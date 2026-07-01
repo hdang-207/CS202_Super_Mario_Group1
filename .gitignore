@@ -1,69 +1,52 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Build directories
+# ====================================================================
+# 1. Bỏ qua các thư mục Build của CMake (Cực kỳ quan trọng)
+# ====================================================================
 build/
 Build/
-build-*/
+out/
+bin/
+obj/
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
+# ====================================================================
+# 2. Bỏ qua các file rác do trình biên dịch và hệ thống sinh ra
+# ====================================================================
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.mod
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
 
-# Temporary files
-*.tmp
-*.log
-*.bak
-*.swp
+# ====================================================================
+# 3. Bỏ qua file cấu hình riêng của các IDE (Visual Studio, CLion, VS Code)
+# ====================================================================
+# Visual Studio rác
+.vs/
+*.user
+*.userosscache
+*.sln
+*.vcxproj
+*.filters
 
-# vcpkg
-vcpkg_installed/
+# CLion rác
+.idea/
+cmake-build-debug/
+cmake-build-release/
 
-# debug information files
-*.dwo
+# VS Code rác
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 
-# test output & cache
-Testing/
-.cache/
+# ====================================================================
+# 4. Bỏ qua các file tạm của hệ thống
+# ====================================================================
+.DS_Store
+Thumbs.db
