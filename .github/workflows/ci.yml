@@ -51,7 +51,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           # 1. Download SFML 2.6.1 release from the official website
-          curl -L -o sfml.tar.gz https://www.sfml-dev.org/files/SFML-2.6.1-macOS-clang.tar.gz
+          curl -L -o sfml.tar.gz https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-macOS-clang.tar.gz
 
           # 2. Extract into a temporary local directory
           mkdir -p $HOME/sfml_local
@@ -76,9 +76,12 @@ jobs:
             \"name\": \"super-mario-ci\",
             \"version-string\": \"1.0.0\",
             \"dependencies\": [
+              \"sfml\"
+            ],
+            \"overrides\": [
               {
                 \"name\": \"sfml\",
-                \"version>=\": \"2.6.1\"
+                \"version\": \"2.6.1\"
               }
             ],
             \"builtin-baseline\": \"$VCPKG_COMMIT\"
