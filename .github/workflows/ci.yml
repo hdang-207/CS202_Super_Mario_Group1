@@ -1,13 +1,6 @@
-name: C++ CMake CI with Multi-Platform Matrix
+name: CI
 
-# Trigger workflow on all branches (including nested branches like feature/...)
-on:
-  push:
-    branches:
-      - '**'
-  pull_request:
-    branches:
-      - '**'
+on: [push, pull_request]
 
 defaults:
   run:
@@ -15,67 +8,82 @@ defaults:
 
 jobs:
   build:
-    name: ${{ matrix.platform.name }} (${{ matrix.config.name }})
+    name: ${{ matrix.platform.name }} ${{ matrix.config.name }}
     runs-on: ${{ matrix.platform.os }}
 
     strategy:
       fail-fast: false
       matrix:
         platform:
-        - { name: Windows VS2022, os: windows-2022 }
-        - { name: Linux GCC,      os: ubuntu-latest }
-        - { name: Linux Clang,    os: ubuntu-latest, flags: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++" }
-        - { name: macOS,          os: macos-latest,  flags: "-DCMAKE_PREFIX_PATH=/opt/homebrew" }
+          - { name: Windows, os: windows-latest, flags: "-A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows" }
+          - { name: Linux GCC, os: ubuntu-latest }
+          - {
+              name: Linux Clang,
+              os: ubuntu-latest,
+              flags: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++,
+            }
+          - { name: macOS, os: macos-latest }
         config:
-        - { name: Shared, flags: "-DBUILD_SHARED_LIBS=TRUE" }
-        - { name: Static, flags: "-DBUILD_SHARED_LIBS=FALSE" }
+          - { name: Shared, flags: -DBUILD_SHARED_LIBS=TRUE }
+          - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
 
     steps:
-    # -----------------------------------------------------------------
-    # STEP 1: INSTALL DEPENDENCIES FOR EACH PLATFORM
-    # -----------------------------------------------------------------
-    
-    # 1.1. For Linux: Install system graphics/audio dependencies and the SFML library
-    - name: Install Linux Dependencies & SFML
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype6-dev libopenal-dev
-        sudo apt-get install -y libsfml-dev
+      # Step 1: Checkout the project source code
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # 1.2. For macOS: Install SFML using Homebrew
-    - name: Install macOS Dependencies (SFML)
-      if: runner.os == 'macOS'
-      run: |
-        brew install sfml
+      # Step 2: Install dependencies for each platform
+      
+      # 2.1. For Linux: Install system graphics/audio dependencies and the SFML library
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libmbedtls-dev libssh2-1-dev libopenal-dev
+          sudo apt-get install -y libsfml-dev
 
-    # 1.3. For Windows VS2022: Use Vcpkg to manage the SFML package
-    - name: Install Windows Dependencies via Vcpkg
-      if: runner.os == 'Windows'
-      run: |
-        vcpkg install sfml:x64-windows
+      # 2.2. For macOS: Install SFML 2.6.x (specifically 2.6.1) manually into system search paths
+      - name: Install macOS Dependencies (SFML 2.6.x)
+        if: runner.os == 'macOS'
+        run: |
+          # 1. Download SFML 2.6.1 release for macOS Clang
+          curl -L -o sfml.tar.gz https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-macOS-clang.tar.gz
+          
+          # 2. Extract into a temporary local directory
+          mkdir -p $HOME/sfml_local
+          tar -xzf sfml.tar.gz -C $HOME/sfml_local --strip-components=1
+          
+          # 3. Copy headers, libraries, and frameworks to system search paths
+          sudo cp -r $HOME/sfml_local/Frameworks/* /Library/Frameworks/
+          sudo mkdir -p /usr/local/lib/cmake/SFML
+          sudo cp -r $HOME/sfml_local/lib/cmake/SFML/* /usr/local/lib/cmake/SFML/
+          sudo cp -P $HOME/sfml_local/lib/*.dylib /usr/local/lib/ 2>/dev/null || true
+          sudo cp -r $HOME/sfml_local/include/* /usr/local/include/
 
-    # -----------------------------------------------------------------
-    # STEP 2: CHECKOUT CODE AND COMPILE (CORE ACTIONS)
-    # -----------------------------------------------------------------
-    
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      # 2.3. For Windows: Use Vcpkg to pin SFML to version 2.6.x (specifically 2.6.1) via manifest mode
+      - name: Install Windows Dependencies via Vcpkg (SFML 2.6.x)
+        if: runner.os == 'Windows'
+        run: |
+          # Create a vcpkg.json manifest file locking the SFML dependency to version >= 2.6.1
+          echo '{
+            "name": "super-mario-ci",
+            "version-string": "1.0.0",
+            "dependencies": [
+              {
+                "name": "sfml",
+                "version>=": "2.6.1"
+              }
+            ],
+            "builtin-baseline": "38bb85c6d33d5ae9a2e37996c58abb04746f3322"
+          }' > vcpkg.json
+          
+          # Run vcpkg installation
+          vcpkg install --triplet=x64-windows
 
-    # 2.1. Configure CMake for UNIX environments (Linux & macOS)
-    - name: Configure CMake (Linux & macOS)
-      if: runner.os != 'Windows'
-      run: cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
+      # Step 3: Run CMake configuration
+      - name: Configure
+        run: cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
 
-    # 2.2. Configure CMake for Windows (Force x64 architecture and integrate Vcpkg Toolchain)
-    - name: Configure CMake (Windows)
-      if: runner.os == 'Windows'
-      run: >
-        cmake -B build -A x64
-        ${{ matrix.platform.flags }}
-        ${{ matrix.config.flags }}
-        -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-        -DVCPKG_TARGET_TRIPLET=x64-windows
-
-    - name: Build Project
-      run: cmake --build build --config Release
+      # Step 4: Compile and build the project
+      - name: Build
+        run: cmake --build build --config Release
