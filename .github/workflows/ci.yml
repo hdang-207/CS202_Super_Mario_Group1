@@ -1,11 +1,13 @@
 name: C++ CMake CI with SFML
 
-# Trigger CI automatically when code is pushed or a pull request is created on main and develop branches
+# Trigger CI automatically when code is pushed or a pull request is created on any branch
 on:
   push:
-    branches: ["main", "develop"]
+    branches:
+      - "**"
   pull_request:
-    branches: ["main", "develop"]
+    branches:
+      - "**"
 
 jobs:
   build-windows:
@@ -41,4 +43,3 @@ jobs:
         shell: msys2 {0}
         run: |
           cmake --build build --config Release
-
