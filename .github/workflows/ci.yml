@@ -1,0 +1,44 @@
+name: C++ CMake CI with SFML
+
+# Trigger CI automatically when code is pushed or a pull request is created on main and develop branches
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+  build-windows:
+    # Use the latest GitHub Windows runner
+    runs-on: windows-latest
+
+    steps:
+      # Step 1: Checkout the project source code from GitHub to the runner
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up the MSYS2 environment and GCC/MinGW (UCRT64) toolchain
+      - name: Setup MSYS2 and Toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          # Automatically install GCC compiler, CMake, Ninja build system, and the official SFML library from the MSYS2 repository
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-sfml
+
+      # Step 3: Run CMake configuration to generate build system files
+      - name: Configure CMake
+        shell: msys2 {0}
+        run: |
+          cmake -G "Ninja" -B build -DCMAKE_BUILD_TYPE=Release
+
+      # Step 4: Compile and build the game executable binary
+      - name: Build Executable Binary
+        shell: msys2 {0}
+        run: |
+          cmake --build build --config Release
+
