@@ -1,0 +1,42 @@
+#include "States/CharacterSelectionState.hpp"
+#include "States/IntroMenuState.hpp"
+#include "States/GameStateManager.hpp"
+#include <iostream>
+
+CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm) : State(gsm) {}
+
+void CharacterSelectionState::init() {
+    // Log user instructions for character selection on initialization.
+    std::cout << "[Core Engine] CharacterSelectionState Initialized.\n";
+    std::cout << "  - Press '1' to select Mario\n";
+    std::cout << "  - Press '2' to select Luigi\n";
+    std::cout << "  - Press 'B' to go back to Menu\n";
+}
+
+void CharacterSelectionState::handleInput(sf::Event& event) {
+    if (event.type == sf::Event::KeyPressed) {
+        // Option 'B' to return back to the Intro Menu State
+        if (event.key.code == sf::Keyboard::B) {
+            std::cout << "[Core Engine] Going back to IntroMenuState...\n";
+            gsm.changeState(std::make_unique<IntroMenuState>(gsm));
+        } 
+        // Option '1' (or Numpad 1) to select Mario
+        else if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::Numpad1) {
+            std::cout << "[Core Engine] Mario Selected!\n";
+        } 
+        // Option '2' (or Numpad 2) to select Luigi
+        else if (event.key.code == sf::Keyboard::Num2 || event.key.code == sf::Keyboard::Numpad2) {
+            std::cout << "[Core Engine] Luigi Selected!\n";
+        }
+    }
+}
+
+void CharacterSelectionState::update(sf::Time dt) {
+    // Skeleton update logic - currently no animations or physics are updated in selection screen.
+}
+
+void CharacterSelectionState::render(sf::RenderWindow& window) {
+    // Clear screen with Sea Green to represent the character selection screen background.
+    window.clear(sf::Color(46, 139, 87));
+}
+
