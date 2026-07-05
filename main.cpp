@@ -1,8 +1,8 @@
-#include <iostream>
-using namespace std;
+#include "Game.hpp"
 
 int main()
 {
-    cout << "Hello World, CS202!\n";
+    Game game;
+    game.run();
     return 0;
 }
