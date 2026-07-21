@@ -66,7 +66,7 @@ void GameStateManager::processStateChanges() {
     applyPendingChanges();
 }
 
-void GameStateManager::handleInput(sf::Event& event) {
+void GameStateManager::handleInput(const sf::Event& event) {
     // Forward input event to the top-most active state
     if (!states.empty()) {
         states.back()->handleInput(event);

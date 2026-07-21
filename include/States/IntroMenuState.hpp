@@ -30,7 +30,7 @@ public:
      * @brief Listens for Enter key press to transition to the character selection screen.
      * @param event The event being polled.
      */
-    void handleInput(sf::Event& event) override;
+    void handleInput(const sf::Event& event) override;
 
     /**
      * @brief Updates any menu animations or logic (currently skeleton placeholder).
