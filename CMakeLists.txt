@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Tìm và tích hợp thư viện SFML (Yêu cầu các thành viên phải cài sẵn SFML trên máy)
-find_package(SFML 3.1.0 COMPONENTS Graphics Window System Audio REQUIRED)
+find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
 
 # Gom tự động các file .hpp trong thư mục include để hiển thị trên các IDE (CLion, VS)
 file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h")
