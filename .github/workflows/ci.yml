@@ -1,4 +1,4 @@
-name: CI
+name: CI (SFML 3.x Multi-Platform Matrix)
 
 on: [push, pull_request]
 
@@ -24,65 +24,50 @@ jobs:
           - {
               name: Linux Clang,
               os: ubuntu-latest,
-              flags: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++,
+              flags: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++",
             }
           - { name: macOS, os: macos-latest }
         config:
-          - { name: Shared, flags: -DBUILD_SHARED_LIBS=TRUE }
-          - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+          - { name: Shared, flags: "-DBUILD_SHARED_LIBS=TRUE" }
+          - { name: Static, flags: "-DBUILD_SHARED_LIBS=FALSE" }
 
     steps:
       # Step 1: Checkout the project source code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Install dependencies for each platform
+      # Step 2: Install dependencies for each platform (Targeting SFML 3.x)
 
-      # 2.1. For Linux: Install system dependencies and SFML 2.6.x (provided by ubuntu-latest package manager)
+      # 2.1. For Linux: Install system graphics dependencies + SFML 3 via Vcpkg or CMake
       - name: Install Linux Dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libmbedtls-dev libssh2-1-dev libopenal-dev
-          sudo apt-get install -y libsfml-dev
+          sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev
 
-      # 2.2. For macOS: Install SFML 2.6.x (specifically 2.6.1) manually into system search paths
-      - name: Install macOS Dependencies (SFML 2.6.x)
+          # Cài đặt SFML 3.x mới nhất thông qua Vcpkg trên Linux máy ảo
+          $VCPKG_INSTALLATION_ROOT/vcpkg install sfml:x64-linux
+
+      # 2.2. For macOS: Use Homebrew (which natively serves SFML 3.x)
+      - name: Install macOS Dependencies (SFML 3.x)
         if: runner.os == 'macOS'
         run: |
-          # 1. Download SFML 2.6.1 release from the official website
-          curl -L -o sfml.tar.gz https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-macOS-clang.tar.gz
+          brew update
+          brew install sfml
 
-          # 2. Extract into a temporary local directory
-          mkdir -p $HOME/sfml_local
-          tar -xzf sfml.tar.gz -C $HOME/sfml_local --strip-components=1
-
-          # 3. Copy headers, libraries, and frameworks to system search paths
-          sudo cp -r $HOME/sfml_local/Frameworks/* /Library/Frameworks/
-          sudo mkdir -p /usr/local/lib/cmake/SFML
-          sudo cp -r $HOME/sfml_local/lib/cmake/SFML/* /usr/local/lib/cmake/SFML/
-          sudo cp -P $HOME/sfml_local/lib/*.dylib /usr/local/lib/ 2>/dev/null || true
-          sudo cp -r $HOME/sfml_local/include/* /usr/local/include/
-
-      # 2.3. For Windows: Use Vcpkg to pin SFML to version 2.6.x (specifically 2.6.1) via manifest mode
-      - name: Install Windows Dependencies via Vcpkg (SFML 2.6.x)
+      # 2.3. For Windows: Use Vcpkg in manifest mode without 2.6.x overrides (Fetches latest SFML 3.x)
+      - name: Install Windows Dependencies via Vcpkg (SFML 3.x)
         if: runner.os == 'Windows'
         run: |
-          # Dynamically query the HEAD commit hash of the local pre-installed vcpkg repository
+          # Dynamically query HEAD commit hash of pre-installed vcpkg
           VCPKG_COMMIT=$(git -C C:/vcpkg rev-parse HEAD)
 
-          # Create a vcpkg.json manifest file using the dynamically resolved local baseline
+          # Create a vcpkg.json manifest file allowing vcpkg to pull the latest SFML 3.x release
           echo "{
             \"name\": \"super-mario-ci\",
             \"version-string\": \"1.0.0\",
             \"dependencies\": [
               \"sfml\"
-            ],
-            \"overrides\": [
-              {
-                \"name\": \"sfml\",
-                \"version\": \"2.6.1\"
-              }
             ],
             \"builtin-baseline\": \"$VCPKG_COMMIT\"
           }" > vcpkg.json
@@ -92,7 +77,12 @@ jobs:
 
       # Step 3: Run CMake configuration
       - name: Configure
-        run: cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+          else
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
+          fi
 
       # Step 4: Compile and build the project
       - name: Build
