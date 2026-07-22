@@ -36,7 +36,7 @@ public:
      * @brief Handles user input event.
      * @param event The SFML event containing event data (key pressed, mouse moved, etc.).
      */
-    virtual void handleInput(sf::Event& event) = 0;
+    virtual void handleInput(const sf::Event& event) = 0;
 
     /**
      * @brief Updates the logic of this state.

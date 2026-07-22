@@ -10,10 +10,10 @@ void IntroMenuState::init() {
     std::cout << "[Core Engine] IntroMenuState Initialized. Press ENTER to select character.\n";
 }
 
-void IntroMenuState::handleInput(sf::Event& event) {
-    if (event.type == sf::Event::KeyPressed) {
+void IntroMenuState::handleInput(const sf::Event& event) {
+    if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // If the user hits Enter, switch the state to CharacterSelectionState.
-        if (event.key.code == sf::Keyboard::Enter) {
+        if (keyPressed->code == sf::Keyboard::Key::Enter) {
             std::cout << "[Core Engine] Enter pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";
             gsm.changeState(std::make_unique<CharacterSelectionState>(gsm));
         }

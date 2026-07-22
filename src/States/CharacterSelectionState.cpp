@@ -13,19 +13,19 @@ void CharacterSelectionState::init() {
     std::cout << "  - Press 'B' to go back to Menu\n";
 }
 
-void CharacterSelectionState::handleInput(sf::Event& event) {
-    if (event.type == sf::Event::KeyPressed) {
+void CharacterSelectionState::handleInput(const sf::Event& event) {
+    if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // Option 'B' to return back to the Intro Menu State
-        if (event.key.code == sf::Keyboard::B) {
+        if (keyPressed->code == sf::Keyboard::Key::B) {
             std::cout << "[Core Engine] Going back to IntroMenuState...\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm));
         } 
         // Option '1' (or Numpad 1) to select Mario
-        else if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::Numpad1) {
+        else if (keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
             std::cout << "[Core Engine] Mario Selected!\n";
         } 
         // Option '2' (or Numpad 2) to select Luigi
-        else if (event.key.code == sf::Keyboard::Num2 || event.key.code == sf::Keyboard::Numpad2) {
+        else if (keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
             std::cout << "[Core Engine] Luigi Selected!\n";
         }
     }

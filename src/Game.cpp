@@ -6,7 +6,7 @@
 const sf::Time Game::TimePerFrame = sf::seconds(1.f / 60.f);
 
 Game::Game() 
-    : window(sf::VideoMode(1200, 800), "Super Mario Bros - Group 1", sf::Style::Close | sf::Style::Titlebar)
+    : window(sf::VideoMode({1200u, 800u}), "Super Mario Bros - Group 1", sf::Style::Close | sf::Style::Titlebar)
 {
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
@@ -53,13 +53,12 @@ void Game::run() {
 }
 
 void Game::processEvents() {
-    sf::Event event;
-    while (window.pollEvent(event)) {
-        if (event.type == sf::Event::Closed) {
+    while (const auto event = window.pollEvent()) {
+        if (event->is<sf::Event::Closed>()) {
             window.close();
         } else {
             // Forward other inputs to the GameStateManager
-            gsm.handleInput(event);
+            gsm.handleInput(*event);
         }
     }
 }

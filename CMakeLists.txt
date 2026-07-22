@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Tìm và tích hợp thư viện SFML (Yêu cầu các thành viên phải cài sẵn SFML trên máy)
-find_package(SFML 2.6 COMPONENTS graphics window system audio REQUIRED)
+find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
 
 # Gom tự động các file .hpp trong thư mục include để hiển thị trên các IDE (CLion, VS)
 file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h")
@@ -23,7 +23,7 @@ add_executable(${PROJECT_NAME} main.cpp ${SOURCES} ${HEADERS})
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 
 # Liên kết các module của SFML vào dự án
-target_link_libraries(${PROJECT_NAME} sfml-graphics sfml-window sfml-system sfml-audio)
+target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Window SFML::System SFML::Audio)
 
 # Lệnh tự động copy thư mục assets vào thư mục build để game đọc được ảnh/nhạc
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
@@ -40,22 +40,28 @@ if(WIN32)
         get_filename_component(SFML_ROOT_DIR "${SFML_DIR}/../../.." ABSOLUTE)
         set(SFML_BIN_DIR "${SFML_ROOT_DIR}/bin")
         
-        # Danh sách các file DLL cần copy tương ứng với các component đang dùng
+        # Danh sách các file DLL cần copy tương ứng với các component đang dùng (SFML 3 Release & Debug)
         set(SFML_DLLS
-            "sfml-graphics-2.dll"
-            "sfml-window-2.dll"
-            "sfml-system-2.dll"
-            "sfml-audio-2.dll"
+            "sfml-graphics-3.dll"
+            "sfml-graphics-d-3.dll"
+            "sfml-window-3.dll"
+            "sfml-window-d-3.dll"
+            "sfml-system-3.dll"
+            "sfml-system-d-3.dll"
+            "sfml-audio-3.dll"
+            "sfml-audio-d-3.dll"
             "openal32.dll" # SFML Audio phụ thuộc vào thư viện này
         )
         
         foreach(DLL ${SFML_DLLS})
-            # Sao chép DLL sau khi build xong
-            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${SFML_BIN_DIR}/${DLL}"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${DLL}"
-            )
+            # Sao chép DLL nếu tồn tại trong thư mục bin của SFML
+            if(EXISTS "${SFML_BIN_DIR}/${DLL}")
+                add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${SFML_BIN_DIR}/${DLL}"
+                    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${DLL}"
+                )
+            endif()
         endforeach()
     endif()
 endif()

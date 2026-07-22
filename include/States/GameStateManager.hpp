@@ -75,7 +75,7 @@ public:
      * @brief Forwards system/input events to the active state at the top of the stack.
      * @param event The SFML event to handle.
      */
-    void handleInput(sf::Event& event);
+    void handleInput(const sf::Event& event);
 
     /**
      * @brief Updates the active state at the top of the stack.

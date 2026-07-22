@@ -30,7 +30,7 @@ public:
      * @brief Listens for keyboard inputs to select characters or go back to the menu.
      * @param event The event being polled.
      */
-    void handleInput(sf::Event& event) override;
+    void handleInput(const sf::Event& event) override;
 
     /**
      * @brief Updates any logic/animations for character selection (skeleton placeholder).
