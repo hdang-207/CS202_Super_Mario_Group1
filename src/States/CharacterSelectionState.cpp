@@ -1,6 +1,8 @@
 #include "States/CharacterSelectionState.hpp"
 #include "States/IntroMenuState.hpp"
+#include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
+#include "Core/CharacterType.hpp"
 #include <iostream>
 
 CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm) : State(gsm) {}
@@ -22,11 +24,13 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         } 
         // Option '1' (or Numpad 1) to select Mario
         else if (keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
-            std::cout << "[Core Engine] Mario Selected!\n";
+            std::cout << "[Core Engine] Mario Selected! Transitioning to PlayState...\n";
+            gsm.changeState(std::make_unique<PlayState>(gsm, CharacterType::Mario));
         } 
         // Option '2' (or Numpad 2) to select Luigi
         else if (keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
-            std::cout << "[Core Engine] Luigi Selected!\n";
+            std::cout << "[Core Engine] Luigi Selected! Transitioning to PlayState...\n";
+            gsm.changeState(std::make_unique<PlayState>(gsm, CharacterType::Luigi));
         }
     }
 }

@@ -7,6 +7,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Đầu ra của file thực thi (.exe) sẽ nằm trong thư mục bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Tự động hỗ trợ tìm SFML_DIR trên các đường dẫn phổ biến nếu chưa khai báo
+if(NOT SFML_DIR)
+    if(EXISTS "D:/Programs/SFML-3.1.0/lib/cmake/SFML")
+        set(SFML_DIR "D:/Programs/SFML-3.1.0/lib/cmake/SFML" CACHE PATH "Path to SFML CMake config")
+    elseif(EXISTS "C:/SFML/lib/cmake/SFML")
+        set(SFML_DIR "C:/SFML/lib/cmake/SFML" CACHE PATH "Path to SFML CMake config")
+    endif()
+endif()
+
 # Tìm và tích hợp thư viện SFML (Yêu cầu các thành viên phải cài sẵn SFML trên máy)
 find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
 
