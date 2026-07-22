@@ -1,0 +1,38 @@
+#include "States/PlayState.hpp"
+#include "States/GameStateManager.hpp"
+#include "States/IntroMenuState.hpp"
+#include <iostream>
+
+PlayState::PlayState(GameStateManager& gsm, CharacterType character)
+    : State(gsm), selectedCharacter(character) {}
+
+void PlayState::init() {
+    std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
+    std::cout << "[Core Engine] PlayState Initialized with character: " << charName << "\n";
+
+    // Load level 1 map file
+    if (mapParser.loadFromFile("assets/maps/level1.txt")) {
+        mapParser.printMap();
+    } else {
+        std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
+    }
+}
+
+void PlayState::handleInput(const sf::Event& event) {
+    if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        // Press Escape to return to Main Menu
+        if (keyPressed->code == sf::Keyboard::Key::Escape) {
+            std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
+            gsm.changeState(std::make_unique<IntroMenuState>(gsm));
+        }
+    }
+}
+
+void PlayState::update(sf::Time dt) {
+    // Skeleton gameplay update loop
+}
+
+void PlayState::render(sf::RenderWindow& window) {
+    // Clear screen with Super Mario Sky Blue color
+    window.clear(sf::Color(107, 140, 255));
+}
