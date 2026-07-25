@@ -36,7 +36,7 @@ void PhysicsBody::addVelocity(const sf::Vector2f& amount) {
     m_velocity += amount;
 }
 
-const sf::Vector2f& PhysicsBody::getVelocity() const {
+const sf::Vector2f& PhysicsBody::getVelocity() const noexcept{
     return m_velocity;
 }
 
@@ -44,7 +44,7 @@ void PhysicsBody::setAcceleration(const sf::Vector2f& acceleration) {
     m_acceleration = acceleration;
 }
 
-const sf::Vector2f& PhysicsBody::getAcceleration() const {
+const sf::Vector2f& PhysicsBody::getAcceleration() const noexcept {
     return m_acceleration;
 }
 
@@ -61,15 +61,15 @@ void PhysicsBody::setCollider(const sf::Vector2f& size, const sf::Vector2f& offs
     m_colliderOffset = offset;
 }
 
-const sf::Vector2f& PhysicsBody::getColliderSize() const {
+const sf::Vector2f& PhysicsBody::getColliderSize() const noexcept {
     return m_colliderSize;
 }
 
-const sf::Vector2f& PhysicsBody::getColliderOffset() const {
+const sf::Vector2f& PhysicsBody::getColliderOffset() const noexcept {
     return m_colliderOffset;
 }
 
-AABB PhysicsBody::getBounds() const {
+AABB PhysicsBody::getBounds() const noexcept {
     return AABB(m_position + m_colliderOffset, m_colliderSize);
 }
 
@@ -77,11 +77,11 @@ void PhysicsBody::setGrounded(bool grounded) {
     m_grounded = grounded;
 }
 
-bool PhysicsBody::isGrounded() const {
+bool PhysicsBody::isGrounded() const noexcept {
     return m_grounded;
 }
 
-bool PhysicsBody::hitCeiling() const {
+bool PhysicsBody::hitCeiling() const noexcept {
     return m_hitCeiling;
 }
 
@@ -93,7 +93,7 @@ void PhysicsBody::setHitWallLeft(bool hitWallLeft) {
     m_hitWallLeft = hitWallLeft;
 }
 
-bool PhysicsBody::hitWallLeft() const {
+bool PhysicsBody::hitWallLeft() const noexcept {
     return m_hitWallLeft;
 }
 
@@ -101,7 +101,7 @@ void PhysicsBody::setHitWallRight(bool hitWallRight) {
     m_hitWallRight = hitWallRight;
 }
 
-bool PhysicsBody::hitWallRight() const {
+bool PhysicsBody::hitWallRight() const noexcept {
     return m_hitWallRight;
 }
 
