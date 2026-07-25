@@ -3,8 +3,8 @@
 #include "States/IntroMenuState.hpp"
 #include <iostream>
 
-PlayState::PlayState(GameStateManager& gsm, CharacterType character)
-    : State(gsm), selectedCharacter(character) {}
+PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
+    : State(gsm, assets), selectedCharacter(character) {}
 
 void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
@@ -29,7 +29,7 @@ void PlayState::handleInput(const sf::Event& event) {
         // Press Escape to return to Main Menu
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm));
+            gsm.changeState(std::make_unique<PlayState>(gsm, assets, CharacterType::Mario));
         }
     }
 }

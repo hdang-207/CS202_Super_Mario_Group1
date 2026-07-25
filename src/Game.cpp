@@ -8,11 +8,19 @@ const sf::Time Game::TimePerFrame = sf::seconds(1.f / 60.f);
 Game::Game() 
     : window(sf::VideoMode({1200u, 800u}), "Super Mario Bros - Group 1", sf::Style::Close | sf::Style::Titlebar)
 {
+    // 1. Load Font chữ cho UI
+    assets.loadFont("MarioFont", "assets/fonts/MarioFont.otf");
+
+    // 2. Load Âm thanh
+    assets.loadSoundBuffer("ThemeSong", "assets/audio/Theme.mp3");
+
+    assets.loadTexture("MenuBackground", "assets/textures/Background.png");
+
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
     
     // Initialize the stack with the intro menu state
-    gsm.pushState(std::make_unique<IntroMenuState>(gsm));
+    gsm.pushState(std::make_unique<IntroMenuState>(gsm, assets));
     
     // Flush the queue immediately to set up the initial state
     gsm.processStateChanges();
