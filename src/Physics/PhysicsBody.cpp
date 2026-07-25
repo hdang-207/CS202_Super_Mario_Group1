@@ -24,7 +24,7 @@ void PhysicsBody::setPosition(const sf::Vector2f& position) {
 
 }
 
-const sf::Vector2f& PhysicsBody::getPosition() const {
+const sf::Vector2f& PhysicsBody::getPosition() const noexcept {
     return m_position;
 }
 
