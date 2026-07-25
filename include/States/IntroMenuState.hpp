@@ -9,12 +9,18 @@
  * to character selection.
  */
 class IntroMenuState : public State {
+private:
+    sf::Sprite bgSprite;           // Hình nền Menu
+    sf::RectangleShape titleBox;  // Khung nền vuông cho Tên Game
+    sf::Text titleText;
+    sf::Music bgMusic;
+
 public:
     /**
      * @brief Constructor for IntroMenuState.
      * @param gsm Reference to the GameStateManager.
      */
-    IntroMenuState(GameStateManager& gsm);
+    IntroMenuState(GameStateManager& gsm, Systems::AssetManager& assets);
 
     /**
      * @brief Destructor.

@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include "States/GameStateManager.hpp"
+#include "Systems/AssetManager.hpp"
 
 /**
  * @class Game
@@ -13,6 +14,7 @@
 class Game {
 private:
     sf::RenderWindow window; ///< Main graphical window of the application.
+    Systems::AssetManager assets; 
     GameStateManager gsm;    ///< Manager handling transition and lifecycle of game states.
     
     /// Target time duration for each frame update (1/60th of a second).

@@ -21,7 +21,7 @@ public:
      * @param gsm Reference to GameStateManager.
      * @param character The character selected by the player (Mario / Luigi).
      */
-    PlayState(GameStateManager& gsm, CharacterType character);
+    PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character);
 
     /**
      * @brief Destructor.

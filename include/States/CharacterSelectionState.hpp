@@ -14,7 +14,7 @@ public:
      * @brief Constructor for CharacterSelectionState.
      * @param gsm Reference to the GameStateManager.
      */
-    CharacterSelectionState(GameStateManager& gsm);
+    CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets);
 
     /**
      * @brief Destructor.
