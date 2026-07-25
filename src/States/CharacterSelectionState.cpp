@@ -26,7 +26,7 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         else if (keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
             std::cout << "[Core Engine] Mario Selected! Transitioning to PlayState...\n";
             gsm.changeState(std::make_unique<PlayState>(gsm, CharacterType::Mario));
-        } 
+        }
         // Option '2' (or Numpad 2) to select Luigi
         else if (keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
             std::cout << "[Core Engine] Luigi Selected! Transitioning to PlayState...\n";
