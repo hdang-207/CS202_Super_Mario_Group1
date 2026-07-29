@@ -43,10 +43,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev
+          sudo apt-get install -y pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev
 
-          # Cài đặt SFML 3.x mới nhất thông qua Vcpkg trên Linux máy ảo
-          $VCPKG_INSTALLATION_ROOT/vcpkg install sfml:x64-linux
+          # Cài đặt SFML 3.x mới nhất thông qua Vcpkg trên Linux máy ảo (sử dụng sudo để có quyền ghi thư mục hệ thống vcpkg)
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-/usr/local/share/vcpkg}"
+          sudo "$VCPKG_ROOT/vcpkg" install sfml:x64-linux
 
       # 2.2. For macOS: Use Homebrew (which natively serves SFML 3.x)
       - name: Install macOS Dependencies (SFML 3.x)
@@ -79,7 +80,8 @@ jobs:
       - name: Configure
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+            VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-/usr/local/share/vcpkg}"
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }} -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           else
             cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
           fi
