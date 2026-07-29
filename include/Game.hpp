@@ -21,6 +21,9 @@ private:
     sf::View screenView;
     bool fullscreen{false};
 
+    /// Buffer pixels per window unit (2 on a Retina screen, 1 elsewhere).
+    float dpiScale{1.f};
+
     /// Target time duration for each frame update (1/60th of a second).
     static const sf::Time TimePerFrame;
 

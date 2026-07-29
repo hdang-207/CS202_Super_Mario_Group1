@@ -1,6 +1,7 @@
 #include "Game.hpp"
 #include "Core/Config.hpp"
 #include "States/IntroMenuState.hpp"
+#include "Systems/HighDpi.hpp"
 #include "Systems/ResourcePath.hpp"
 #include <iostream>
 
@@ -91,9 +92,13 @@ void Game::processEvents() {
 }
 
 void Game::updateScreenView() {
+    // Re-asked every time because the answer changes when the window is dragged
+    // onto a screen with a different pixel density.
+    dpiScale = Systems::enableHighDpi(window.getNativeHandle());
+
     screenView.setSize({Config::kViewWidth, Config::kViewHeight});
     screenView.setCenter({Config::kViewWidth / 2.f, Config::kViewHeight / 2.f});
-    screenView.setViewport(Config::letterboxViewport(window.getSize()));
+    screenView.setViewport(Config::letterboxViewport(window.getSize(), dpiScale));
 }
 
 void Game::toggleFullscreen() {

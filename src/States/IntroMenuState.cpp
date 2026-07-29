@@ -22,7 +22,7 @@ void IntroMenuState::init() {
                           (Config::kViewHeight - bgSize.y * bgScale) / 2.f});
 
     titleText.setString("SUPER MARIO BROS");
-    titleText.setCharacterSize(64); // Kích thước chữ lớn
+    titleText.setCharacterSize(48); // Kích thước chữ lớn
     titleText.setFillColor(sf::Color::Blue); // Màu đỏ đặc trưng của Mario
 
     // Căn giữa Tên Game theo chiều ngang của vùng chơi
