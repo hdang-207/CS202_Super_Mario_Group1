@@ -9,12 +9,14 @@ Game::Game()
     : window(sf::VideoMode({1200u, 800u}), "Super Mario Bros - Group 1", sf::Style::Close | sf::Style::Titlebar)
 {
     // 1. Load Font chữ cho UI
-    assets.loadFont("MarioFont", "assets/fonts/MarioFont.otf");
+    assets.loadFont("MarioFont", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/fonts/MarioFont.otf");
 
     // 2. Load Âm thanh
-    assets.loadSoundBuffer("ThemeSong", "assets/audio/Theme.mp3");
+    assets.loadSoundBuffer("ThemeSong", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/audio/Theme.mp3");
 
-    assets.loadTexture("MenuBackground", "assets/textures/Background.png");
+    assets.loadTexture("MenuBackground", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/Background.png");
+
+    assets.loadTexture("CloudBackground", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/Cloud1200x800.png");
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);

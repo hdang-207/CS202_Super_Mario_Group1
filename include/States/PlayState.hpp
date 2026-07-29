@@ -2,8 +2,6 @@
 #include "States/State.hpp"
 #include "Core/CharacterType.hpp"
 #include "Systems/MapParser.hpp"
-#include "Entities/Cloud.hpp"
-#include <vector>
 
 /**
  * @class PlayState
@@ -13,7 +11,7 @@ class PlayState : public State {
 private:
     CharacterType selectedCharacter;
     MapParser mapParser;
-    std::vector<Cloud> clouds; ///< Decorative background clouds.
+    sf::Sprite bgSprite; ///< Sky + clouds background image.
 
 public:
     /**
