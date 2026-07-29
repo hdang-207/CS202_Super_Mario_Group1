@@ -14,9 +14,13 @@
 class Game {
 private:
     sf::RenderWindow window; ///< Main graphical window of the application.
-    Systems::AssetManager assets; 
+    Systems::AssetManager assets;
     GameStateManager gsm;    ///< Manager handling transition and lifecycle of game states.
-    
+
+    /// View covering the whole game area; its viewport letterboxes the picture.
+    sf::View screenView;
+    bool fullscreen{false};
+
     /// Target time duration for each frame update (1/60th of a second).
     static const sf::Time TimePerFrame;
 
@@ -24,6 +28,17 @@ private:
      * @brief Polls and handles all window events, delegating inputs to the active state.
      */
     void processEvents();
+
+    /**
+     * @brief Rebuilds @ref screenView so the game keeps its aspect ratio in the
+     *        current window (black bars instead of stretching).
+     */
+    void updateScreenView();
+
+    /**
+     * @brief Switches between the windowed and fullscreen presentation (F11).
+     */
+    void toggleFullscreen();
 
     /**
      * @brief Updates the game logic.
