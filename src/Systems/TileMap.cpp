@@ -1,5 +1,6 @@
 #include "Systems/TileMap.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace {
     /// One entry of the level legend: which artwork a map character draws and how it behaves.
