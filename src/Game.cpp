@@ -4,6 +4,7 @@
 #include "Systems/HighDpi.hpp"
 #include "Systems/ResourcePath.hpp"
 #include <iostream>
+#include <optional>
 
 namespace {
     const char* kWindowTitle = "Super Mario Bros - Group 1";
