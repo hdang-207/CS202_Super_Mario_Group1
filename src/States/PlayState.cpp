@@ -1,4 +1,5 @@
 #include "States/PlayState.hpp"
+#include "Core/Config.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/IntroMenuState.hpp"
 #include "Systems/ResourcePath.hpp"
@@ -6,14 +7,6 @@
 #include <iostream>
 
 namespace {
-    // The level art is authored at 16px per tile, like the original game. Drawing it
-    // at a whole-number zoom keeps every pixel crisp; 3x gives a 20x15 tile viewport
-    // in a 960x720 window, so the ground sits at the bottom of the screen and roughly
-    // a screen-and-a-bit of level is visible at a time.
-    constexpr float kZoom = 3.f;
-    constexpr float kViewWidth = 960.f;
-    constexpr float kViewHeight = 720.f;
-
     // Kinematics, in world pixels per second. Tuned against a 48px tile so the jump
     // clears roughly three and a half tiles, like Super Mario Bros.
     constexpr float kGravity = 2400.f;
@@ -44,7 +37,7 @@ namespace {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
-      camera(sf::FloatRect({0.f, 0.f}, {kViewWidth, kViewHeight})) {}
+      camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
 
 void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
@@ -58,7 +51,7 @@ void PlayState::init() {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
-    if (!tileMap.build(mapParser, assets.getTexture("LevelTilemap"), kZoom)) {
+    if (!tileMap.build(mapParser, assets.getTexture("LevelTilemap"), Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
         return;
     }
@@ -174,18 +167,34 @@ void PlayState::moveAvatar(sf::Time dt) {
 }
 
 void PlayState::updateCamera() {
-    float halfWidth = kViewWidth / 2.f;
-    float maxCenter = std::max(halfWidth, tileMap.pixelWidth() - halfWidth);
-    float centerX = std::clamp(avatarPos.x + avatar.getSize().x / 2.f, halfWidth, maxCenter);
-    camera.setCenter({centerX, kViewHeight / 2.f});
+    // Follow the avatar, but never show anything past the edges of the level.
+    float halfWidth = Config::kViewWidth / 2.f;
+    float halfHeight = Config::kViewHeight / 2.f;
+    float maxCenterX = std::max(halfWidth, tileMap.pixelWidth() - halfWidth);
+    float maxCenterY = std::max(halfHeight, tileMap.pixelHeight() - halfHeight);
+
+    camera.setCenter({
+        std::clamp(avatarPos.x + avatar.getSize().x / 2.f, halfWidth, maxCenterX),
+        std::clamp(avatarPos.y + avatar.getSize().y / 2.f, halfHeight, maxCenterY)
+    });
 }
 
 void PlayState::render(sf::RenderWindow& window) {
-    // Same sky blue as the level artwork, so tiles blend into the background.
-    window.clear(sf::Color(92, 148, 252));
+    // Game::render hands us a view whose viewport letterboxes the picture; the
+    // camera has to reuse that viewport, otherwise the level would be drawn over
+    // the black bars.
+    const sf::View screenView = window.getView();
+    camera.setViewport(screenView.getViewport());
+
+    // Sky: the same blue as the level artwork, so tiles blend into the background.
+    // It is painted as a rectangle rather than with clear() so it stays inside the
+    // game area and leaves the letterbox bars black.
+    sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
+    sky.setFillColor(sf::Color(92, 148, 252));
+    window.draw(sky);
 
     window.setView(camera);
     window.draw(tileMap);
     window.draw(avatar);
-    window.setView(window.getDefaultView());
+    window.setView(screenView);
 }
