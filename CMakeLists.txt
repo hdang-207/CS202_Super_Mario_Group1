@@ -31,8 +31,21 @@ add_executable(${PROJECT_NAME} main.cpp ${SOURCES} ${HEADERS})
 # Khai báo thư mục include cho target (Modern CMake thay vì dùng include_directories toàn cục)
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 
+# Đường dẫn source tree dùng làm phương án dự phòng cuối cùng khi tìm thư mục assets
+# (xem Systems::resourcePath) - nhờ vậy không ai phải hardcode đường dẫn máy mình nữa.
+target_compile_definitions(${PROJECT_NAME} PRIVATE MARIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 # Liên kết các module của SFML vào dự án
 target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Window SFML::System SFML::Audio)
+
+# Trên macOS: SFML tạo surface OpenGL ở mật độ 1x nên màn Retina bị phóng to làm mờ.
+# File .mm dưới đây (Objective-C++) bật surface đúng độ phân giải màn hình.
+# Windows/Linux không cần, phần thân hàm nằm ở HighDpi.cpp và chỉ trả về 1.
+if(APPLE)
+    enable_language(OBJCXX)
+    target_sources(${PROJECT_NAME} PRIVATE src/Systems/HighDpi.mm)
+    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework AppKit" "-framework OpenGL")
+endif()
 
 # Lệnh tự động copy thư mục assets vào thư mục build để game đọc được ảnh/nhạc
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

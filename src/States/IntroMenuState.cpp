@@ -1,6 +1,9 @@
 #include "States/IntroMenuState.hpp"
+#include "Core/Config.hpp"
 #include "States/CharacterSelectionState.hpp"
 #include "States/GameStateManager.hpp"
+#include "Systems/ResourcePath.hpp"
+#include <algorithm>
 #include <iostream>
 
 IntroMenuState::IntroMenuState(GameStateManager& gsm, Systems::AssetManager& assets) 
@@ -10,19 +13,25 @@ void IntroMenuState::init() {
     // Log info representing game starting up.
     std::cout << "[Core Engine] IntroMenuState Initialized. Press ENTER to select character.\n";
 
-    bgSprite.setPosition({0.f, 0.f});
+    // Phóng ảnh nền để phủ kín màn hình mà không bị méo (giữ nguyên tỉ lệ gốc),
+    // phần thừa được cắt đều hai bên.
+    sf::Vector2f bgSize(bgSprite.getTexture().getSize());
+    float bgScale = std::max(Config::kViewWidth / bgSize.x, Config::kViewHeight / bgSize.y);
+    bgSprite.setScale({bgScale, bgScale});
+    bgSprite.setPosition({(Config::kViewWidth - bgSize.x * bgScale) / 2.f,
+                          (Config::kViewHeight - bgSize.y * bgScale) / 2.f});
 
     titleText.setString("SUPER MARIO BROS");
     titleText.setCharacterSize(48); // Kích thước chữ lớn
     titleText.setFillColor(sf::Color::Blue); // Màu đỏ đặc trưng của Mario
 
-    // Căn giữa Tên Game trên màn hình (Giả sử màn hình 800x600)
+    // Căn giữa Tên Game theo chiều ngang của vùng chơi
     sf::FloatRect titleBounds = titleText.getLocalBounds();
-    titleText.setOrigin({titleBounds.position.x + titleBounds.size.x / 2.f, 
+    titleText.setOrigin({titleBounds.position.x + titleBounds.size.x / 2.f,
                              titleBounds.position.y + titleBounds.size.y / 2.f});
-    titleText.setPosition({400.f, 150.f}); 
+    titleText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.25f});
 
-    if (bgMusic.openFromFile("/Users/tranquochuy/Downloads/CS202_MarioGame/assets/audio/Theme.mp3")) {
+    if (bgMusic.openFromFile(Systems::resourcePath("assets/audio/Theme.mp3"))) {
     bgMusic.setLooping(true); // Lặp lại liên tục khi ở Menu
     bgMusic.setVolume(60.f);  // Mức âm lượng (0 - 100)
     bgMusic.play();           // Phát nhạc ngay khi mở Menu!
