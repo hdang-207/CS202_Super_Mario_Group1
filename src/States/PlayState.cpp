@@ -17,14 +17,13 @@ void PlayState::init() {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
-    // Fit the sky/clouds background image to the window width, preserving its aspect
-    // ratio (no stretching), and center it vertically.
+    // Scale the sky/clouds background image to fill the window. Its aspect ratio (1536x1024)
+    // already matches the window's (1200x800), so this does not distort the image.
     sf::Vector2u textureSize = bgSprite.getTexture().getSize();
     sf::Vector2u windowSize = {1200u, 800u};
-    float scale = static_cast<float>(windowSize.x) / textureSize.x;
-    float scaledHeight = textureSize.y * scale;
-    bgSprite.setScale({scale, scale});
-    bgSprite.setPosition({0.f, (windowSize.y - scaledHeight) / 2.f});
+    bgSprite.setPosition({0.f, 0.f});
+    bgSprite.setScale({static_cast<float>(windowSize.x) / textureSize.x,
+                        static_cast<float>(windowSize.y) / textureSize.y});
 }
 
 void PlayState::handleInput(const sf::Event& event) {
