@@ -42,12 +42,13 @@ jobs:
 
       # Step 2: Install dependencies for each platform (Targeting SFML 3.x)
 
-      # 2.1. For Linux: Install system graphics and X11 dependencies required by SFML
+      # 2.1. For Linux: Fix vcpkg directory permissions and install system X11/OpenGL dependencies
       - name: Install Linux Dependencies
         if: runner.os == 'Linux'
         run: |
+          sudo chown -R $USER:$USER /usr/local/share/vcpkg
           sudo apt-get update
-          sudo apt-get install -y pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev
+          sudo apt-get install -y pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev libx11-xcb-dev libxcb1-dev libxcb-randr0-dev libxcb-image0-dev libgl-dev
 
       # 2.2. For macOS: Use Homebrew (which natively serves SFML 3.x)
       - name: Install macOS Dependencies (SFML 3.x)
@@ -56,17 +57,23 @@ jobs:
           brew update
           brew install sfml
 
-      # 2.3. For Windows & Linux: Create Vcpkg Manifest mode file (Fetches latest SFML 3.x)
+      # 2.3. For Windows & Linux: Create Vcpkg Manifest mode file with dynamic builtin-baseline
       - name: Create Vcpkg Manifest (SFML 3.x)
         if: runner.os != 'macOS'
         run: |
-          echo '{
-            "name": "super-mario-ci",
-            "version-string": "1.0.0",
-            "dependencies": [
-              "sfml"
-            ]
-          }' > vcpkg.json
+          VCPKG_DIR="C:/vcpkg"
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            VCPKG_DIR="/usr/local/share/vcpkg"
+          fi
+          VCPKG_COMMIT=$(git -C "$VCPKG_DIR" rev-parse HEAD)
+          echo "{
+            \"name\": \"super-mario-ci\",
+            \"version-string\": \"1.0.0\",
+            \"dependencies\": [
+              \"sfml\"
+            ],
+            \"builtin-baseline\": \"$VCPKG_COMMIT\"
+          }" > vcpkg.json
 
       # Step 3: Run CMake configuration
       - name: Configure
