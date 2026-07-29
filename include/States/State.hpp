@@ -1,8 +1,12 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include "Systems/AssetManager.hpp"
 
 class GameStateManager;
 
+namespace Systems {
+    class AssetManager; 
+}
 /**
  * @class State
  * @brief Abstract base class for all game states.
@@ -14,13 +18,14 @@ class GameStateManager;
 class State {
 protected:
     GameStateManager& gsm; ///< Reference to the State Manager for controlling navigation/flow.
+    Systems::AssetManager& assets;
 
 public:
     /**
      * @brief Constructor that binds this state to a GameStateManager.
      * @param gsm Reference to the parent GameStateManager.
      */
-    State(GameStateManager& gsm) : gsm(gsm) {}
+    State(GameStateManager& gsm, Systems::AssetManager& assets) : gsm(gsm), assets(assets) {}
 
     /**
      * @brief Virtual destructor to ensure correct cleanup of derived classes.

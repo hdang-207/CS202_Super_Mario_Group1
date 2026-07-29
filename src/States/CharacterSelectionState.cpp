@@ -1,11 +1,13 @@
 #include "States/CharacterSelectionState.hpp"
+#include "Core/Config.hpp"
 #include "States/IntroMenuState.hpp"
 #include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Core/CharacterType.hpp"
 #include <iostream>
 
-CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm) : State(gsm) {}
+CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets) 
+    : State(gsm, assets) {}
 
 void CharacterSelectionState::init() {
     // Log user instructions for character selection on initialization.
@@ -20,17 +22,17 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         // Option 'B' to return back to the Intro Menu State
         if (keyPressed->code == sf::Keyboard::Key::B) {
             std::cout << "[Core Engine] Going back to IntroMenuState...\n";
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm));
+            gsm.changeState(std::make_unique<PlayState>(gsm, assets, CharacterType::Mario));
         } 
         // Option '1' (or Numpad 1) to select Mario
         else if (keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
             std::cout << "[Core Engine] Mario Selected! Transitioning to PlayState...\n";
-            gsm.changeState(std::make_unique<PlayState>(gsm, CharacterType::Mario));
-        } 
+            gsm.changeState(std::make_unique<PlayState>(gsm, assets, CharacterType::Mario));
+        }
         // Option '2' (or Numpad 2) to select Luigi
         else if (keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
             std::cout << "[Core Engine] Luigi Selected! Transitioning to PlayState...\n";
-            gsm.changeState(std::make_unique<PlayState>(gsm, CharacterType::Luigi));
+            gsm.changeState(std::make_unique<PlayState>(gsm, assets, CharacterType::Mario));
         }
     }
 }
@@ -40,7 +42,11 @@ void CharacterSelectionState::update(sf::Time dt) {
 }
 
 void CharacterSelectionState::render(sf::RenderWindow& window) {
-    // Clear screen with Sea Green to represent the character selection screen background.
-    window.clear(sf::Color(46, 139, 87));
+    // Fill the game area with Sea Green to represent the character selection screen
+    // background. Drawn as a rectangle rather than cleared, so the letterbox bars
+    // around the game area stay black.
+    sf::RectangleShape background({Config::kViewWidth, Config::kViewHeight});
+    background.setFillColor(sf::Color(46, 139, 87));
+    window.draw(background);
 }
 
