@@ -15,70 +15,43 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - {
-              name: Windows,
-              os: windows-latest,
-              flags: "-A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows",
-            }
-          - {
-              name: Linux GCC,
-              os: ubuntu-latest,
-              flags: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake",
-            }
-          - {
-              name: Linux Clang,
-              os: ubuntu-latest,
-              flags: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake",
-            }
+          - { name: Windows, os: windows-latest, flags: "-A x64" }
+          - { name: Linux GCC, os: ubuntu-latest, flags: "" }
+          - { name: Linux Clang, os: ubuntu-latest, flags: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++" }
           - { name: macOS, os: macos-latest }
         config:
           - { name: Shared, flags: "-DBUILD_SHARED_LIBS=TRUE" }
           - { name: Static, flags: "-DBUILD_SHARED_LIBS=FALSE" }
 
     steps:
-      # Step 1: Checkout the project source code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Install dependencies for each platform (Targeting SFML 3.x)
-
-      # 2.1. For Linux: Fix vcpkg directory permissions and install system X11/OpenGL dependencies
-      - name: Install Linux Dependencies
+      - name: Install Linux Dependencies (X11 & OpenGL)
         if: runner.os == 'Linux'
         run: |
-          sudo chown -R $USER:$USER /usr/local/share/vcpkg
           sudo apt-get update
           sudo apt-get install -y pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev libx11-xcb-dev libxcb1-dev libxcb-randr0-dev libxcb-image0-dev libgl-dev
 
-      # 2.2. For macOS: Use Homebrew (which natively serves SFML 3.x)
       - name: Install macOS Dependencies (SFML 3.x)
         if: runner.os == 'macOS'
         run: |
           brew update
           brew install sfml
 
-      # 2.3. For Windows & Linux: Create Vcpkg Manifest mode file with dynamic builtin-baseline
-      - name: Create Vcpkg Manifest (SFML 3.x)
+      - name: Setup Vcpkg
         if: runner.os != 'macOS'
-        run: |
-          VCPKG_DIR="C:/vcpkg"
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            VCPKG_DIR="/usr/local/share/vcpkg"
-          fi
-          VCPKG_COMMIT=$(git -C "$VCPKG_DIR" rev-parse HEAD)
-          echo "{
-            \"name\": \"super-mario-ci\",
-            \"version-string\": \"1.0.0\",
-            \"dependencies\": [
-              \"sfml\"
-            ],
-            \"builtin-baseline\": \"$VCPKG_COMMIT\"
-          }" > vcpkg.json
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '9d7f79f56ae1a9b4704d6a7fb8237e347a974133'
 
-      # Step 3: Run CMake configuration
       - name: Configure
-        run: cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }} -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          else
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
+          fi
 
-      # Step 4: Compile and build the project
       - name: Build
         run: cmake --build build --config Release
