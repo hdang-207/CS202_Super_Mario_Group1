@@ -1,4 +1,5 @@
 #include "States/CharacterSelectionState.hpp"
+#include "Core/Config.hpp"
 #include "States/IntroMenuState.hpp"
 #include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
@@ -41,7 +42,11 @@ void CharacterSelectionState::update(sf::Time dt) {
 }
 
 void CharacterSelectionState::render(sf::RenderWindow& window) {
-    // Clear screen with Sea Green to represent the character selection screen background.
-    window.clear(sf::Color(46, 139, 87));
+    // Fill the game area with Sea Green to represent the character selection screen
+    // background. Drawn as a rectangle rather than cleared, so the letterbox bars
+    // around the game area stay black.
+    sf::RectangleShape background({Config::kViewWidth, Config::kViewHeight});
+    background.setFillColor(sf::Color(46, 139, 87));
+    window.draw(background);
 }
 
