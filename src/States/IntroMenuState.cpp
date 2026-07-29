@@ -22,7 +22,7 @@ void IntroMenuState::init() {
                              titleBounds.position.y + titleBounds.size.y / 2.f});
     titleText.setPosition({400.f, 150.f}); 
 
-    if (bgMusic.openFromFile("assets/audio/Theme.mp3")) {
+    if (bgMusic.openFromFile("/Users/tranquochuy/Downloads/CS202_MarioGame/assets/audio/Theme.mp3")) {
     bgMusic.setLooping(true); // Lặp lại liên tục khi ở Menu
     bgMusic.setVolume(60.f);  // Mức âm lượng (0 - 100)
     bgMusic.play();           // Phát nhạc ngay khi mở Menu!
