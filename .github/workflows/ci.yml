@@ -45,7 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libx11-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev
 
-          # Cài đặt SFML 3.x mới nhất thông qua Vcpkg trên Linux máy ảo (sử dụng sudo để có quyền ghi thư mục hệ thống vcpkg)
+          # Install latest SFML 3.x via Vcpkg on Linux runner (using sudo for system vcpkg write access)
           VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-/usr/local/share/vcpkg}"
           sudo "$VCPKG_ROOT/vcpkg" install sfml:x64-linux
 
