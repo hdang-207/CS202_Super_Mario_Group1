@@ -1,33 +1,81 @@
 #include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/IntroMenuState.hpp"
+#include "Systems/ResourcePath.hpp"
 #include <algorithm>
 #include <iostream>
 
+namespace {
+    // The level art is authored at 16px per tile, like the original game. Drawing it
+    // at a whole-number zoom keeps every pixel crisp; 3x gives a 20x15 tile viewport
+    // in a 960x720 window, so the ground sits at the bottom of the screen and roughly
+    // a screen-and-a-bit of level is visible at a time.
+    constexpr float kZoom = 3.f;
+    constexpr float kViewWidth = 960.f;
+    constexpr float kViewHeight = 720.f;
+
+    // Kinematics, in world pixels per second. Tuned against a 48px tile so the jump
+    // clears roughly three and a half tiles, like Super Mario Bros.
+    constexpr float kGravity = 2400.f;
+    constexpr float kWalkAcceleration = 1800.f;
+    constexpr float kMaxWalkSpeed = 420.f;
+    constexpr float kGroundFriction = 2000.f;
+    constexpr float kJumpSpeed = 900.f;
+    constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
+    constexpr float kMaxFallSpeed = 1400.f;
+
+    bool keyDown(sf::Keyboard::Key key) {
+        return sf::Keyboard::isKeyPressed(key);
+    }
+
+    bool wantsLeft() {
+        return keyDown(sf::Keyboard::Key::Left) || keyDown(sf::Keyboard::Key::A);
+    }
+
+    bool wantsRight() {
+        return keyDown(sf::Keyboard::Key::Right) || keyDown(sf::Keyboard::Key::D);
+    }
+
+    bool wantsJump() {
+        return keyDown(sf::Keyboard::Key::Space) || keyDown(sf::Keyboard::Key::Up)
+            || keyDown(sf::Keyboard::Key::W);
+    }
+}
+
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
-    : State(gsm, assets), selectedCharacter(character), bgSprite(assets.getTexture("LevelTilemap")) {}
+    : State(gsm, assets), selectedCharacter(character),
+      camera(sf::FloatRect({0.f, 0.f}, {kViewWidth, kViewHeight})) {}
 
 void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
     std::cout << "[Core Engine] PlayState Initialized with character: " << charName << "\n";
 
     // Load level 1 map file
-    if (mapParser.loadFromFile("/Users/tranquochuy/Downloads/CS202_MarioGame/assets/maps/level1.txt")) {
-        mapParser.printMap();
+    if (mapParser.loadFromFile(Systems::resourcePath("assets/maps/level1.txt"))) {
+        std::cout << "[Core Engine] Level size: " << mapParser.getWidth() << "x"
+                  << mapParser.getHeight() << " tiles\n";
     } else {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
-    // Zoom the tilemap in so it fills the window height, preserving its aspect ratio.
-    // This makes the level wider than the window (a real side-scroller camera), so we
-    // scroll a view across it horizontally instead of squeezing the whole level into
-    // one screen.
-    sf::Vector2u windowSize = {1200u, 800u};
-    sf::Vector2u textureSize = bgSprite.getTexture().getSize();
-    float scale = static_cast<float>(windowSize.y) / textureSize.y;
-    bgSprite.setScale({scale, scale});
-    bgSprite.setPosition({0.f, 0.f});
-    levelWidth = textureSize.x * scale;
+    if (!tileMap.build(mapParser, assets.getTexture("LevelTilemap"), kZoom)) {
+        std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
+        return;
+    }
+    std::cout << "[Core Engine] Enemy spawns found: " << tileMap.enemySpawns().size() << "\n";
+
+    // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
+    float tile = tileMap.tileSize();
+    avatar.setSize({tile * 0.7f, tile * 0.95f});
+    avatar.setFillColor(selectedCharacter == CharacterType::Mario
+                            ? sf::Color(216, 40, 0)     // Mario red
+                            : sf::Color(0, 168, 0));    // Luigi green
+    avatar.setOutlineThickness(-2.f);
+    avatar.setOutlineColor(sf::Color(20, 20, 20));
+    respawnAvatar();
+    updateCamera();
+
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Esc to quit.\n";
 }
 
 void PlayState::handleInput(const sf::Event& event) {
@@ -35,32 +83,109 @@ void PlayState::handleInput(const sf::Event& event) {
         // Press Escape to return to Main Menu
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
-            gsm.changeState(std::make_unique<PlayState>(gsm, assets, CharacterType::Mario));
+            gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         }
     }
 }
 
 void PlayState::update(sf::Time dt) {
-    // Scroll the camera across the level with the arrow keys (no player entity yet).
-    const float scrollSpeed = 500.f; // pixels per second
-    float windowWidth = 1200.f;
-    float maxCameraX = std::max(0.f, levelWidth - windowWidth);
+    moveAvatar(dt);
+    updateCamera();
+}
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-        cameraX += scrollSpeed * dt.asSeconds();
+sf::FloatRect PlayState::avatarBounds() const {
+    return sf::FloatRect(avatarPos, avatar.getSize());
+}
+
+void PlayState::respawnAvatar() {
+    sf::Vector2f spawn = tileMap.playerSpawn();
+    // Sit the avatar on the bottom of its spawn tile rather than its top-left corner.
+    avatarPos = {spawn.x, spawn.y + tileMap.tileSize() - avatar.getSize().y};
+    avatarVelocity = {0.f, 0.f};
+    onGround = false;
+}
+
+void PlayState::moveAvatar(sf::Time dt) {
+    float seconds = dt.asSeconds();
+
+    // --- horizontal intent -------------------------------------------------
+    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
+    if (direction != 0.f) {
+        avatarVelocity.x += direction * kWalkAcceleration * seconds;
+        avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
+    } else {
+        // Coast to a stop instead of snapping, so movement keeps some inertia.
+        float drop = kGroundFriction * seconds;
+        if (std::abs(avatarVelocity.x) <= drop) {
+            avatarVelocity.x = 0.f;
+        } else {
+            avatarVelocity.x -= std::copysign(drop, avatarVelocity.x);
+        }
     }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-        cameraX -= scrollSpeed * dt.asSeconds();
+
+    // --- jumping -----------------------------------------------------------
+    bool jumpPressed = wantsJump();
+    if (jumpPressed && !jumpHeld && onGround) {
+        avatarVelocity.y = -kJumpSpeed;
+        onGround = false;
     }
-    cameraX = std::clamp(cameraX, 0.f, maxCameraX);
+    // Let go early and the jump is cut short - the classic variable jump height.
+    if (!jumpPressed && avatarVelocity.y < -kJumpSpeed * kJumpCutoff) {
+        avatarVelocity.y = -kJumpSpeed * kJumpCutoff;
+    }
+    jumpHeld = jumpPressed;
+
+    avatarVelocity.y = std::min(avatarVelocity.y + kGravity * seconds, kMaxFallSpeed);
+
+    // --- move and resolve, one axis at a time ------------------------------
+    sf::Vector2f size = avatar.getSize();
+
+    avatarPos.x += avatarVelocity.x * seconds;
+    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(avatarBounds())) {
+        if (avatarVelocity.x > 0.f) {
+            avatarPos.x = tile.position.x - size.x;
+            avatarVelocity.x = 0.f;
+        } else if (avatarVelocity.x < 0.f) {
+            avatarPos.x = tile.position.x + tile.size.x;
+            avatarVelocity.x = 0.f;
+        }
+    }
+    avatarPos.x = std::clamp(avatarPos.x, 0.f, std::max(0.f, tileMap.pixelWidth() - size.x));
+
+    onGround = false;
+    avatarPos.y += avatarVelocity.y * seconds;
+    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(avatarBounds())) {
+        if (avatarVelocity.y > 0.f) {
+            avatarPos.y = tile.position.y - size.y;
+            avatarVelocity.y = 0.f;
+            onGround = true;
+        } else if (avatarVelocity.y < 0.f) {
+            avatarPos.y = tile.position.y + tile.size.y;
+            avatarVelocity.y = 0.f;
+        }
+    }
+
+    // Fell down one of the level's pits: start over from the spawn point.
+    if (avatarPos.y > tileMap.pixelHeight()) {
+        respawnAvatar();
+    }
+
+    avatar.setPosition(avatarPos);
+}
+
+void PlayState::updateCamera() {
+    float halfWidth = kViewWidth / 2.f;
+    float maxCenter = std::max(halfWidth, tileMap.pixelWidth() - halfWidth);
+    float centerX = std::clamp(avatarPos.x + avatar.getSize().x / 2.f, halfWidth, maxCenter);
+    camera.setCenter({centerX, kViewHeight / 2.f});
 }
 
 void PlayState::render(sf::RenderWindow& window) {
-    // Same sky blue as the tilemap image, so any edge gaps blend in seamlessly.
-    window.clear(sf::Color(93, 148, 251));
+    // Same sky blue as the level artwork, so tiles blend into the background.
+    window.clear(sf::Color(92, 148, 252));
 
-    sf::View camera(sf::FloatRect({cameraX, 0.f}, {1200.f, 800.f}));
     window.setView(camera);
-    window.draw(bgSprite);
+    window.draw(tileMap);
+    window.draw(avatar);
     window.setView(window.getDefaultView());
 }

@@ -31,6 +31,10 @@ add_executable(${PROJECT_NAME} main.cpp ${SOURCES} ${HEADERS})
 # Khai báo thư mục include cho target (Modern CMake thay vì dùng include_directories toàn cục)
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 
+# Đường dẫn source tree dùng làm phương án dự phòng cuối cùng khi tìm thư mục assets
+# (xem Systems::resourcePath) - nhờ vậy không ai phải hardcode đường dẫn máy mình nữa.
+target_compile_definitions(${PROJECT_NAME} PRIVATE MARIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 # Liên kết các module của SFML vào dự án
 target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Window SFML::System SFML::Audio)
 

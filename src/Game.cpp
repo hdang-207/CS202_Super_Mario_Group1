@@ -1,22 +1,23 @@
 #include "Game.hpp"
 #include "States/IntroMenuState.hpp"
+#include "Systems/ResourcePath.hpp"
 #include <iostream>
 
 // Define target update frequency of 60 frames per second (approx 16.67ms per frame)
 const sf::Time Game::TimePerFrame = sf::seconds(1.f / 60.f);
 
 Game::Game() 
-    : window(sf::VideoMode({1200u, 800u}), "Super Mario Bros - Group 1", sf::Style::Close | sf::Style::Titlebar)
+    : window(sf::VideoMode({960u, 720u}), "Super Mario Bros - Group 1", sf::Style::Close | sf::Style::Titlebar)
 {
     // 1. Load Font chữ cho UI
-    assets.loadFont("MarioFont", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/fonts/MarioFont.otf");
+    assets.loadFont("MarioFont", Systems::resourcePath("assets/fonts/MarioFont.otf"));
 
     // 2. Load Âm thanh
-    assets.loadSoundBuffer("ThemeSong", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/audio/Theme.mp3");
+    assets.loadSoundBuffer("ThemeSong", Systems::resourcePath("assets/audio/Theme.mp3"));
 
-    assets.loadTexture("MenuBackground", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/Background.png");
+    assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
 
-    assets.loadTexture("LevelTilemap", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/tilemap.jpeg");
+    assets.loadTexture("LevelTilemap", Systems::resourcePath("assets/textures/tilemap.png"));
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
