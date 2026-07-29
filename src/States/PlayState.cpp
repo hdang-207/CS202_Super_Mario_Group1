@@ -1,10 +1,11 @@
 #include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/IntroMenuState.hpp"
+#include <algorithm>
 #include <iostream>
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
-    : State(gsm, assets), selectedCharacter(character), bgSprite(assets.getTexture("CloudBackground")) {}
+    : State(gsm, assets), selectedCharacter(character), bgSprite(assets.getTexture("LevelTilemap")) {}
 
 void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
@@ -17,35 +18,16 @@ void PlayState::init() {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
+    // Zoom the tilemap in so it fills the window height, preserving its aspect ratio.
+    // This makes the level wider than the window (a real side-scroller camera), so we
+    // scroll a view across it horizontally instead of squeezing the whole level into
+    // one screen.
     sf::Vector2u windowSize = {1200u, 800u};
-
-    // Scale the sky/clouds background image to fill the window. Its aspect ratio (1536x1024)
-    // already matches the window's (1200x800), so this does not distort the image.
-    sf::Vector2u bgTextureSize = bgSprite.getTexture().getSize();
+    sf::Vector2u textureSize = bgSprite.getTexture().getSize();
+    float scale = static_cast<float>(windowSize.y) / textureSize.y;
+    bgSprite.setScale({scale, scale});
     bgSprite.setPosition({0.f, 0.f});
-    bgSprite.setScale({static_cast<float>(windowSize.x) / bgTextureSize.x,
-                        static_cast<float>(windowSize.y) / bgTextureSize.y});
-
-    // Lay down a ground tile sprite for every '#' cell in the map grid, scaled so the
-    // grid exactly covers the window.
-    const std::vector<std::vector<char>>& grid = mapParser.getGrid();
-    if (mapParser.getWidth() > 0 && mapParser.getHeight() > 0) {
-        float tileWidth = static_cast<float>(windowSize.x) / mapParser.getWidth();
-        float tileHeight = static_cast<float>(windowSize.y) / mapParser.getHeight();
-        sf::Vector2u groundTextureSize = assets.getTexture("GroundTile").getSize();
-
-        for (std::size_t row = 0; row < grid.size(); ++row) {
-            for (std::size_t col = 0; col < grid[row].size(); ++col) {
-                if (grid[row][col] != '#') {
-                    continue;
-                }
-                sf::Sprite tile(assets.getTexture("GroundTile"));
-                tile.setScale({tileWidth / groundTextureSize.x, tileHeight / groundTextureSize.y});
-                tile.setPosition({col * tileWidth, row * tileHeight});
-                groundTiles.push_back(tile);
-            }
-        }
-    }
+    levelWidth = textureSize.x * scale;
 }
 
 void PlayState::handleInput(const sf::Event& event) {
@@ -59,15 +41,26 @@ void PlayState::handleInput(const sf::Event& event) {
 }
 
 void PlayState::update(sf::Time dt) {
-    // Skeleton gameplay update loop
+    // Scroll the camera across the level with the arrow keys (no player entity yet).
+    const float scrollSpeed = 500.f; // pixels per second
+    float windowWidth = 1200.f;
+    float maxCameraX = std::max(0.f, levelWidth - windowWidth);
+
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
+        cameraX += scrollSpeed * dt.asSeconds();
+    }
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
+        cameraX -= scrollSpeed * dt.asSeconds();
+    }
+    cameraX = std::clamp(cameraX, 0.f, maxCameraX);
 }
 
 void PlayState::render(sf::RenderWindow& window) {
-    // Same sky blue as the background image, so the letterboxed edges blend in seamlessly.
-    window.clear(sf::Color(91, 146, 247));
-    window.draw(bgSprite);
+    // Same sky blue as the tilemap image, so any edge gaps blend in seamlessly.
+    window.clear(sf::Color(93, 148, 251));
 
-    for (auto& tile : groundTiles) {
-        window.draw(tile);
-    }
+    sf::View camera(sf::FloatRect({cameraX, 0.f}, {1200.f, 800.f}));
+    window.setView(camera);
+    window.draw(bgSprite);
+    window.setView(window.getDefaultView());
 }

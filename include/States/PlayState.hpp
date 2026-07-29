@@ -2,7 +2,6 @@
 #include "States/State.hpp"
 #include "Core/CharacterType.hpp"
 #include "Systems/MapParser.hpp"
-#include <vector>
 
 /**
  * @class PlayState
@@ -12,8 +11,9 @@ class PlayState : public State {
 private:
     CharacterType selectedCharacter;
     MapParser mapParser;
-    sf::Sprite bgSprite; ///< Sky + clouds background image.
-    std::vector<sf::Sprite> groundTiles; ///< One tile sprite per '#' cell in the map grid.
+    sf::Sprite bgSprite; ///< Level tilemap background image.
+    float cameraX{0.f}; ///< Horizontal scroll offset (in pixels) of the camera into the level.
+    float levelWidth{0.f}; ///< Full scrolled width of the level (scaled tilemap width).
 
 public:
     /**

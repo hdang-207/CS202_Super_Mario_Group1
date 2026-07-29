@@ -16,9 +16,7 @@ Game::Game()
 
     assets.loadTexture("MenuBackground", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/Background.png");
 
-    assets.loadTexture("CloudBackground", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/Cloud1200x800.png");
-
-    assets.loadTexture("GroundTile", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/ground.png");
+    assets.loadTexture("LevelTilemap", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/tilemap.jpeg");
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
