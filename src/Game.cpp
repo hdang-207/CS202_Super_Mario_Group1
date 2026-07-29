@@ -18,6 +18,8 @@ Game::Game()
 
     assets.loadTexture("CloudBackground", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/Cloud1200x800.png");
 
+    assets.loadTexture("GroundTile", "/Users/tranquochuy/Downloads/CS202_MarioGame/assets/textures/ground.png");
+
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
     

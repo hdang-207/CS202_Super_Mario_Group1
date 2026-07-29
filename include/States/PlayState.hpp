@@ -2,6 +2,7 @@
 #include "States/State.hpp"
 #include "Core/CharacterType.hpp"
 #include "Systems/MapParser.hpp"
+#include <vector>
 
 /**
  * @class PlayState
@@ -12,6 +13,7 @@ private:
     CharacterType selectedCharacter;
     MapParser mapParser;
     sf::Sprite bgSprite; ///< Sky + clouds background image.
+    std::vector<sf::Sprite> groundTiles; ///< One tile sprite per '#' cell in the map grid.
 
 public:
     /**
