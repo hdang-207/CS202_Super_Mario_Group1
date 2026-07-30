@@ -3,68 +3,30 @@
 #include <cmath>
 
 namespace {
-    /// One entry of the level legend: which artwork a map character draws and how it behaves.
+    /// One entry of the level legend: how a map character behaves.
     struct TileDef {
         char symbol;
-        int atlasX;      ///< Pixel column of the tile inside the atlas texture.
-        int atlasY;      ///< Pixel row of the tile inside the atlas texture.
         TileType type;
     };
 
     /**
-     * Level legend. Atlas coordinates were taken straight from the World 1-1 tile
-     * sheet, so the drawn level matches the original artwork exactly.
+     * Level legend. Artwork comes from setTileTexture(); this table only decides
+     * what a character means to the physics.
      *
-     * Solid, gameplay-relevant symbols:
      *   #  ground        B  brick          ?  question block   S  staircase block
      *   [] pipe top      {} pipe body      H  hidden block
-     * Markers (drawn as sky):
-     *   P  player spawn  E  enemy spawn    .  empty sky
-     * Everything else is decoration and never collides.
+     * Markers handled separately: P player spawn, E enemy spawn, . empty sky.
      */
     constexpr TileDef kTileDefs[] = {
-        // --- solid ---
-        { '#',    0, 208, TileType::Ground        },
-        { 'B', 1280,  80, TileType::Brick         },
-        { '?',  352,  80, TileType::QuestionBlock },
-        { 'S', 3008,  80, TileType::StairBlock    },
-        { 'H', 1024, 128, TileType::HiddenBlock   },
-        { '[',  736, 144, TileType::Pipe          },
-        { ']',  752, 144, TileType::Pipe          },
-        { '{',  736, 160, TileType::Pipe          },
-        { '}',  752, 160, TileType::Pipe          },
-        // --- decoration: clouds ---
-        { 'q',  304,  32, TileType::Decoration },
-        { 'w',  320,  32, TileType::Decoration },
-        { 'e',  336,  32, TileType::Decoration },
-        { 'a',  304,  48, TileType::Decoration },
-        { 's',  320,  48, TileType::Decoration },
-        { 'd',  336,  48, TileType::Decoration },
-        // --- decoration: hills ---
-        { 'n',   32, 160, TileType::Decoration },
-        { 'y',   16, 176, TileType::Decoration },
-        { 'u',   32, 176, TileType::Decoration },
-        { 'i',   48, 176, TileType::Decoration },
-        { 'j',   32, 192, TileType::Decoration },
-        { 'k',   48, 192, TileType::Decoration },
-        // --- decoration: bushes ---
-        { 'z',  176, 192, TileType::Decoration },
-        { 'x',  192, 192, TileType::Decoration },
-        { 'c',  240, 192, TileType::Decoration },
-        // --- decoration: flagpole ---
-        { 'O', 3168,  32, TileType::Decoration },
-        { '/', 3152,  48, TileType::Decoration },
-        { 'F', 3168,  48, TileType::Decoration },
-        { '!', 3168,  64, TileType::Decoration },
-        { '|', 3168,  80, TileType::Decoration },
-        // --- decoration: castle ---
-        { '1', 3248, 128, TileType::Decoration },
-        { '2', 3248, 144, TileType::Decoration },
-        { '3', 3264, 144, TileType::Decoration },
-        { '4', 3280, 144, TileType::Decoration },
-        { '5', 3248, 160, TileType::Decoration },
-        { '6', 3264, 176, TileType::Decoration },
-        { '7', 3264, 192, TileType::Decoration },
+        { '#', TileType::Ground        },
+        { 'B', TileType::Brick         },
+        { '?', TileType::QuestionBlock },
+        { 'S', TileType::StairBlock    },
+        { 'H', TileType::HiddenBlock   },
+        { '[', TileType::Pipe          },
+        { ']', TileType::Pipe          },
+        { '{', TileType::Pipe          },
+        { '}', TileType::Pipe          },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -80,15 +42,83 @@ namespace {
     bool isSolidType(TileType type) {
         return type != TileType::Empty && type != TileType::Decoration;
     }
+
+    /// @brief Appends one rectangle as the two triangles SFML 3 needs.
+    void appendQuad(sf::VertexArray& target, sf::Vector2f topLeft, sf::Vector2f size,
+                    const sf::FloatRect& texRect) {
+        const sf::Vector2f corners[4] = {
+            {topLeft.x, topLeft.y},
+            {topLeft.x + size.x, topLeft.y},
+            {topLeft.x + size.x, topLeft.y + size.y},
+            {topLeft.x, topLeft.y + size.y}
+        };
+        float texRight = texRect.position.x + texRect.size.x;
+        float texBottom = texRect.position.y + texRect.size.y;
+        const sf::Vector2f texCorners[4] = {
+            {texRect.position.x, texRect.position.y},
+            {texRight, texRect.position.y},
+            {texRight, texBottom},
+            {texRect.position.x, texBottom}
+        };
+        const int triangle[6] = {0, 1, 2, 0, 2, 3};
+
+        for (int corner : triangle) {
+            sf::Vertex vertex;
+            vertex.position = corners[corner];
+            vertex.texCoords = texCorners[corner];
+            target.append(vertex);
+        }
+    }
 }
 
-bool TileMap::build(const MapParser& parser, const sf::Texture& atlas, float scale) {
+void TileMap::setTileTexture(char symbol, const sf::Texture& texture, int frameCount,
+                             sf::Time frameDuration) {
+    frameCount = std::max(1, frameCount);
+
+    if (TileBatch* existing = batchFor(symbol)) {
+        existing->texture = &texture;
+        existing->frameCount = frameCount;
+        existing->frameDuration = frameDuration;
+        return;
+    }
+
+    batches.push_back({symbol, &texture, frameCount, frameDuration, sf::Time::Zero, 0,
+                       sf::VertexArray(sf::PrimitiveType::Triangles)});
+}
+
+void TileMap::setDecorationTexture(char symbol, const sf::Texture& texture) {
+    if (TileBatch* existing = decorationFor(symbol)) {
+        existing->texture = &texture;
+        return;
+    }
+    decorations.push_back({symbol, &texture, 1, sf::Time::Zero, sf::Time::Zero, 0,
+                           sf::VertexArray(sf::PrimitiveType::Triangles)});
+}
+
+TileMap::TileBatch* TileMap::batchFor(char symbol) {
+    for (TileBatch& batch : batches) {
+        if (batch.symbol == symbol) {
+            return &batch;
+        }
+    }
+    return nullptr;
+}
+
+TileMap::TileBatch* TileMap::decorationFor(char symbol) {
+    for (TileBatch& batch : decorations) {
+        if (batch.symbol == symbol) {
+            return &batch;
+        }
+    }
+    return nullptr;
+}
+
+bool TileMap::build(const MapParser& parser, float scale) {
     const std::vector<std::vector<char>>& grid = parser.getGrid();
     if (grid.empty()) {
         return false;
     }
 
-    atlasTexture = &atlas;
     columns = static_cast<int>(parser.getWidth());
     rows = static_cast<int>(parser.getHeight());
     tileSizePx = kSourceTileSize * scale;
@@ -97,9 +127,16 @@ bool TileMap::build(const MapParser& parser, const sf::Texture& atlas, float sca
     enemies.clear();
     spawn = {0.f, 0.f};
 
-    // SFML 3 has no quad primitive, so each tile is drawn as two triangles.
-    vertices.setPrimitiveType(sf::PrimitiveType::Triangles);
-    vertices.clear();
+    // Rebuilding restarts every animation, so the baked texture coordinates below
+    // (which all point at frame 0) stay in step with what update() thinks is shown.
+    for (TileBatch& batch : batches) {
+        batch.vertices.clear();
+        batch.elapsed = sf::Time::Zero;
+        batch.frame = 0;
+    }
+    for (TileBatch& batch : decorations) {
+        batch.vertices.clear();
+    }
 
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < static_cast<int>(grid[row].size()); ++col) {
@@ -115,6 +152,15 @@ bool TileMap::build(const MapParser& parser, const sf::Texture& atlas, float sca
                 continue;
             }
 
+            // Scenery is placed by a single character but covers whatever area its
+            // picture needs, so it is handled before the one-cell tiles below.
+            if (TileBatch* decor = decorationFor(symbol)) {
+                sf::Vector2f artSize(decor->texture->getSize());
+                appendQuad(decor->vertices, worldPos, artSize * scale,
+                           sf::FloatRect({0.f, 0.f}, artSize));
+                continue;
+            }
+
             const TileDef* def = findTile(symbol);
             if (def == nullptr) {
                 continue; // sky or an unknown symbol: nothing to store, nothing to draw
@@ -122,39 +168,50 @@ bool TileMap::build(const MapParser& parser, const sf::Texture& atlas, float sca
 
             types[static_cast<std::size_t>(row) * columns + col] = def->type;
 
-            // The hidden block is solid but must not be visible until it is struck.
-            if (def->type == TileType::HiddenBlock) {
+            // The hidden block is solid but must not be visible until it is struck,
+            // so it is deliberately left without artwork.
+            TileBatch* batch = batchFor(symbol);
+            if (batch == nullptr) {
                 continue;
             }
 
-            float left = worldPos.x;
-            float top = worldPos.y;
-            float right = left + tileSizePx;
-            float bottom = top + tileSizePx;
-
-            float texLeft = static_cast<float>(def->atlasX);
-            float texTop = static_cast<float>(def->atlasY);
-            float texRight = texLeft + kSourceTileSize;
-            float texBottom = texTop + kSourceTileSize;
-
-            const sf::Vector2f corners[4] = {
-                {left, top}, {right, top}, {right, bottom}, {left, bottom}
-            };
-            const sf::Vector2f texCorners[4] = {
-                {texLeft, texTop}, {texRight, texTop}, {texRight, texBottom}, {texLeft, texBottom}
-            };
-            const int triangle[6] = {0, 1, 2, 0, 2, 3};
-
-            for (int corner : triangle) {
-                sf::Vertex vertex;
-                vertex.position = corners[corner];
-                vertex.texCoords = texCorners[corner];
-                vertices.append(vertex);
-            }
+            appendQuad(batch->vertices, worldPos, {tileSizePx, tileSizePx},
+                       sf::FloatRect({0.f, 0.f},
+                                     {batch->frameWidth(),
+                                      static_cast<float>(batch->texture->getSize().y)}));
         }
     }
 
     return true;
+}
+
+void TileMap::update(sf::Time dt) {
+    for (TileBatch& batch : batches) {
+        if (batch.frameCount <= 1 || batch.frameDuration <= sf::Time::Zero
+            || batch.vertices.getVertexCount() == 0) {
+            continue;
+        }
+
+        batch.elapsed += dt;
+        int steps = 0;
+        while (batch.elapsed >= batch.frameDuration) {
+            batch.elapsed -= batch.frameDuration;
+            ++steps;
+        }
+        if (steps == 0) {
+            continue;
+        }
+
+        // Frames sit side by side, so switching one is a horizontal slide of the
+        // texture coordinates - no need to rebuild the geometry.
+        int next = (batch.frame + steps) % batch.frameCount;
+        float shift = static_cast<float>(next - batch.frame) * batch.frameWidth();
+        batch.frame = next;
+
+        for (std::size_t i = 0; i < batch.vertices.getVertexCount(); ++i) {
+            batch.vertices[i].texCoords.x += shift;
+        }
+    }
 }
 
 TileType TileMap::typeAt(int col, int row) const {
@@ -195,9 +252,20 @@ bool TileMap::intersectsSolid(const sf::FloatRect& box) const {
 }
 
 void TileMap::draw(sf::RenderTarget& target, sf::RenderStates states) const {
-    if (atlasTexture == nullptr || vertices.getVertexCount() == 0) {
-        return;
+    // Scenery first: it has to end up behind the blocks and the ground.
+    for (const TileBatch& batch : decorations) {
+        if (batch.texture == nullptr || batch.vertices.getVertexCount() == 0) {
+            continue;
+        }
+        states.texture = batch.texture;
+        target.draw(batch.vertices, states);
     }
-    states.texture = atlasTexture;
-    target.draw(vertices, states);
+
+    for (const TileBatch& batch : batches) {
+        if (batch.texture == nullptr || batch.vertices.getVertexCount() == 0) {
+            continue;
+        }
+        states.texture = batch.texture;
+        target.draw(batch.vertices, states);
+    }
 }

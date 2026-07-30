@@ -29,7 +29,17 @@ Game::Game()
 
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
 
-    assets.loadTexture("LevelTilemap", Systems::resourcePath("assets/textures/tilemap.png"));
+    // Level artwork: one image per map character, no tile atlas involved.
+    assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
+    assets.loadTexture("BrickTile", Systems::resourcePath("assets/textures/brick.png"));
+    assets.loadTexture("HardBlockTile", Systems::resourcePath("assets/textures/hard_block.png"));
+    assets.loadTexture("PipeTopLeft", Systems::resourcePath("assets/textures/pipe_top_left.png"));
+    assets.loadTexture("PipeTopRight", Systems::resourcePath("assets/textures/pipe_top_right.png"));
+    assets.loadTexture("PipeBodyLeft", Systems::resourcePath("assets/textures/pipe_body_left.png"));
+    assets.loadTexture("PipeBodyRight", Systems::resourcePath("assets/textures/pipe_body_right.png"));
+
+    // Four frames laid out left to right; TileMap cycles them so the block blinks.
+    assets.loadTexture("QuestionBlock", Systems::resourcePath("assets/textures/question_block.png"));
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
