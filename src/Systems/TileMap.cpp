@@ -43,14 +43,14 @@ namespace {
         return type != TileType::Empty && type != TileType::Decoration;
     }
 
-    /// @brief Appends one square tile as the two triangles SFML 3 needs.
-    void appendTile(sf::VertexArray& target, sf::Vector2f topLeft, float size,
+    /// @brief Appends one rectangle as the two triangles SFML 3 needs.
+    void appendQuad(sf::VertexArray& target, sf::Vector2f topLeft, sf::Vector2f size,
                     const sf::FloatRect& texRect) {
         const sf::Vector2f corners[4] = {
             {topLeft.x, topLeft.y},
-            {topLeft.x + size, topLeft.y},
-            {topLeft.x + size, topLeft.y + size},
-            {topLeft.x, topLeft.y + size}
+            {topLeft.x + size.x, topLeft.y},
+            {topLeft.x + size.x, topLeft.y + size.y},
+            {topLeft.x, topLeft.y + size.y}
         };
         float texRight = texRect.position.x + texRect.size.x;
         float texBottom = texRect.position.y + texRect.size.y;
@@ -86,8 +86,26 @@ void TileMap::setTileTexture(char symbol, const sf::Texture& texture, int frameC
                        sf::VertexArray(sf::PrimitiveType::Triangles)});
 }
 
+void TileMap::setDecorationTexture(char symbol, const sf::Texture& texture) {
+    if (TileBatch* existing = decorationFor(symbol)) {
+        existing->texture = &texture;
+        return;
+    }
+    decorations.push_back({symbol, &texture, 1, sf::Time::Zero, sf::Time::Zero, 0,
+                           sf::VertexArray(sf::PrimitiveType::Triangles)});
+}
+
 TileMap::TileBatch* TileMap::batchFor(char symbol) {
     for (TileBatch& batch : batches) {
+        if (batch.symbol == symbol) {
+            return &batch;
+        }
+    }
+    return nullptr;
+}
+
+TileMap::TileBatch* TileMap::decorationFor(char symbol) {
+    for (TileBatch& batch : decorations) {
         if (batch.symbol == symbol) {
             return &batch;
         }
@@ -116,6 +134,9 @@ bool TileMap::build(const MapParser& parser, float scale) {
         batch.elapsed = sf::Time::Zero;
         batch.frame = 0;
     }
+    for (TileBatch& batch : decorations) {
+        batch.vertices.clear();
+    }
 
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < static_cast<int>(grid[row].size()); ++col) {
@@ -128,6 +149,15 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'E') {
                 enemies.push_back(worldPos);
+                continue;
+            }
+
+            // Scenery is placed by a single character but covers whatever area its
+            // picture needs, so it is handled before the one-cell tiles below.
+            if (TileBatch* decor = decorationFor(symbol)) {
+                sf::Vector2f artSize(decor->texture->getSize());
+                appendQuad(decor->vertices, worldPos, artSize * scale,
+                           sf::FloatRect({0.f, 0.f}, artSize));
                 continue;
             }
 
@@ -145,7 +175,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 continue;
             }
 
-            appendTile(batch->vertices, worldPos, tileSizePx,
+            appendQuad(batch->vertices, worldPos, {tileSizePx, tileSizePx},
                        sf::FloatRect({0.f, 0.f},
                                      {batch->frameWidth(),
                                       static_cast<float>(batch->texture->getSize().y)}));
@@ -222,6 +252,15 @@ bool TileMap::intersectsSolid(const sf::FloatRect& box) const {
 }
 
 void TileMap::draw(sf::RenderTarget& target, sf::RenderStates states) const {
+    // Scenery first: it has to end up behind the blocks and the ground.
+    for (const TileBatch& batch : decorations) {
+        if (batch.texture == nullptr || batch.vertices.getVertexCount() == 0) {
+            continue;
+        }
+        states.texture = batch.texture;
+        target.draw(batch.vertices, states);
+    }
+
     for (const TileBatch& batch : batches) {
         if (batch.texture == nullptr || batch.vertices.getVertexCount() == 0) {
             continue;

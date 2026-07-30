@@ -56,6 +56,18 @@ public:
                         sf::Time frameDuration = sf::seconds(0.12f));
 
     /**
+     * @brief Registers scenery artwork - clouds, hills, bushes - for a map character.
+     * @param symbol Character as it appears in the map file, e.g. 'M' for a big hill.
+     * @param texture Picture of the whole object. Unlike a tile it may be several
+     *        tiles wide and tall; it is anchored at the top-left corner of the cell
+     *        holding @p symbol and keeps its own proportions.
+     *
+     * Scenery never collides and is always drawn behind the level, so one character
+     * places a whole object and the cells it covers stay free for anything else.
+     */
+    void setDecorationTexture(char symbol, const sf::Texture& texture);
+
+    /**
      * @brief Builds the level geometry from a parsed map.
      * @param parser Map whose character grid describes the level.
      * @param scale Zoom factor applied to every tile (use an integer to stay pixel-perfect).
@@ -110,8 +122,12 @@ private:
     /// @brief Batch holding @p symbol, or nullptr when no artwork was registered for it.
     TileBatch* batchFor(char symbol);
 
-    std::vector<TileType> types;      ///< Row-major grid of tile types.
-    std::vector<TileBatch> batches;   ///< One vertex buffer per map character.
+    /// @brief Scenery batch holding @p symbol, or nullptr when it is not scenery.
+    TileBatch* decorationFor(char symbol);
+
+    std::vector<TileType> types;        ///< Row-major grid of tile types.
+    std::vector<TileBatch> batches;     ///< One vertex buffer per map character.
+    std::vector<TileBatch> decorations; ///< Scenery, drawn first so it stays behind.
     int columns{0};
     int rows{0};
     float tileSizePx{16.f};
