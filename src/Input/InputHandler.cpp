@@ -2,6 +2,9 @@
 #include <SFML/Window/Keyboard.hpp>
 
 void InputHandler::update() {
+
+    reset();
+
     const bool left = 
     sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::A) ||
     sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Left);
@@ -10,16 +13,25 @@ void InputHandler::update() {
     sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::D) ||
     sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Right);
 
-    playerInput.moveAxis = static_cast<float>(right) - static_cast<float>(left);
+    if (left) {
+        m_moveLeftCommand.execute(m_playerInput);
+    }
 
-    playerInput.jumpHeld = sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space);
+    if (right) {
+        m_moveRightCommand.execute(m_playerInput);
+    }
+
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space)) {
+        m_jumpCommand.execute(m_playerInput);
+    }
+
 }
 
 void InputHandler::reset() {
-    playerInput = PlayerInput{};
+    m_playerInput = PlayerInput{};
 }
 
 const PlayerInput& InputHandler::getPlayerInput() const {
-    return playerInput;
+    return m_playerInput;
 }
 

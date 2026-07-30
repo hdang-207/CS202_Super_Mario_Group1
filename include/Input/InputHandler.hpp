@@ -1,4 +1,6 @@
 #include "PlayerInput.hpp"
+#include "Input/PlayerCommand.hpp"
+
 
 
 class InputHandler {
@@ -10,5 +12,9 @@ public:
     //getter
     const PlayerInput& getPlayerInput() const;
 private:
-    PlayerInput playerInput{};
+    PlayerInput m_playerInput{};
+
+    MoveCommand m_moveLeftCommand{-1.0f};
+    MoveCommand m_moveRightCommand{1.0f};
+    JumpCommand m_jumpCommand{};
 };
