@@ -21,26 +21,27 @@ namespace {
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
 
-    bool keyDown(sf::Keyboard::Key key) {
-        return sf::Keyboard::isKeyPressed(key);
-    }
+}
 
-    bool wantsLeft() {
-        return keyDown(sf::Keyboard::Key::Left) || keyDown(sf::Keyboard::Key::A);
-    }
+bool PlayState::holding(sf::Keyboard::Key key) const {
+    return heldKeys.count(key) > 0;
+}
 
-    bool wantsRight() {
-        return keyDown(sf::Keyboard::Key::Right) || keyDown(sf::Keyboard::Key::D);
-    }
+bool PlayState::wantsLeft() const {
+    return holding(sf::Keyboard::Key::Left) || holding(sf::Keyboard::Key::A);
+}
 
-    bool wantsJump() {
-        return keyDown(sf::Keyboard::Key::Space) || keyDown(sf::Keyboard::Key::Up)
-            || keyDown(sf::Keyboard::Key::W);
-    }
+bool PlayState::wantsRight() const {
+    return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
+}
 
-    bool wantsBoost() {
-        return keyDown(sf::Keyboard::Key::LShift) || keyDown(sf::Keyboard::Key::RShift);
-    }
+bool PlayState::wantsJump() const {
+    return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
+        || holding(sf::Keyboard::Key::W);
+}
+
+bool PlayState::wantsBoost() const {
+    return holding(sf::Keyboard::Key::LShift) || holding(sf::Keyboard::Key::RShift);
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
@@ -93,7 +94,27 @@ void PlayState::init() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
+    // A key held while the window loses focus never sends its release, so it would
+    // stay down forever and the level would scroll on its own.
+    if (event.is<sf::Event::FocusLost>()) {
+        heldKeys.clear();
+        return;
+    }
+
+    if (const auto* keyReleased = event.getIf<sf::Event::KeyReleased>()) {
+        heldKeys.erase(keyReleased->code);
+        return;
+    }
+
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        // Holding a key makes the system repeat KeyPressed; the toggles below must
+        // only fire on the first one, otherwise resting on F would flicker the mode.
+        bool repeat = holding(keyPressed->code);
+        heldKeys.insert(keyPressed->code);
+        if (repeat) {
+            return;
+        }
+
         // Press Escape to return to Main Menu
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
@@ -228,15 +249,24 @@ void PlayState::panCamera(sf::Time dt) {
 }
 
 void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
-    float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
-    int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
+    std::string label = "F = MAP VIEW";
+    sf::Vector2f position(16.f, Config::kViewHeight - 34.f);
+    unsigned size = 16;
 
-    sf::Text hint(assets.getFont("MarioFont"),
-                  "FREE LOOK   COL " + std::to_string(firstColumn) + "-"
-                      + std::to_string(firstColumn + Config::kViewTilesX - 1)
-                      + "   A/D SCROLL   SHIFT FASTER   F EXIT",
-                  20);
-    hint.setPosition({16.f, 12.f});
+    if (freeLook) {
+        // Show which columns of level1.txt are on screen, so what is drawn can be
+        // matched against the map file straight away.
+        float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
+        int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
+        label = "MAP VIEW   COL " + std::to_string(firstColumn) + "-"
+              + std::to_string(firstColumn + Config::kViewTilesX - 1)
+              + "   A/D SCROLL   SHIFT FASTER   F EXIT";
+        position = {16.f, 12.f};
+        size = 20;
+    }
+
+    sf::Text hint(assets.getFont("MarioFont"), label, size);
+    hint.setPosition(position);
     hint.setFillColor(sf::Color::White);
     hint.setOutlineColor(sf::Color::Black);
     hint.setOutlineThickness(3.f);
@@ -262,7 +292,5 @@ void PlayState::render(sf::RenderWindow& window) {
     window.draw(avatar);
 
     window.setView(screenView);
-    if (freeLook) {
-        drawFreeLookHint(window);
-    }
+    drawFreeLookHint(window); // always on: it doubles as proof the build is current
 }

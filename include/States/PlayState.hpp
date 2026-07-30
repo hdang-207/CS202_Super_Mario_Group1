@@ -3,6 +3,7 @@
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
+#include <set>
 
 /**
  * @class PlayState
@@ -32,6 +33,17 @@ private:
     // scrolled through and inspected without playing it.
     bool freeLook{false};
     sf::Vector2f freeLookCentre;
+
+    /**
+     * Keys held right now, tracked from the window's key events.
+     *
+     * Deliberately not sf::Keyboard::isKeyPressed(): on macOS that goes through
+     * the HID manager, which needs the Input Monitoring privilege. Without it the
+     * call does not fail loudly, it just reports every key as up forever, and the
+     * game silently stops responding to the movement keys. Window events need no
+     * privilege at all.
+     */
+    std::set<sf::Keyboard::Key> heldKeys;
 
 public:
     /**
@@ -70,6 +82,12 @@ public:
     void render(sf::RenderWindow& window) override;
 
 private:
+    bool holding(sf::Keyboard::Key key) const;  ///< True while @p key is down.
+    bool wantsLeft() const;                     ///< Left arrow or A.
+    bool wantsRight() const;                    ///< Right arrow or D.
+    bool wantsJump() const;                     ///< Space, Up or W.
+    bool wantsBoost() const;                    ///< Either Shift, for fast scrolling.
+
     /// @brief Current collision box of the test avatar, in world pixels.
     sf::FloatRect avatarBounds() const;
 
@@ -88,6 +106,6 @@ private:
     /// @brief Scrolls the free-look camera with the left/right keys.
     void panCamera(sf::Time dt);
 
-    /// @brief Draws the free-look banner, including which map columns are on screen.
+    /// @brief Draws the map-view banner, or the hint that says how to turn it on.
     void drawFreeLookHint(sf::RenderWindow& window) const;
 };
