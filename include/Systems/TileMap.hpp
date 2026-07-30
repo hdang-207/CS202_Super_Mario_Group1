@@ -44,6 +44,18 @@ public:
      */
     bool build(const MapParser& parser, const sf::Texture& atlas, float scale);
 
+    /**
+     * @brief Draws one tile type with its own image instead of the atlas artwork.
+     * @param type Tile type to re-skin, e.g. TileType::Ground for the '#' characters.
+     * @param texture Standalone image; it is stretched over the whole tile, so a
+     *        16x16 png lines up one-to-one with the rest of the level.
+     *
+     * Call this before build() - the geometry is baked there. Every overridden
+     * type costs one extra draw call, which is nothing next to the single call
+     * the atlas needs for the rest of the level.
+     */
+    void setTileTexture(TileType type, const sf::Texture& texture);
+
     /// @brief True if the tile at this grid cell blocks movement (out of bounds is not solid).
     bool isSolid(int col, int row) const;
 
@@ -67,10 +79,21 @@ public:
     const std::vector<sf::Vector2f>& enemySpawns() const { return enemies; }
 
 private:
+    /// Tiles of one type that are drawn from their own image rather than the atlas.
+    struct TextureBatch {
+        TileType type;
+        const sf::Texture* texture;
+        sf::VertexArray vertices;
+    };
+
     void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 
+    /// @brief Batch that owns @p type, or nullptr when the atlas draws it.
+    TextureBatch* batchFor(TileType type);
+
     std::vector<TileType> types;        ///< Row-major grid of tile types.
-    sf::VertexArray vertices;           ///< Whole level batched into one geometry buffer.
+    sf::VertexArray vertices;           ///< Everything drawn from the atlas, in one buffer.
+    std::vector<TextureBatch> batches;  ///< One extra buffer per re-skinned tile type.
     const sf::Texture* atlasTexture{nullptr};
     int columns{0};
     int rows{0};

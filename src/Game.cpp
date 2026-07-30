@@ -30,6 +30,9 @@ Game::Game()
 
     assets.loadTexture("LevelTilemap", Systems::resourcePath("assets/textures/tilemap.png"));
 
+    // Own artwork for single tile types, drawn instead of the matching atlas tile.
+    assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
+
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
     

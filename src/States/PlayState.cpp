@@ -51,6 +51,9 @@ void PlayState::init() {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
+    // Every '#' in the map file is drawn with our own ground.png instead of the atlas.
+    tileMap.setTileTexture(TileType::Ground, assets.getTexture("GroundTile"));
+
     if (!tileMap.build(mapParser, assets.getTexture("LevelTilemap"), Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
         return;
