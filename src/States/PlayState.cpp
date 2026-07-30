@@ -17,6 +17,10 @@ namespace {
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
+    /// How fast free-look scrolls the level, and the multiplier while Shift is held.
+    constexpr float kFreeLookSpeed = 900.f;
+    constexpr float kFreeLookBoost = 3.f;
+
     bool keyDown(sf::Keyboard::Key key) {
         return sf::Keyboard::isKeyPressed(key);
     }
@@ -32,6 +36,10 @@ namespace {
     bool wantsJump() {
         return keyDown(sf::Keyboard::Key::Space) || keyDown(sf::Keyboard::Key::Up)
             || keyDown(sf::Keyboard::Key::W);
+    }
+
+    bool wantsBoost() {
+        return keyDown(sf::Keyboard::Key::LShift) || keyDown(sf::Keyboard::Key::RShift);
     }
 }
 
@@ -51,10 +59,18 @@ void PlayState::init() {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
-    // Every '#' in the map file is drawn with our own ground.png instead of the atlas.
-    tileMap.setTileTexture(TileType::Ground, assets.getTexture("GroundTile"));
+    // Artwork for every character the map file uses. 'H' is left out on purpose:
+    // the hidden block has to stay invisible until it is struck.
+    tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
+    tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
+    tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
+    tileMap.setTileTexture(']', assets.getTexture("PipeTopRight"));
+    tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
+    tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
+    tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
 
-    if (!tileMap.build(mapParser, assets.getTexture("LevelTilemap"), Config::kZoom)) {
+    if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
         return;
     }
@@ -72,6 +88,8 @@ void PlayState::init() {
     updateCamera();
 
     std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Esc to quit.\n";
+    std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
+                 "through the level with A/D (hold Shift to go faster).\n";
 }
 
 void PlayState::handleInput(const sf::Event& event) {
@@ -80,13 +98,26 @@ void PlayState::handleInput(const sf::Event& event) {
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+        } else if (keyPressed->code == sf::Keyboard::Key::F) {
+            freeLook = !freeLook;
+            // Pick the scrolling up exactly where the camera already is, so the
+            // picture does not jump when the mode changes.
+            freeLookCentre = camera.getCenter();
+            std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
         }
     }
 }
 
 void PlayState::update(sf::Time dt) {
-    moveAvatar(dt);
-    updateCamera();
+    if (freeLook) {
+        // The avatar is deliberately frozen: left it running it would walk off or
+        // fall into a pit while the camera is somewhere else entirely.
+        panCamera(dt);
+    } else {
+        moveAvatar(dt);
+        updateCamera();
+    }
+    tileMap.update(dt); // keeps the question blocks blinking
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
@@ -169,17 +200,47 @@ void PlayState::moveAvatar(sf::Time dt) {
     avatar.setPosition(avatarPos);
 }
 
-void PlayState::updateCamera() {
-    // Follow the avatar, but never show anything past the edges of the level.
+void PlayState::centreCamera(sf::Vector2f target) {
+    // Never show anything past the edges of the level.
     float halfWidth = Config::kViewWidth / 2.f;
     float halfHeight = Config::kViewHeight / 2.f;
     float maxCenterX = std::max(halfWidth, tileMap.pixelWidth() - halfWidth);
     float maxCenterY = std::max(halfHeight, tileMap.pixelHeight() - halfHeight);
 
-    camera.setCenter({
-        std::clamp(avatarPos.x + avatar.getSize().x / 2.f, halfWidth, maxCenterX),
-        std::clamp(avatarPos.y + avatar.getSize().y / 2.f, halfHeight, maxCenterY)
-    });
+    camera.setCenter({std::clamp(target.x, halfWidth, maxCenterX),
+                      std::clamp(target.y, halfHeight, maxCenterY)});
+}
+
+void PlayState::updateCamera() {
+    centreCamera(avatarPos + avatar.getSize() / 2.f);
+}
+
+void PlayState::panCamera(sf::Time dt) {
+    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
+    float speed = kFreeLookSpeed * (wantsBoost() ? kFreeLookBoost : 1.f);
+
+    freeLookCentre.x += direction * speed * dt.asSeconds();
+    centreCamera(freeLookCentre);
+
+    // Read the clamp back, otherwise holding a key at either end of the level
+    // would build up an offset that has to be undone before scrolling resumes.
+    freeLookCentre = camera.getCenter();
+}
+
+void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
+    float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
+    int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
+
+    sf::Text hint(assets.getFont("MarioFont"),
+                  "FREE LOOK   COL " + std::to_string(firstColumn) + "-"
+                      + std::to_string(firstColumn + Config::kViewTilesX - 1)
+                      + "   A/D SCROLL   SHIFT FASTER   F EXIT",
+                  20);
+    hint.setPosition({16.f, 12.f});
+    hint.setFillColor(sf::Color::White);
+    hint.setOutlineColor(sf::Color::Black);
+    hint.setOutlineThickness(3.f);
+    window.draw(hint);
 }
 
 void PlayState::render(sf::RenderWindow& window) {
@@ -199,5 +260,9 @@ void PlayState::render(sf::RenderWindow& window) {
     window.setView(camera);
     window.draw(tileMap);
     window.draw(avatar);
+
     window.setView(screenView);
+    if (freeLook) {
+        drawFreeLookHint(window);
+    }
 }

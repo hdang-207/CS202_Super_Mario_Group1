@@ -28,6 +28,11 @@ private:
     bool jumpHeld{false};
     // =======================================================================
 
+    // Free-look: F detaches the camera from the avatar so the level can be
+    // scrolled through and inspected without playing it.
+    bool freeLook{false};
+    sf::Vector2f freeLookCentre;
+
 public:
     /**
      * @brief Constructor for PlayState.
@@ -74,6 +79,15 @@ private:
     /// @brief Puts the avatar back on the level's spawn tile.
     void respawnAvatar();
 
+    /// @brief Points the camera at @p target, without ever leaving the level.
+    void centreCamera(sf::Vector2f target);
+
     /// @brief Keeps the camera centred on the avatar without leaving the level.
     void updateCamera();
+
+    /// @brief Scrolls the free-look camera with the left/right keys.
+    void panCamera(sf::Time dt);
+
+    /// @brief Draws the free-look banner, including which map columns are on screen.
+    void drawFreeLookHint(sf::RenderWindow& window) const;
 };
