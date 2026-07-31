@@ -10,15 +10,16 @@
  */
 class IntroMenuState : public State {
 private:
-    sf::Sprite bgSprite;           // Hình nền Menu
-    sf::RectangleShape titleBox;  // Khung nền vuông cho Tên Game
-    sf::Text titleText;
-    sf::Music bgMusic;
+    sf::Sprite bgSprite;           ///< Background menu sprite
+    sf::RectangleShape titleBox;   ///< Frame/box container for game title
+    sf::Text titleText;            ///< Text display for main game title
+    sf::Music bgMusic;             ///< Background music track
 
 public:
     /**
      * @brief Constructor for IntroMenuState.
      * @param gsm Reference to the GameStateManager.
+     * @param assets Reference to the central AssetManager.
      */
     IntroMenuState(GameStateManager& gsm, Systems::AssetManager& assets);
 
@@ -28,7 +29,7 @@ public:
     ~IntroMenuState() override = default;
 
     /**
-     * @brief Initializes the intro menu (prints welcome logs).
+     * @brief Initializes the intro menu (loads assets and sets up UI elements).
      */
     void init() override;
 
@@ -39,7 +40,7 @@ public:
     void handleInput(const sf::Event& event) override;
 
     /**
-     * @brief Updates any menu animations or logic (currently skeleton placeholder).
+     * @brief Updates any menu animations or logic.
      * @param dt Time elapsed since last frame.
      */
     void update(sf::Time dt) override;
@@ -50,4 +51,3 @@ public:
      */
     void render(sf::RenderWindow& window) override;
 };
-

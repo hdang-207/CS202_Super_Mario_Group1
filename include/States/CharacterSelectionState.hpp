@@ -13,6 +13,7 @@ public:
     /**
      * @brief Constructor for CharacterSelectionState.
      * @param gsm Reference to the GameStateManager.
+     * @param assets Reference to the central AssetManager.
      */
     CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets);
 
@@ -33,7 +34,7 @@ public:
     void handleInput(const sf::Event& event) override;
 
     /**
-     * @brief Updates any logic/animations for character selection (skeleton placeholder).
+     * @brief Updates any logic/animations for character selection.
      * @param dt Time elapsed since last frame.
      */
     void update(sf::Time dt) override;
@@ -44,4 +45,3 @@ public:
      */
     void render(sf::RenderWindow& window) override;
 };
-

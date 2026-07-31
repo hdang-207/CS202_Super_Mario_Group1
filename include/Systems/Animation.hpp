@@ -3,6 +3,10 @@
 #include <vector>
 
 namespace Systems {
+    /**
+     * @class Animation
+     * @brief Manages sprite sheet animation sequences and frame timing.
+     */
     class Animation {
     private:
         std::vector<sf::IntRect> frames;
@@ -11,6 +15,13 @@ namespace Systems {
         size_t currentFrame;
 
     public:
+        /**
+         * @brief Constructs an Animation sequence from a grid texture.
+         * @param texture Sprite sheet texture containing frame grid.
+         * @param rows Number of vertical frame rows.
+         * @param cols Number of horizontal frame columns.
+         * @param duration Time duration (in seconds) to display each frame.
+         */
         Animation(sf::Texture& texture, int rows, int cols, float duration) {
             frameTime = duration;
             elapsed = 0.0f;
@@ -27,6 +38,10 @@ namespace Systems {
             }
         }
 
+        /**
+         * @brief Advances animation frame state based on delta time.
+         * @param dt Time elapsed since the last update frame.
+         */
         void update(sf::Time dt) {
             elapsed += dt.asSeconds();
             if (elapsed >= frameTime) {
@@ -35,6 +50,10 @@ namespace Systems {
             }
         }
 
+        /**
+         * @brief Gets the sub-rectangle texture bounds for the currently active frame.
+         * @return Const reference to the current frame IntRect.
+         */
         const sf::IntRect& getCurrentFrame() const { return frames[currentFrame]; }
     };
 }
