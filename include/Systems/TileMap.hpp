@@ -9,7 +9,7 @@
  */
 enum class TileType {
     Empty,         ///< Sky / open air.
-    Decoration,    ///< Drawn but never collides (hills, bushes, clouds, flagpole, castle).
+    Decoration,    ///< Drawn but never collides.
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
     QuestionBlock, ///< Item block (solid).
@@ -22,27 +22,61 @@ enum class TileType {
  * @class TileMap
  * @brief Turns a parsed character grid into a drawable, collidable level.
  *
- * Each map character maps to one 16x16 tile in the level atlas texture plus a
- * TileType that decides whether it is solid. The whole level is uploaded once
- * into a vertex array, so rendering costs a single draw call no matter how big
- * the level is.
+ * Artwork is supplied per map character through setTileTexture(), so the level
+ * is drawn entirely from the project's own images - there is no tile atlas. All
+ * tiles sharing a character are batched into one vertex array, which means one
+ * draw call per character rather than per tile.
+ *
+ * A character may be given a horizontal strip of frames instead of a single
+ * image; update() then cycles the whole batch through them, which is how the
+ * question blocks blink.
  *
  * Physics code does not need to know anything about characters or artwork: it
  * asks for the solid tiles overlapping a bounding box and resolves against those.
  */
 class TileMap : public sf::Drawable {
 public:
-    /// Size of one tile in the source atlas, in pixels.
+    /// Size of one tile in the source artwork, in pixels.
     static constexpr int kSourceTileSize = 16;
+
+    /**
+     * @brief Sets the artwork one map character is drawn with.
+     * @param symbol Character as it appears in the map file, e.g. '#' or '?'.
+     * @param texture Image for that character. It is stretched over one whole
+     *        tile, so a 16x16 png lines up one-to-one with the level grid.
+     * @param frameCount Number of animation frames laid out left to right inside
+     *        @p texture. Leave at 1 for a still image.
+     * @param frameDuration How long each frame is shown.
+     *
+     * Call this before build() - the geometry is baked there. A character with
+     * no artwork still collides, it is simply not drawn (that is how the hidden
+     * block works).
+     */
+    void setTileTexture(char symbol, const sf::Texture& texture, int frameCount = 1,
+                        sf::Time frameDuration = sf::seconds(0.12f));
+
+    /**
+     * @brief Registers scenery artwork - clouds, hills, bushes - for a map character.
+     * @param symbol Character as it appears in the map file, e.g. 'M' for a big hill.
+     * @param texture Picture of the whole object. Unlike a tile it may be several
+     *        tiles wide and tall; it is anchored at the top-left corner of the cell
+     *        holding @p symbol and keeps its own proportions.
+     *
+     * Scenery never collides and is always drawn behind the level, so one character
+     * places a whole object and the cells it covers stay free for anything else.
+     */
+    void setDecorationTexture(char symbol, const sf::Texture& texture);
 
     /**
      * @brief Builds the level geometry from a parsed map.
      * @param parser Map whose character grid describes the level.
-     * @param atlas Texture holding the 16x16 tile artwork.
      * @param scale Zoom factor applied to every tile (use an integer to stay pixel-perfect).
      * @return True if the map contained at least one row.
      */
-    bool build(const MapParser& parser, const sf::Texture& atlas, float scale);
+    bool build(const MapParser& parser, float scale);
+
+    /// @brief Advances the animated tiles. Call once per frame.
+    void update(sf::Time dt);
 
     /// @brief True if the tile at this grid cell blocks movement (out of bounds is not solid).
     bool isSolid(int col, int row) const;
@@ -67,11 +101,33 @@ public:
     const std::vector<sf::Vector2f>& enemySpawns() const { return enemies; }
 
 private:
+    /// Every tile written with the same map character, batched into one buffer.
+    struct TileBatch {
+        char symbol;
+        const sf::Texture* texture;
+        int frameCount;
+        sf::Time frameDuration;
+        sf::Time elapsed;      ///< Time spent on the frame currently shown.
+        int frame;             ///< Frame the whole batch is currently showing.
+        sf::VertexArray vertices;
+
+        /// Width of one frame inside the texture, in source pixels.
+        float frameWidth() const {
+            return static_cast<float>(texture->getSize().x) / static_cast<float>(frameCount);
+        }
+    };
+
     void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 
+    /// @brief Batch holding @p symbol, or nullptr when no artwork was registered for it.
+    TileBatch* batchFor(char symbol);
+
+    /// @brief Scenery batch holding @p symbol, or nullptr when it is not scenery.
+    TileBatch* decorationFor(char symbol);
+
     std::vector<TileType> types;        ///< Row-major grid of tile types.
-    sf::VertexArray vertices;           ///< Whole level batched into one geometry buffer.
-    const sf::Texture* atlasTexture{nullptr};
+    std::vector<TileBatch> batches;     ///< One vertex buffer per map character.
+    std::vector<TileBatch> decorations; ///< Scenery, drawn first so it stays behind.
     int columns{0};
     int rows{0};
     float tileSizePx{16.f};

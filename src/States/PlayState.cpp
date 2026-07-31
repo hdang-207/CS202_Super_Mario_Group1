@@ -17,22 +17,31 @@ namespace {
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
-    bool keyDown(sf::Keyboard::Key key) {
-        return sf::Keyboard::isKeyPressed(key);
-    }
+    /// How fast free-look scrolls the level, and the multiplier while Shift is held.
+    constexpr float kFreeLookSpeed = 900.f;
+    constexpr float kFreeLookBoost = 3.f;
 
-    bool wantsLeft() {
-        return keyDown(sf::Keyboard::Key::Left) || keyDown(sf::Keyboard::Key::A);
-    }
+}
 
-    bool wantsRight() {
-        return keyDown(sf::Keyboard::Key::Right) || keyDown(sf::Keyboard::Key::D);
-    }
+bool PlayState::holding(sf::Keyboard::Key key) const {
+    return heldKeys.count(key) > 0;
+}
 
-    bool wantsJump() {
-        return keyDown(sf::Keyboard::Key::Space) || keyDown(sf::Keyboard::Key::Up)
-            || keyDown(sf::Keyboard::Key::W);
-    }
+bool PlayState::wantsLeft() const {
+    return holding(sf::Keyboard::Key::Left) || holding(sf::Keyboard::Key::A);
+}
+
+bool PlayState::wantsRight() const {
+    return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
+}
+
+bool PlayState::wantsJump() const {
+    return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
+        || holding(sf::Keyboard::Key::W);
+}
+
+bool PlayState::wantsBoost() const {
+    return holding(sf::Keyboard::Key::LShift) || holding(sf::Keyboard::Key::RShift);
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
@@ -51,7 +60,18 @@ void PlayState::init() {
         std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
     }
 
-    if (!tileMap.build(mapParser, assets.getTexture("LevelTilemap"), Config::kZoom)) {
+    // Artwork for every character the map file uses. 'H' is left out on purpose:
+    // the hidden block has to stay invisible until it is struck.
+    tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
+    tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
+    tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
+    tileMap.setTileTexture(']', assets.getTexture("PipeTopRight"));
+    tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
+    tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
+    tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+
+    if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
         return;
     }
@@ -69,21 +89,56 @@ void PlayState::init() {
     updateCamera();
 
     std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Esc to quit.\n";
+    std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
+                 "through the level with A/D (hold Shift to go faster).\n";
 }
 
 void PlayState::handleInput(const sf::Event& event) {
+    // A key held while the window loses focus never sends its release, so it would
+    // stay down forever and the level would scroll on its own.
+    if (event.is<sf::Event::FocusLost>()) {
+        heldKeys.clear();
+        return;
+    }
+
+    if (const auto* keyReleased = event.getIf<sf::Event::KeyReleased>()) {
+        heldKeys.erase(keyReleased->code);
+        return;
+    }
+
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        // Holding a key makes the system repeat KeyPressed; the toggles below must
+        // only fire on the first one, otherwise resting on F would flicker the mode.
+        bool repeat = holding(keyPressed->code);
+        heldKeys.insert(keyPressed->code);
+        if (repeat) {
+            return;
+        }
+
         // Press Escape to return to Main Menu
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+        } else if (keyPressed->code == sf::Keyboard::Key::F) {
+            freeLook = !freeLook;
+            // Pick the scrolling up exactly where the camera already is, so the
+            // picture does not jump when the mode changes.
+            freeLookCentre = camera.getCenter();
+            std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
         }
     }
 }
 
 void PlayState::update(sf::Time dt) {
-    moveAvatar(dt);
-    updateCamera();
+    if (freeLook) {
+        // The avatar is deliberately frozen: left it running it would walk off or
+        // fall into a pit while the camera is somewhere else entirely.
+        panCamera(dt);
+    } else {
+        moveAvatar(dt);
+        updateCamera();
+    }
+    tileMap.update(dt); // keeps the question blocks blinking
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
@@ -166,17 +221,56 @@ void PlayState::moveAvatar(sf::Time dt) {
     avatar.setPosition(avatarPos);
 }
 
-void PlayState::updateCamera() {
-    // Follow the avatar, but never show anything past the edges of the level.
+void PlayState::centreCamera(sf::Vector2f target) {
+    // Never show anything past the edges of the level.
     float halfWidth = Config::kViewWidth / 2.f;
     float halfHeight = Config::kViewHeight / 2.f;
     float maxCenterX = std::max(halfWidth, tileMap.pixelWidth() - halfWidth);
     float maxCenterY = std::max(halfHeight, tileMap.pixelHeight() - halfHeight);
 
-    camera.setCenter({
-        std::clamp(avatarPos.x + avatar.getSize().x / 2.f, halfWidth, maxCenterX),
-        std::clamp(avatarPos.y + avatar.getSize().y / 2.f, halfHeight, maxCenterY)
-    });
+    camera.setCenter({std::clamp(target.x, halfWidth, maxCenterX),
+                      std::clamp(target.y, halfHeight, maxCenterY)});
+}
+
+void PlayState::updateCamera() {
+    centreCamera(avatarPos + avatar.getSize() / 2.f);
+}
+
+void PlayState::panCamera(sf::Time dt) {
+    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
+    float speed = kFreeLookSpeed * (wantsBoost() ? kFreeLookBoost : 1.f);
+
+    freeLookCentre.x += direction * speed * dt.asSeconds();
+    centreCamera(freeLookCentre);
+
+    // Read the clamp back, otherwise holding a key at either end of the level
+    // would build up an offset that has to be undone before scrolling resumes.
+    freeLookCentre = camera.getCenter();
+}
+
+void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
+    std::string label = "F = MAP VIEW";
+    sf::Vector2f position(16.f, Config::kViewHeight - 34.f);
+    unsigned size = 16;
+
+    if (freeLook) {
+        // Show which columns of level1.txt are on screen, so what is drawn can be
+        // matched against the map file straight away.
+        float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
+        int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
+        label = "MAP VIEW   COL " + std::to_string(firstColumn) + "-"
+              + std::to_string(firstColumn + Config::kViewTilesX - 1)
+              + "   A/D SCROLL   SHIFT FASTER   F EXIT";
+        position = {16.f, 12.f};
+        size = 20;
+    }
+
+    sf::Text hint(assets.getFont("MarioFont"), label, size);
+    hint.setPosition(position);
+    hint.setFillColor(sf::Color::White);
+    hint.setOutlineColor(sf::Color::Black);
+    hint.setOutlineThickness(3.f);
+    window.draw(hint);
 }
 
 void PlayState::render(sf::RenderWindow& window) {
@@ -196,5 +290,7 @@ void PlayState::render(sf::RenderWindow& window) {
     window.setView(camera);
     window.draw(tileMap);
     window.draw(avatar);
+
     window.setView(screenView);
+    drawFreeLookHint(window); // always on: it doubles as proof the build is current
 }
