@@ -7,23 +7,25 @@ class GameStateManager;
 namespace Systems {
     class AssetManager; 
 }
+
 /**
  * @class State
  * @brief Abstract base class for all game states.
  *
  * Defines the contract/interface for different screens or states of the game
  * (e.g. Menu, Selection, Gameplay). Each state retains a reference to the GameStateManager
- * to trigger state transitions (push, pop, change).
+ * to trigger state transitions (push, pop, change) and AssetManager to access resources.
  */
 class State {
 protected:
-    GameStateManager& gsm; ///< Reference to the State Manager for controlling navigation/flow.
-    Systems::AssetManager& assets;
+    GameStateManager& gsm;        ///< Reference to the State Manager for controlling navigation/flow.
+    Systems::AssetManager& assets; ///< Reference to the central AssetManager for accessing textures, fonts, and sound buffers.
 
 public:
     /**
-     * @brief Constructor that binds this state to a GameStateManager.
+     * @brief Constructor that binds this state to a GameStateManager and AssetManager.
      * @param gsm Reference to the parent GameStateManager.
+     * @param assets Reference to the central AssetManager.
      */
     State(GameStateManager& gsm, Systems::AssetManager& assets) : gsm(gsm), assets(assets) {}
 
@@ -65,4 +67,3 @@ public:
      */
     virtual void resume() {}
 };
-
