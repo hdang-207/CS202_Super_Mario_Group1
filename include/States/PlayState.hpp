@@ -3,6 +3,8 @@
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
+#include "Systems/Animation.hpp"
+#include <memory>
 #include <set>
 
 /**
@@ -16,13 +18,14 @@ private:
     TileMap tileMap;
     sf::View camera;
 
-    // === TEMPORARY test avatar =============================================
-    // A plain rectangle with just enough kinematics to walk, jump and stand on
-    // the tile map, so the level can be played and checked right now. It is a
-    // stand-in for the real Player/Mario/Luigi hierarchy (Physics Lead) and is
-    // meant to be deleted once that lands - TileMap below is the piece that
-    // stays, and is what the real physics code should collide against.
+    // === Character avatar and animations ====================================
     sf::RectangleShape avatar;
+    sf::Sprite avatarSprite;
+    std::unique_ptr<Systems::Animation> marioRunAnim;
+    bool facingRight{true};
+    float runAnimTimer{0.f};
+    int currentRunStep{0};
+
     sf::Vector2f avatarPos;
     sf::Vector2f avatarVelocity;
     bool onGround{false};

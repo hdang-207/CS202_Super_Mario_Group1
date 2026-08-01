@@ -46,6 +46,7 @@ bool PlayState::wantsBoost() const {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
+      avatarSprite(assets.getTexture("MarioMovement")),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
 
 void PlayState::init() {
@@ -77,14 +78,15 @@ void PlayState::init() {
     }
     std::cout << "[Core Engine] Enemy spawns found: " << tileMap.enemySpawns().size() << "\n";
 
-    // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
     avatar.setSize({tile * 0.7f, tile * 0.95f});
-    avatar.setFillColor(selectedCharacter == CharacterType::Mario
-                            ? sf::Color(216, 40, 0)     // Mario red
-                            : sf::Color(0, 168, 0));    // Luigi green
-    avatar.setOutlineThickness(-2.f);
-    avatar.setOutlineColor(sf::Color(20, 20, 20));
+    avatar.setFillColor(sf::Color::Transparent);
+
+    // Initialize Mario Movement animation (1 row, 3 columns, 0.1s per frame)
+    sf::Texture& marioTex = const_cast<sf::Texture&>(assets.getTexture("MarioMovement"));
+    marioRunAnim = std::make_unique<Systems::Animation>(marioTex, 1, 3, 0.1f);
+    avatarSprite.setTexture(marioTex);
+
     respawnAvatar();
     updateCamera();
 
@@ -219,6 +221,50 @@ void PlayState::moveAvatar(sf::Time dt) {
     }
 
     avatar.setPosition(avatarPos);
+
+    // --- Update Avatar Movement Animation & Facing Direction ---
+    if (avatarVelocity.x > 10.f) {
+        facingRight = true;
+    } else if (avatarVelocity.x < -10.f) {
+        facingRight = false;
+    }
+
+    sf::Vector2u texSize = assets.getTexture("MarioMovement").getSize();
+    int frameW = texSize.x / 4;
+    int frameH = texSize.y;
+
+    if (!onGround) {
+        // Trạng thái Nhảy (Jump - Frame 0 ngoài cùng bên trái)
+        avatarSprite.setTextureRect(sf::IntRect({0 * frameW, 0}, {frameW, frameH}));
+    }
+    else if (std::abs(avatarVelocity.x) > 10.f) {
+        // Trạng thái Chạy (Lặp qua Run 1, Run 2, Idle)
+        runAnimTimer += dt.asSeconds();
+        if (runAnimTimer >= 0.08f) {
+            runAnimTimer = 0.0f;
+            currentRunStep = (currentRunStep + 1) % 4;
+        }
+        const int runIndices[] = {3, 2, 1, 2};
+        int activeIndex = runIndices[currentRunStep];
+        avatarSprite.setTextureRect(sf::IntRect({activeIndex * frameW, 0}, {frameW, frameH}));
+    }
+    else {
+        // Trạng thái Đứng yên (Idle - Frame 3 ngoài cùng bên phải)
+        runAnimTimer = 0.0f;
+        currentRunStep = 0;
+        avatarSprite.setTextureRect(sf::IntRect({3 * frameW, 0}, {frameW, frameH}));
+    }
+
+    sf::FloatRect sb = avatarSprite.getLocalBounds();
+    // Align sprite origin at bottom-center so feet rest perfectly on top of ground tiles
+    avatarSprite.setOrigin({sb.position.x + sb.size.x / 2.f, sb.position.y + sb.size.y});
+
+    float targetHeight = avatar.getSize().y * 1.5f;
+    float scaleY = (sb.size.y > 0.f) ? (targetHeight / sb.size.y) : 1.f;
+    float scaleX = facingRight ? scaleY : -scaleY;
+
+    avatarSprite.setScale({scaleX, scaleY});
+    avatarSprite.setPosition({avatarPos.x + avatar.getSize().x / 2.f, avatarPos.y + avatar.getSize().y});
 }
 
 void PlayState::centreCamera(sf::Vector2f target) {
@@ -274,23 +320,17 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
 }
 
 void PlayState::render(sf::RenderWindow& window) {
-    // Game::render hands us a view whose viewport letterboxes the picture; the
-    // camera has to reuse that viewport, otherwise the level would be drawn over
-    // the black bars.
     const sf::View screenView = window.getView();
     camera.setViewport(screenView.getViewport());
 
-    // Sky: the same blue as the level artwork, so tiles blend into the background.
-    // It is painted as a rectangle rather than with clear() so it stays inside the
-    // game area and leaves the letterbox bars black.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
     sky.setFillColor(sf::Color(92, 148, 252));
     window.draw(sky);
 
     window.setView(camera);
     window.draw(tileMap);
-    window.draw(avatar);
+    window.draw(avatarSprite);
 
     window.setView(screenView);
-    drawFreeLookHint(window); // always on: it doubles as proof the build is current
+    drawFreeLookHint(window);
 }
