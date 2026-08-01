@@ -1,4 +1,4 @@
-#include "Entity/Character.hpp"
+#include "Entities/Character.hpp"
 
 namespace entity {
 
