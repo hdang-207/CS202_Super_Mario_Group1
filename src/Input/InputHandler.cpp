@@ -31,7 +31,7 @@ void InputHandler::reset() {
     m_playerInput = PlayerInput{};
 }
 
-const PlayerInput& InputHandler::getPlayerInput() const {
+const PlayerInput& InputHandler::getPlayerInput() const noexcept {
     return m_playerInput;
 }
 

@@ -10,7 +10,7 @@ public:
     void reset();
 
     //getter
-    const PlayerInput& getPlayerInput() const;
+    const PlayerInput& getPlayerInput() const noexcept;
 private:
     PlayerInput m_playerInput{};
 
