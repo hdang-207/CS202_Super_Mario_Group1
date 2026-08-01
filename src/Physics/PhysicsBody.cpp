@@ -69,7 +69,7 @@ const sf::Vector2f& PhysicsBody::getColliderOffset() const noexcept {
     return m_colliderOffset;
 }
 
-AABB PhysicsBody::getBounds() const noexcept {
+AABB PhysicsBody::getAABB() const noexcept {
     return AABB(m_position + m_colliderOffset, m_colliderSize);
 }
 

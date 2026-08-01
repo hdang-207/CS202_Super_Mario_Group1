@@ -54,7 +54,7 @@ public:
 
     // Trả về collider tại vị trí thật trong world.
     [[nodiscard]]
-    AABB getBounds() const noexcept;
+    AABB getAABB() const noexcept;
 
     void setGrounded(bool grounded);
 
