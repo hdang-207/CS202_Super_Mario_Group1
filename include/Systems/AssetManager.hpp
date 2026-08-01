@@ -1,0 +1,86 @@
+#pragma once
+#include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
+#include <map>
+#include <string>
+#include <utility>
+
+namespace Systems {
+    /**
+     * @class AssetManager
+     * @brief Centralized resource management system for textures, fonts, and sound buffers.
+     */
+    class AssetManager {
+    private:
+        std::map<std::string, sf::Texture> _textures;
+        std::map<std::string, sf::Font> _fonts;
+        std::map<std::string, sf::SoundBuffer> _soundBuffers;
+
+    public:
+        AssetManager() = default;
+        ~AssetManager() = default;
+
+        /**
+         * @brief Loads a texture from file and stores it under a given identifier.
+         * @param name Unique identifier name for the texture.
+         * @param path File system path to the image file.
+         */
+        void loadTexture(const std::string& name, const std::string& path) {
+            sf::Texture texture;
+            if (texture.loadFromFile(path)) {
+                _textures[name] = std::move(texture);
+            }
+        }
+
+        /**
+         * @brief Retrieves a loaded texture by identifier.
+         * @param name Identifier of the texture to retrieve.
+         * @return Const reference to the sf::Texture object.
+         */
+        const sf::Texture& getTexture(const std::string& name) const { 
+            return _textures.at(name); 
+        }
+
+        /**
+         * @brief Loads a font from file and stores it under a given identifier.
+         * @param name Unique identifier name for the font.
+         * @param path File system path to the font file.
+         */
+        void loadFont(const std::string& name, const std::string& path) {
+            sf::Font font;
+            if (font.openFromFile(path)) {
+                _fonts[name] = std::move(font);
+            }
+        }
+
+        /**
+         * @brief Retrieves a loaded font by identifier.
+         * @param name Identifier of the font to retrieve.
+         * @return Const reference to the sf::Font object.
+         */
+        const sf::Font& getFont(const std::string& name) const { 
+            return _fonts.at(name); 
+        }
+
+        /**
+         * @brief Loads a sound buffer from file and stores it under a given identifier.
+         * @param name Unique identifier name for the sound buffer.
+         * @param path File system path to the audio file.
+         */
+        void loadSoundBuffer(const std::string& name, const std::string& path) {
+            sf::SoundBuffer buffer;
+            if (buffer.loadFromFile(path)) {
+                _soundBuffers[name] = std::move(buffer);
+            }
+        }
+
+        /**
+         * @brief Retrieves a loaded sound buffer by identifier.
+         * @param name Identifier of the sound buffer to retrieve.
+         * @return Const reference to the sf::SoundBuffer object.
+         */
+        const sf::SoundBuffer& getSoundBuffer(const std::string& name) const { 
+            return _soundBuffers.at(name); 
+        }
+    };
+}

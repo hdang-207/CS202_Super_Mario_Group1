@@ -1,7 +1,12 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include "Systems/AssetManager.hpp"
 
 class GameStateManager;
+
+namespace Systems {
+    class AssetManager; 
+}
 
 /**
  * @class State
@@ -9,18 +14,20 @@ class GameStateManager;
  *
  * Defines the contract/interface for different screens or states of the game
  * (e.g. Menu, Selection, Gameplay). Each state retains a reference to the GameStateManager
- * to trigger state transitions (push, pop, change).
+ * to trigger state transitions (push, pop, change) and AssetManager to access resources.
  */
 class State {
 protected:
-    GameStateManager& gsm; ///< Reference to the State Manager for controlling navigation/flow.
+    GameStateManager& gsm;        ///< Reference to the State Manager for controlling navigation/flow.
+    Systems::AssetManager& assets; ///< Reference to the central AssetManager for accessing textures, fonts, and sound buffers.
 
 public:
     /**
-     * @brief Constructor that binds this state to a GameStateManager.
+     * @brief Constructor that binds this state to a GameStateManager and AssetManager.
      * @param gsm Reference to the parent GameStateManager.
+     * @param assets Reference to the central AssetManager.
      */
-    State(GameStateManager& gsm) : gsm(gsm) {}
+    State(GameStateManager& gsm, Systems::AssetManager& assets) : gsm(gsm), assets(assets) {}
 
     /**
      * @brief Virtual destructor to ensure correct cleanup of derived classes.
@@ -60,4 +67,3 @@ public:
      */
     virtual void resume() {}
 };
-
