@@ -8,7 +8,7 @@ struct PlayerInput {
     //  1.0f: sang phải
     float moveAxis{0.0f};
 
-    // True đúng tại thời điểm người chơi vừa nhấn nút nhảy.
+    // True tại toàn bộ frame người chơi giữ nút nhảy.
     bool jumpHeld{false};
 };
 
