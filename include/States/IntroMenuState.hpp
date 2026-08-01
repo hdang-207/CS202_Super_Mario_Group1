@@ -13,7 +13,9 @@ private:
     sf::Sprite bgSprite;           ///< Background menu sprite
     sf::RectangleShape titleBox;   ///< Frame/box container for game title
     sf::Text titleText;            ///< Text display for main game title
-    sf::Music bgMusic;             ///< Background music track
+    sf::Text promptText;           ///< Text prompt instructing user to press key
+    float blinkTimer = 0.0f;       ///< Timer for blinking text effect
+    bool showPrompt = true;        ///< Toggle visibility of prompt text
 
 public:
     /**
