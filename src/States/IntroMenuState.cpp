@@ -3,15 +3,16 @@
 #include "States/CharacterSelectionState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Systems/ResourcePath.hpp"
+#include "Systems/SoundController.hpp"
 #include <algorithm>
 #include <iostream>
 
 IntroMenuState::IntroMenuState(GameStateManager& gsm, Systems::AssetManager& assets) 
-    : State(gsm, assets),titleText(assets.getFont("MarioFont")),bgSprite(assets.getTexture("MenuBackground")) {}
+    : State(gsm, assets), titleText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")), bgSprite(assets.getTexture("MenuBackground")) {}
 
 void IntroMenuState::init() {
     // Log info representing game starting up.
-    std::cout << "[Core Engine] IntroMenuState Initialized. Press ENTER to select character.\n";
+    std::cout << "[Core Engine] IntroMenuState Initialized. Press ANY KEY to select character.\n";
 
     // Phóng ảnh nền để phủ kín màn hình mà không bị méo (giữ nguyên tỉ lệ gốc),
     // phần thừa được cắt đều hai bên.
@@ -22,39 +23,50 @@ void IntroMenuState::init() {
                           (Config::kViewHeight - bgSize.y * bgScale) / 2.f});
 
     titleText.setString("SUPER MARIO BROS");
-    titleText.setCharacterSize(48); // Kích thước chữ lớn
-    titleText.setFillColor(sf::Color::Blue); // Màu đỏ đặc trưng của Mario
+    titleText.setCharacterSize(48);
+    titleText.setFillColor(sf::Color::Red);
+    titleText.setOutlineColor(sf::Color::White);
+    titleText.setOutlineThickness(3.f);
 
-    // Căn giữa Tên Game theo chiều ngang của vùng chơi
     sf::FloatRect titleBounds = titleText.getLocalBounds();
     titleText.setOrigin({titleBounds.position.x + titleBounds.size.x / 2.f,
-                             titleBounds.position.y + titleBounds.size.y / 2.f});
+                         titleBounds.position.y + titleBounds.size.y / 2.f});
     titleText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.25f});
 
-    if (bgMusic.openFromFile(Systems::resourcePath("assets/audio/Theme.mp3"))) {
-    bgMusic.setLooping(true); // Lặp lại liên tục khi ở Menu
-    bgMusic.setVolume(60.f);  // Mức âm lượng (0 - 100)
-    bgMusic.play();           // Phát nhạc ngay khi mở Menu!
-    }
+    promptText.setString("PRESS ANY KEY TO START");
+    promptText.setCharacterSize(24);
+    promptText.setFillColor(sf::Color::Yellow);
+    promptText.setOutlineColor(sf::Color::Black);
+    promptText.setOutlineThickness(2.f);
+
+    sf::FloatRect promptBounds = promptText.getLocalBounds();
+    promptText.setOrigin({promptBounds.position.x + promptBounds.size.x / 2.f,
+                          promptBounds.position.y + promptBounds.size.y / 2.f});
+    promptText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.65f});
+
+    Systems::SoundController::getInstance().playMusic(Systems::resourcePath("assets/audio/Theme.mp3"));
 }
 
 void IntroMenuState::handleInput(const sf::Event& event) {
-    if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
-        // If the user hits Enter, switch the state to CharacterSelectionState.
-        if (keyPressed->code == sf::Keyboard::Key::Enter) {
-            std::cout << "[Core Engine] Enter pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";
-            gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
-        }
+    if (event.is<sf::Event::KeyPressed>()) {
+        std::cout << "[Core Engine] Key pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";
+        gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
     }
 }
 
 void IntroMenuState::update(sf::Time dt) {
-    // Skeleton update logic - currently no animations or physics are updated in menu.
+    blinkTimer += dt.asSeconds();
+    if (blinkTimer >= 0.5f) {
+        blinkTimer = 0.0f;
+        showPrompt = !showPrompt;
+    }
 }
 
 void IntroMenuState::render(sf::RenderWindow& window) {
-    // Clear screen with Cornflower Blue to represent the menu background.
     window.draw(bgSprite);
     window.draw(titleText);
+    if (showPrompt) {
+        window.draw(promptText);
+    }
 }
 
