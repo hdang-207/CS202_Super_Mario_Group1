@@ -70,6 +70,19 @@ void PlayState::init() {
     tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
     tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
+
+    // Scenery. One character places a whole object, which is why these go through
+    // setDecorationTexture: they are several tiles big, never collide, and are
+    // drawn behind the level so the cells they cover stay usable.
+    tileMap.setDecorationTexture('M', assets.getTexture("HillBig"));
+    tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
+    tileMap.setDecorationTexture('V', assets.getTexture("BushBig"));
+    tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
+    tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
+    tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
+    tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
+    tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";

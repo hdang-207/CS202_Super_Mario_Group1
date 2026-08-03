@@ -10,6 +10,7 @@
 enum class TileType {
     Empty,         ///< Sky / open air.
     Decoration,    ///< Drawn but never collides.
+    Coin,          ///< Pickup: drawn and animated, but never blocks movement.
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
     QuestionBlock, ///< Item block (solid).
