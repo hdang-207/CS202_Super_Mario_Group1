@@ -32,6 +32,10 @@ Game::Game()
     // Character preview textures
     assets.loadTexture("MarioPreview", Systems::resourcePath("assets/character/Mario_preview.png"));
     assets.loadTexture("LuigiPreview", Systems::resourcePath("assets/character/Luigi_preview.png"));
+    assets.loadTexture("MarioIdle", Systems::resourcePath("assets/character/Mario_idle.png"));
+    assets.loadTexture("MarioJump", Systems::resourcePath("assets/character/Mario_jump.png"));
+    assets.loadTexture("MarioRun1", Systems::resourcePath("assets/character/Mario_run1.png"));
+    assets.loadTexture("MarioRun2", Systems::resourcePath("assets/character/Mario_run2.png"));
 
     // Level artwork: one image per map character, no tile atlas involved.
     assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));

@@ -46,6 +46,7 @@ bool PlayState::wantsBoost() const {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
+      avatarSprite(assets.getTexture("MarioIdle")),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
 
 void PlayState::init() {
@@ -237,6 +238,49 @@ void PlayState::moveAvatar(sf::Time dt) {
     }
 
     avatar.setPosition(avatarPos);
+
+    // --- Update Avatar Movement Animation & Facing Direction ---
+    if (avatarVelocity.x > 10.f) {
+        facingRight = true;
+    } else if (avatarVelocity.x < -10.f) {
+        facingRight = false;
+    }
+
+    if (!onGround) {
+        // Trạng thái Nhảy (Jump)
+        avatarSprite.setTexture(assets.getTexture("MarioJump"));
+    }
+    else if (std::abs(avatarVelocity.x) > 10.f) {
+        // Trạng thái Chạy (Lặp qua Idle -> Run 1 -> Run 2 -> Run 1)
+        runAnimTimer += dt.asSeconds();
+        if (runAnimTimer >= 0.08f) {
+            runAnimTimer = 0.0f;
+            currentRunStep = (currentRunStep + 1) % 4;
+        }
+        const std::string runTexKeys[] = {"MarioIdle", "MarioRun1", "MarioRun2", "MarioRun1"};
+        avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
+    }
+    else {
+        // Trạng thái Đứng yên (Idle)
+        runAnimTimer = 0.0f;
+        currentRunStep = 0;
+        avatarSprite.setTexture(assets.getTexture("MarioIdle"));
+    }
+
+    // Reset texture rect to full size of currently active texture
+    sf::Vector2u texSize = avatarSprite.getTexture().getSize();
+    avatarSprite.setTextureRect(sf::IntRect({0, 0}, {(int)texSize.x, (int)texSize.y}));
+
+    sf::FloatRect sb = avatarSprite.getLocalBounds();
+    // Align sprite origin at bottom-center so feet rest perfectly on top of ground tiles
+    avatarSprite.setOrigin({sb.position.x + sb.size.x / 2.f, sb.position.y + sb.size.y});
+
+    float targetHeight = avatar.getSize().y * 1.5f;
+    float scaleY = (sb.size.y > 0.f) ? (targetHeight / sb.size.y) : 1.f;
+    float scaleX = facingRight ? scaleY : -scaleY;
+
+    avatarSprite.setScale({scaleX, scaleY});
+    avatarSprite.setPosition({avatarPos.x + avatar.getSize().x / 2.f, avatarPos.y + avatar.getSize().y});
 }
 
 void PlayState::centreCamera(sf::Vector2f target) {
@@ -307,7 +351,7 @@ void PlayState::render(sf::RenderWindow& window) {
 
     window.setView(camera);
     window.draw(tileMap);
-    window.draw(avatar);
+    window.draw(avatarSprite);
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
