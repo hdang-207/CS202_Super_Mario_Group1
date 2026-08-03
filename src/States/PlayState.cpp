@@ -13,7 +13,7 @@ namespace {
     constexpr float kWalkAcceleration = 1800.f;
     constexpr float kMaxWalkSpeed = 420.f;
     constexpr float kGroundFriction = 2000.f;
-    constexpr float kJumpSpeed = 900.f;
+    constexpr float kJumpSpeed = 1000.f;
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
@@ -162,8 +162,13 @@ void PlayState::moveAvatar(sf::Time dt) {
         avatarVelocity.x += direction * kWalkAcceleration * seconds;
         avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
     } else {
+
+        // SỬA TẠI ĐÂY: Kiểm tra xem nhân vật có đang đứng trên đất không
+        // Nếu trên đất -> dùng lực ma sát gốc (2000.f)
+        // Nếu trên không -> chỉ lấy 2% lực ma sát để giữ nguyên quán tính bay tới trước
+        float friction = onGround ? kGroundFriction : (kGroundFriction * 0.02f);
         // Coast to a stop instead of snapping, so movement keeps some inertia.
-        float drop = kGroundFriction * seconds;
+        float drop = friction * seconds;
         if (std::abs(avatarVelocity.x) <= drop) {
             avatarVelocity.x = 0.f;
         } else {
@@ -189,7 +194,14 @@ void PlayState::moveAvatar(sf::Time dt) {
     sf::Vector2f size = avatar.getSize();
 
     avatarPos.x += avatarVelocity.x * seconds;
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(avatarBounds())) {
+
+    // TẠO HITBOX ẢO CHO TRỤC X: Bóp hẹp chiều cao để không quẹt sàn/trần
+    sf::FloatRect xBounds = avatarBounds();
+    xBounds.position.y += 1.0f;    // Nhích mép trên (đỉnh) xuống 1 pixel
+    xBounds.size.y -= 2.0f;        // Kéo mép dưới (đáy) lên 1 pixel
+
+
+    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
         if (avatarVelocity.x > 0.f) {
             avatarPos.x = tile.position.x - size.x;
             avatarVelocity.x = 0.f;
@@ -202,7 +214,13 @@ void PlayState::moveAvatar(sf::Time dt) {
 
     onGround = false;
     avatarPos.y += avatarVelocity.y * seconds;
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(avatarBounds())) {
+    
+    // TẠO HITBOX ẢO CHO TRỤC Y: Bóp hẹp chiều rộng để không quẹt tường
+    sf::FloatRect yBounds = avatarBounds();
+    yBounds.position.x += 1.0f;    // Nhích mép trái vào trong 1 pixel
+    yBounds.size.x -= 2.0f;        // Bóp mép phải vào trong 1 pixel
+
+    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
         if (avatarVelocity.y > 0.f) {
             avatarPos.y = tile.position.y - size.y;
             avatarVelocity.y = 0.f;
