@@ -20,6 +20,8 @@ private:
 
     sf::RectangleShape previewCard;///< Outer preview frame
     sf::Sprite previewSprite;      ///< Preview sprite for chosen character avatar
+    sf::Sprite musicIconSprite;    ///< Music toggle icon sprite
+    sf::Sprite soundIconSprite;    ///< Sound effect toggle icon sprite
     int selectedIndex = 0;         ///< 0 for Mario, 1 for Luigi
 
 public:

@@ -15,6 +15,7 @@
 class GameStateManager {
 private:
     std::vector<std::unique_ptr<State>> states; ///< Stack of game states. Only the top state is updated and rendered.
+    sf::RenderWindow* window{nullptr};         ///< Pointer to main window for coordinate mapping
     
     /// @brief Enum defining the kinds of modifications we can perform on the state stack.
     enum class Action {
@@ -43,6 +44,9 @@ public:
      * @brief Default constructor.
      */
     GameStateManager() = default;
+
+    void setWindow(sf::RenderWindow* win) { window = win; }
+    sf::RenderWindow* getWindow() const { return window; }
 
     /**
      * @brief Default destructor. Clears all remaining active states.

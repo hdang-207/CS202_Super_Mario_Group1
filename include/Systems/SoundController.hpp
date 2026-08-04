@@ -14,6 +14,8 @@ namespace Systems {
     private:
         sf::Music _bgMusic;         ///< Unique background music stream
         float _musicVolume = 60.0f; ///< Current music volume (0 - 100)
+        bool _musicMuted{false};    ///< Track music mute state
+        bool _soundMuted{false};    ///< Track sound effect mute state
 
         // Constructor & Destructor are private for Singleton
         SoundController() = default;
@@ -43,7 +45,7 @@ namespace Systems {
                 return false;
             }
             _bgMusic.setLooping(loop);
-            _bgMusic.setVolume(_musicVolume);
+            _bgMusic.setVolume(_musicMuted ? 0.f : _musicVolume);
             _bgMusic.play();
             std::cout << "[SoundController] Playing music: " << filePath << "\n";
             return true;
@@ -75,7 +77,9 @@ namespace Systems {
          */
         void setMusicVolume(float volume) {
             _musicVolume = volume;
-            _bgMusic.setVolume(_musicVolume);
+            if (!_musicMuted) {
+                _bgMusic.setVolume(_musicVolume);
+            }
         }
 
         /**
@@ -83,6 +87,32 @@ namespace Systems {
          */
         float getMusicVolume() const {
             return _musicVolume;
+        }
+
+        bool isMusicMuted() const { return _musicMuted; }
+        bool isSoundMuted() const { return _soundMuted; }
+
+        void setMusicMuted(bool muted) {
+            _musicMuted = muted;
+            if (_musicMuted) {
+                _bgMusic.setVolume(0.f);
+            } else {
+                _bgMusic.setVolume(_musicVolume);
+            }
+            std::cout << "[SoundController] Music Muted: " << (_musicMuted ? "YES" : "NO") << "\n";
+        }
+
+        void setSoundMuted(bool muted) {
+            _soundMuted = muted;
+            std::cout << "[SoundController] Sound Effects Muted: " << (_soundMuted ? "YES" : "NO") << "\n";
+        }
+
+        void toggleMusicMuted() {
+            setMusicMuted(!_musicMuted);
+        }
+
+        void toggleSoundMuted() {
+            setSoundMuted(!_soundMuted);
         }
     };
 }

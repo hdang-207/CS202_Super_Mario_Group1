@@ -4,7 +4,9 @@
 #include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Core/CharacterType.hpp"
+#include "Systems/SoundController.hpp"
 #include <iostream>
+#include <cmath>
 
 CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets) 
     : State(gsm, assets),
@@ -14,7 +16,9 @@ CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems:
       luigiOptionText(assets.getFont("MarioFont")),
       descText(assets.getFont("MarioFont")),
       backHintText(assets.getFont("MarioFont")),
-      previewSprite(assets.getTexture("MarioPreview")) {}
+      previewSprite(assets.getTexture("MarioPreview")),
+      musicIconSprite(assets.getTexture("MusicSymbol")),
+      soundIconSprite(assets.getTexture("SoundSymbol")) {}
 
 void CharacterSelectionState::init() {
     std::cout << "[Core Engine] CharacterSelectionState Initialized.\n";
@@ -60,14 +64,30 @@ void CharacterSelectionState::init() {
     luigiOptionText.setOutlineColor(sf::Color::Black);
     luigiOptionText.setOutlineThickness(2.f);
 
-    backHintText.setString("PRESS 'B' TO GO BACK TO MENU | ENTER/SPACE TO CONFIRM");
-    backHintText.setCharacterSize(14);
+    backHintText.setString("PRESS 'B' TO GO BACK TO MENU | ENTER/SPACE TO CONFIRM\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
+    backHintText.setCharacterSize(13);
     backHintText.setFillColor(sf::Color::White);
     backHintText.setOutlineColor(sf::Color::Black);
     backHintText.setOutlineThickness(2.f);
     sf::FloatRect bb = backHintText.getLocalBounds();
     backHintText.setOrigin({bb.position.x + bb.size.x / 2.f, bb.position.y + bb.size.y / 2.f});
     backHintText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.90f});
+
+    // Configure Music & Sound Icon Sprites in Bottom Left
+    float iconTargetSize = 36.f;
+    sf::FloatRect mbounds = musicIconSprite.getLocalBounds();
+    if (mbounds.size.y > 0.f) {
+        float scaleM = iconTargetSize / mbounds.size.y;
+        musicIconSprite.setScale({scaleM, scaleM});
+    }
+    musicIconSprite.setPosition({30.f, Config::kViewHeight - 55.f});
+
+    sf::FloatRect sbounds = soundIconSprite.getLocalBounds();
+    if (sbounds.size.y > 0.f) {
+        float scaleS = iconTargetSize / sbounds.size.y;
+        soundIconSprite.setScale({scaleS, scaleS});
+    }
+    soundIconSprite.setPosition({80.f, Config::kViewHeight - 55.f});
 }
 
 void CharacterSelectionState::handleInput(const sf::Event& event) {
@@ -89,10 +109,59 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Going back to IntroMenuState...\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         }
+        else if (keyPressed->code == sf::Keyboard::Key::M) {
+            Systems::SoundController::getInstance().toggleMusicMuted();
+        }
+        else if (keyPressed->code == sf::Keyboard::Key::N) {
+            Systems::SoundController::getInstance().toggleSoundMuted();
+        }
+    }
+    else if (const auto* mousePressed = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mousePressed->button == sf::Mouse::Button::Left) {
+            sf::Vector2f mousePos(static_cast<float>(mousePressed->position.x), static_cast<float>(mousePressed->position.y));
+            if (gsm.getWindow() != nullptr) {
+                // Map raw window pixels to exact UI view coordinates regardless of window size / maximization
+                mousePos = gsm.getWindow()->mapPixelToCoords(mousePressed->position);
+            }
+
+            if (musicIconSprite.getGlobalBounds().contains(mousePos)) {
+                Systems::SoundController::getInstance().toggleMusicMuted();
+            }
+            else if (soundIconSprite.getGlobalBounds().contains(mousePos)) {
+                Systems::SoundController::getInstance().toggleSoundMuted();
+            }
+            else if (marioOptionText.getGlobalBounds().contains(mousePos)) {
+                selectedIndex = 0;
+            }
+            else if (luigiOptionText.getGlobalBounds().contains(mousePos)) {
+                selectedIndex = 1;
+            }
+        }
     }
 }
 
 void CharacterSelectionState::update(sf::Time dt) {
+    // Map current mouse position for hover effects across resized/maximized windows
+    sf::Vector2f mousePos(-9999.f, -9999.f);
+    if (gsm.getWindow() != nullptr) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(*gsm.getWindow());
+        mousePos = gsm.getWindow()->mapPixelToCoords(pixelPos);
+    }
+
+    // Hover effect for Music & Sound icons
+    float baseSize = 36.f;
+    float mbSize = musicIconSprite.getLocalBounds().size.y;
+    if (mbSize > 0.f) {
+        float scale = (baseSize / mbSize) * (musicIconSprite.getGlobalBounds().contains(mousePos) ? 1.18f : 1.0f);
+        musicIconSprite.setScale({scale, scale});
+    }
+
+    float sbSize = soundIconSprite.getLocalBounds().size.y;
+    if (sbSize > 0.f) {
+        float scale = (baseSize / sbSize) * (soundIconSprite.getGlobalBounds().contains(mousePos) ? 1.18f : 1.0f);
+        soundIconSprite.setScale({scale, scale});
+    }
+
     if (selectedIndex == 0) {
         marioOptionText.setString("> 1. MARIO");
         marioOptionText.setFillColor(sf::Color::Yellow);
@@ -149,5 +218,29 @@ void CharacterSelectionState::render(sf::RenderWindow& window) {
     window.draw(marioOptionText);
     window.draw(luigiOptionText);
     window.draw(backHintText);
+
+    // Draw Music & Sound icons in bottom-left corner
+    window.draw(musicIconSprite);
+    window.draw(soundIconSprite);
+
+    // Helper lambda to draw a red slash line over an icon when muted
+    auto drawRedSlash = [&](const sf::FloatRect& bounds) {
+        sf::RectangleShape slash;
+        float lineLength = std::sqrt(bounds.size.x * bounds.size.x + bounds.size.y * bounds.size.y);
+        slash.setSize({lineLength, 4.f});
+        slash.setFillColor(sf::Color::Red);
+        slash.setOrigin({0.f, 2.f});
+        slash.setPosition({bounds.position.x, bounds.position.y + bounds.size.y});
+        float angleDeg = -std::atan2(bounds.size.y, bounds.size.x) * 180.f / 3.14159265f;
+        slash.setRotation(sf::degrees(angleDeg));
+        window.draw(slash);
+    };
+
+    if (Systems::SoundController::getInstance().isMusicMuted()) {
+        drawRedSlash(musicIconSprite.getGlobalBounds());
+    }
+    if (Systems::SoundController::getInstance().isSoundMuted()) {
+        drawRedSlash(soundIconSprite.getGlobalBounds());
+    }
 }
 

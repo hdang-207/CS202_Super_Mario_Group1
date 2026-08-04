@@ -18,6 +18,7 @@ Game::Game()
              sf::Style::Close | sf::Style::Titlebar | sf::Style::Resize),
       screenView(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight}))
 {
+    gsm.setWindow(&window);
     // Keep the picture centred and unstretched at the starting window size.
     updateScreenView();
 
@@ -40,6 +41,8 @@ Game::Game()
     assets.loadTexture("LuigiJump", Systems::resourcePath("assets/character/Luigi_jump.png"));
     assets.loadTexture("LuigiRun1", Systems::resourcePath("assets/character/Luigi_run1.png"));
     assets.loadTexture("LuigiRun2", Systems::resourcePath("assets/character/Luigi_run2.png"));
+    assets.loadTexture("MusicSymbol", Systems::resourcePath("assets/textures/music_symbol.png"));
+    assets.loadTexture("SoundSymbol", Systems::resourcePath("assets/textures/sound_symbol.png"));
 
     // Level artwork: one image per map character, no tile atlas involved.
     assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
