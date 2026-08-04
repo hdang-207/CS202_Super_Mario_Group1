@@ -46,7 +46,7 @@ bool PlayState::wantsBoost() const {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
-      avatarSprite(assets.getTexture("MarioIdle")),
+      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
 
 void PlayState::init() {
@@ -81,11 +81,8 @@ void PlayState::init() {
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
     avatar.setSize({tile * 0.7f, tile * 0.95f});
-    avatar.setFillColor(selectedCharacter == CharacterType::Mario
-                            ? sf::Color(216, 40, 0)     // Mario red
-                            : sf::Color(0, 168, 0));    // Luigi green
-    avatar.setOutlineThickness(-2.f);
-    avatar.setOutlineColor(sf::Color(20, 20, 20));
+    avatar.setFillColor(sf::Color::Transparent);
+    avatarSprite.setTexture(assets.getTexture(selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"));
     respawnAvatar();
     updateCamera();
 
@@ -246,9 +243,11 @@ void PlayState::moveAvatar(sf::Time dt) {
         facingRight = false;
     }
 
+    std::string prefix = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
+
     if (!onGround) {
         // Trạng thái Nhảy (Jump)
-        avatarSprite.setTexture(assets.getTexture("MarioJump"));
+        avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
     }
     else if (std::abs(avatarVelocity.x) > 10.f) {
         // Trạng thái Chạy (Lặp qua Idle -> Run 1 -> Run 2 -> Run 1)
@@ -257,14 +256,14 @@ void PlayState::moveAvatar(sf::Time dt) {
             runAnimTimer = 0.0f;
             currentRunStep = (currentRunStep + 1) % 4;
         }
-        const std::string runTexKeys[] = {"MarioIdle", "MarioRun1", "MarioRun2", "MarioRun1"};
+        const std::string runTexKeys[] = {prefix + "Idle", prefix + "Run1", prefix + "Run2", prefix + "Run1"};
         avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
     }
     else {
         // Trạng thái Đứng yên (Idle)
         runAnimTimer = 0.0f;
         currentRunStep = 0;
-        avatarSprite.setTexture(assets.getTexture("MarioIdle"));
+        avatarSprite.setTexture(assets.getTexture(prefix + "Idle"));
     }
 
     // Reset texture rect to full size of currently active texture
