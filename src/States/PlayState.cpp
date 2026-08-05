@@ -17,6 +17,11 @@ namespace {
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
+    /// Coin released by a question block: rises, falls back, then vanishes.
+    constexpr float kCoinPopSpeed = -480.f;
+    constexpr float kCoinPopGravity = 1400.f;
+    constexpr float kCoinPopLifetime = 0.7f;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
@@ -53,14 +58,6 @@ void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
     std::cout << "[Core Engine] PlayState Initialized with character: " << charName << "\n";
 
-    // Load level 1 map file
-    if (mapParser.loadFromFile(Systems::resourcePath("assets/maps/level1.txt"))) {
-        std::cout << "[Core Engine] Level size: " << mapParser.getWidth() << "x"
-                  << mapParser.getHeight() << " tiles\n";
-    } else {
-        std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
-    }
-
     // Artwork for every character the map file uses. 'H' is left out on purpose:
     // the hidden block has to stay invisible until it is struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
@@ -71,6 +68,7 @@ void PlayState::init() {
     tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
     tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('U', assets.getTexture("EmptyBlock"));
     tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
 
     // Scenery. One character places a whole object, which is why these go through
@@ -84,12 +82,11 @@ void PlayState::init() {
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
+    tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
 
-    if (!tileMap.build(mapParser, Config::kZoom)) {
-        std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
+    if (!loadLevel(1)) {
         return;
     }
-    std::cout << "[Core Engine] Enemy spawns found: " << tileMap.enemySpawns().size() << "\n";
 
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
@@ -150,13 +147,87 @@ void PlayState::update(sf::Time dt) {
         panCamera(dt);
     } else {
         moveAvatar(dt);
+        if (tryEnterNextLevel()) {
+            tileMap.update(dt);
+            return;
+        }
         updateCamera();
     }
+    updateCoinPops(dt);
     tileMap.update(dt); // keeps the question blocks blinking
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
     return sf::FloatRect(avatarPos, avatar.getSize());
+}
+
+bool PlayState::loadLevel(int level) {
+    std::string mapName = "assets/maps/level" + std::to_string(level) + ".txt";
+    if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
+        std::cerr << "[Core Engine] Warning: Failed to load level" << level << ".txt map!\n";
+        return false;
+    }
+    if (!tileMap.build(mapParser, Config::kZoom)) {
+        std::cerr << "[Core Engine] Warning: Level " << level
+                  << " map is empty, nothing to play!\n";
+        return false;
+    }
+
+    currentLevel = level;
+    coinPops.clear();
+    std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
+              << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
+              << tileMap.enemySpawns().size() << " enemy spawns\n";
+    return true;
+}
+
+bool PlayState::tryEnterNextLevel() {
+    if (currentLevel != 1 || !tileMap.hasLevelExit()
+        || !avatarBounds().findIntersection(tileMap.levelExitBounds()).has_value()) {
+        return false;
+    }
+
+    if (!loadLevel(2)) {
+        return false;
+    }
+
+    freeLook = false;
+    respawnAvatar();
+    avatar.setPosition(avatarPos);
+    updateCamera();
+    std::cout << "[Core Engine] Warp pipe entered: Level 1 -> Level 2\n";
+    return true;
+}
+
+void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
+    coinPops.push_back({blockPosition, kCoinPopSpeed, 0.f});
+}
+
+void PlayState::updateCoinPops(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    for (CoinPop& coin : coinPops) {
+        coin.elapsed += seconds;
+        coin.position.y += coin.velocityY * seconds;
+        coin.velocityY += kCoinPopGravity * seconds;
+    }
+
+    coinPops.erase(std::remove_if(coinPops.begin(), coinPops.end(), [](const CoinPop& coin) {
+        return coin.elapsed >= kCoinPopLifetime;
+    }), coinPops.end());
+}
+
+void PlayState::drawCoinPops(sf::RenderWindow& window) const {
+    sf::Sprite coinSprite(assets.getTexture("Coin"));
+    coinSprite.setScale({Config::kZoom, Config::kZoom});
+
+    for (const CoinPop& coin : coinPops) {
+        int frame = static_cast<int>(coin.elapsed / 0.08f) % 4;
+        coinSprite.setTextureRect(sf::IntRect({frame * TileMap::kSourceTileSize, 0},
+                                             {TileMap::kSourceTileSize,
+                                              TileMap::kSourceTileSize}));
+        coinSprite.setPosition(coin.position);
+        window.draw(coinSprite);
+    }
 }
 
 void PlayState::respawnAvatar() {
@@ -245,6 +316,11 @@ void PlayState::moveAvatar(sf::Time dt) {
             onGround = true;
         } else if (avatarVelocity.y < 0.f) {
             avatarPos.y = tile.position.y + tile.size.y;
+            int col = static_cast<int>(tile.position.x / tileMap.tileSize());
+            int row = static_cast<int>(tile.position.y / tileMap.tileSize());
+            if (tileMap.activateQuestionBlock(col, row)) {
+                spawnCoinPop(tile.position);
+            }
             avatarVelocity.y = 0.f;
         }
     }
@@ -337,11 +413,12 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
     unsigned size = 16;
 
     if (freeLook) {
-        // Show which columns of level1.txt are on screen, so what is drawn can be
-        // matched against the map file straight away.
+        // Show which columns of the current level are on screen, so what is drawn
+        // can be matched against its map file straight away.
         float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
         int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
-        label = "MAP VIEW   COL " + std::to_string(firstColumn) + "-"
+        label = "MAP VIEW L" + std::to_string(currentLevel)
+              + "   COL " + std::to_string(firstColumn) + "-"
               + std::to_string(firstColumn + Config::kViewTilesX - 1)
               + "   A/D SCROLL   SHIFT FASTER   F EXIT";
         position = {16.f, 12.f};
@@ -363,15 +440,16 @@ void PlayState::render(sf::RenderWindow& window) {
     const sf::View screenView = window.getView();
     camera.setViewport(screenView.getViewport());
 
-    // Sky: the same blue as the level artwork, so tiles blend into the background.
-    // It is painted as a rectangle rather than with clear() so it stays inside the
-    // game area and leaves the letterbox bars black.
+    // World 1-2 stays dark while underground, then returns to the outdoor sky
+    // when the brick ceiling ends near the flag area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    sky.setFillColor(sf::Color(92, 148, 252));
+    bool underground = currentLevel == 2 && avatarPos.x < 185.f * Config::kTileSize;
+    sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
     window.setView(camera);
     window.draw(tileMap);
+    drawCoinPops(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

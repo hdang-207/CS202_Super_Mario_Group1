@@ -55,6 +55,7 @@ Game::Game()
 
     // Four frames laid out left to right; TileMap cycles them so the block blinks.
     assets.loadTexture("QuestionBlock", Systems::resourcePath("assets/textures/question_block.png"));
+    assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
@@ -68,6 +69,7 @@ Game::Game()
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));
     assets.loadTexture("Castle", Systems::resourcePath("assets/textures/Fortress.png"));
+    assets.loadTexture("WarpPipeForked", Systems::resourcePath("assets/textures/warp_pipe_forked.png"));
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);

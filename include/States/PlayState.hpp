@@ -4,6 +4,7 @@
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
 #include <set>
+#include <vector>
 
 /**
  * @class PlayState
@@ -15,6 +16,7 @@ private:
     MapParser mapParser;
     TileMap tileMap;
     sf::View camera;
+    int currentLevel{1};
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -31,6 +33,13 @@ private:
     sf::Vector2f avatarVelocity;
     bool onGround{false};
     bool jumpHeld{false};
+
+    struct CoinPop {
+        sf::Vector2f position;
+        float velocityY;
+        float elapsed;
+    };
+    std::vector<CoinPop> coinPops;
     // =======================================================================
 
     // Free-look: F detaches the camera from the avatar so the level can be
@@ -86,6 +95,28 @@ private:
      * @brief Respawns the test avatar at the player spawn location.
      */
     void respawnAvatar();
+
+    /**
+     * @brief Loads and builds one numbered map file.
+     * @param level Level number used in assets/maps/levelN.txt.
+     * @return True when the map was loaded and built successfully.
+     */
+    bool loadLevel(int level);
+
+    /**
+     * @brief Enters level 2 when the avatar reaches level 1's warp pipe.
+     * @return True when a transition happened during this frame.
+     */
+    bool tryEnterNextLevel();
+
+    /// @brief Starts the short coin animation above an activated question block.
+    void spawnCoinPop(sf::Vector2f blockPosition);
+
+    /// @brief Advances and removes temporary question-block coins.
+    void updateCoinPops(sf::Time dt);
+
+    /// @brief Draws all temporary coins in world space.
+    void drawCoinPops(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
