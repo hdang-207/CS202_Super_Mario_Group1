@@ -76,6 +76,10 @@ void PlayState::init() {
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
     // drawn behind the level so the cells they cover stay usable.
+    tileMap.setDecorationTexture('M', assets.getTexture("HillBig"));
+    tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
+    tileMap.setDecorationTexture('V', assets.getTexture("BushBig"));
+    tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
     tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
