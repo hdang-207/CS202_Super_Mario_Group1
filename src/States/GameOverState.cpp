@@ -7,8 +7,13 @@
 GameOverState::GameOverState(GameStateManager& gsm, Systems::AssetManager& assets)
     : State(gsm, assets), gameOverText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")) {}
 
+#include "Systems/SoundController.hpp"
+
 void GameOverState::init() {
     std::cout << "[Core Engine] GameOverState Initialized.\n";
+
+    Systems::SoundController::getInstance().stopMusic();
+    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("GameOverSound"));
 
     bgShape.setSize({Config::kViewWidth, Config::kViewHeight});
     bgShape.setFillColor(sf::Color(100, 100, 100)); // Gray background

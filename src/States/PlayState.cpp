@@ -5,6 +5,8 @@
 #include "States/GameOverState.hpp"
 #include "States/VictoryState.hpp"
 #include "Systems/ResourcePath.hpp"
+#include "Core/EventSystem.hpp"
+#include "Systems/SoundController.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -70,8 +72,59 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
 }
 
 void PlayState::init() {
+    Core::EventSystem::getInstance().clearAllListeners();
+
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
     std::cout << "[Core Engine] PlayState Initialized with character: " << charName << "\n";
+    
+    hud.init(assets, selectedCharacter);
+    hud.setScore(this->score);
+    hud.setCoins(this->coins);
+    hud.setLives(this->lives);
+
+    // Setup SoundController and Data event listeners
+    auto& events = Core::EventSystem::getInstance();
+    auto& sounds = Systems::SoundController::getInstance();
+    
+    events.subscribe(Core::EventType::CoinCollected, [&sounds, this](const Core::Event&) {
+        sounds.playSound(assets.getSoundBuffer("CoinSound"));
+        this->coins += 1;
+        this->score += 200;
+        if (this->coins >= 100) {
+            this->coins -= 100;
+            Core::EventSystem::getInstance().broadcast({Core::EventType::OneMoreLife});
+        }
+        this->hud.setCoins(this->coins);
+        this->hud.setScore(this->score);
+    });
+    
+    events.subscribe(Core::EventType::MushroomCollected, [&sounds, this](const Core::Event&) {
+        sounds.playSound(assets.getSoundBuffer("PowerUpSound"));
+        this->score += 1000;
+        this->hud.setScore(this->score);
+    });
+    
+    events.subscribe(Core::EventType::PlayerJumped, [&sounds, this](const Core::Event&) {
+        sounds.playSound(assets.getSoundBuffer("JumpSound"));
+    });
+    
+    events.subscribe(Core::EventType::PlayerDied, [&sounds, this](const Core::Event&) {
+        sounds.playSound(assets.getSoundBuffer("DieSound"));
+        sounds.stopMusic();
+        
+        this->lives -= 1;
+        this->hud.setLives(this->lives);
+        if (this->lives <= 0) {
+            std::cout << "[Core Engine] Game Over condition met.\n";
+            Core::EventSystem::getInstance().broadcast({Core::EventType::GameOver});
+        }
+    });
+
+    events.subscribe(Core::EventType::OneMoreLife, [&sounds, this](const Core::Event&) {
+        sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
+        this->lives += 1;
+        this->hud.setLives(this->lives);
+    });
 
     // Artwork for every character the map file uses. 'H' is left out on purpose:
     // the hidden block has to stay invisible until it is struck.
@@ -99,8 +152,14 @@ void PlayState::init() {
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
 
-    if (!loadLevel(1)) {
+    if (!loadLevel(currentLevel)) {
         return;
+    }
+
+    if (currentLevel == 2) {
+        Systems::SoundController::getInstance().playMusic(Systems::resourcePath("assets/audio/Theme2.mp3"));
+    } else {
+        Systems::SoundController::getInstance().playMusic(Systems::resourcePath("assets/audio/Theme.mp3"));
     }
 
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
@@ -215,8 +274,10 @@ void PlayState::update(sf::Time dt) {
         updateCamera();
     }
     updateCoinPops(dt);
-    updateMushroomPops(dt);
+    updateMushrooms(dt);
     tileMap.update(dt); // keeps the question blocks blinking
+    hud.update(dt);     // updates the HUD (timer, etc.)
+    Systems::SoundController::getInstance().update(); // Clean up finished sounds
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
@@ -237,7 +298,7 @@ bool PlayState::loadLevel(int level) {
 
     currentLevel = level;
     coinPops.clear();
-    mushroomPops.clear();
+    mushrooms.clear();
     prepareQuestionBlockRewards();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
@@ -361,25 +422,84 @@ PlayState::BlockReward PlayState::takeNextQuestionBlockReward() {
     return blockRewards[nextBlockReward++];
 }
 
-void PlayState::spawnMushroomPop(sf::Vector2f blockPosition) {
-    mushroomPops.push_back({blockPosition, blockPosition, 0.f});
+void PlayState::spawnMushroom(sf::Vector2f blockPosition) {
+    mushrooms.push_back({blockPosition, blockPosition, {0.f, 0.f}, MushroomState::Emerging, 0.f});
 }
 
-void PlayState::updateMushroomPops(sf::Time dt) {
-    for (MushroomPop& mushroom : mushroomPops) {
-        mushroom.elapsed = std::min(mushroom.elapsed + dt.asSeconds(),
-                                    kMushroomRiseDuration);
-        float progress = mushroom.elapsed / kMushroomRiseDuration;
-        mushroom.position = {mushroom.blockPosition.x,
-                             mushroom.blockPosition.y - tileMap.tileSize() * progress};
+void PlayState::updateMushrooms(sf::Time dt) {
+    constexpr float kMushroomSpeed = 120.f;
+    constexpr float kGravity = 2400.f;
+    constexpr float kMaxFallSpeed = 600.f;
+    float seconds = dt.asSeconds();
+    
+    sf::FloatRect ab = avatarBounds();
+
+    for (auto it = mushrooms.begin(); it != mushrooms.end(); ) {
+        if (it->state == MushroomState::Emerging) {
+            it->elapsed = std::min(it->elapsed + seconds, kMushroomRiseDuration);
+            float progress = it->elapsed / kMushroomRiseDuration;
+            it->position = {it->blockPosition.x,
+                            it->blockPosition.y - tileMap.tileSize() * progress};
+            
+            if (it->elapsed >= kMushroomRiseDuration) {
+                it->state = MushroomState::Moving;
+                it->velocity.x = kMushroomSpeed;
+            }
+        } else if (it->state == MushroomState::Moving) {
+            it->velocity.y = std::min(it->velocity.y + kGravity * seconds, kMaxFallSpeed);
+            
+            sf::Vector2f size(tileMap.tileSize(), tileMap.tileSize());
+            
+            // X movement & collision
+            it->position.x += it->velocity.x * seconds;
+            sf::FloatRect xBounds(it->position, size);
+            xBounds.position.y += 1.0f;
+            xBounds.size.y -= 2.0f;
+            
+            for (const auto& tile : tileMap.solidTilesOverlapping(xBounds)) {
+                if (it->velocity.x > 0.f) {
+                    it->position.x = tile.position.x - size.x;
+                } else if (it->velocity.x < 0.f) {
+                    it->position.x = tile.position.x + tile.size.x;
+                }
+                it->velocity.x = -it->velocity.x; // bounce horizontally
+                break;
+            }
+            
+            // Y movement & collision
+            it->position.y += it->velocity.y * seconds;
+            sf::FloatRect yBounds(it->position, size);
+            yBounds.position.x += 1.0f;
+            yBounds.size.x -= 2.0f;
+            
+            for (const auto& tile : tileMap.solidTilesOverlapping(yBounds)) {
+                if (it->velocity.y > 0.f) {
+                    it->position.y = tile.position.y - size.y;
+                } else if (it->velocity.y < 0.f) {
+                    it->position.y = tile.position.y + tile.size.y;
+                }
+                it->velocity.y = 0.f;
+            }
+        }
+        
+        sf::FloatRect mushroomBounds(it->position, sf::Vector2f(tileMap.tileSize(), tileMap.tileSize()));
+        if (it->state == MushroomState::Moving && ab.findIntersection(mushroomBounds)) {
+            Core::EventSystem::getInstance().broadcast({Core::EventType::MushroomCollected});
+            it = mushrooms.erase(it);
+        } else if (it->position.y > tileMap.pixelHeight()) {
+            // fell into a pit
+            it = mushrooms.erase(it);
+        } else {
+            ++it;
+        }
     }
 }
 
-void PlayState::drawMushroomPops(sf::RenderWindow& window) const {
+void PlayState::drawMushrooms(sf::RenderWindow& window) const {
     sf::Sprite mushroomSprite(assets.getTexture("SuperMushroom"));
     mushroomSprite.setScale({Config::kZoom, Config::kZoom});
 
-    for (const MushroomPop& mushroom : mushroomPops) {
+    for (const MushroomEntity& mushroom : mushrooms) {
         mushroomSprite.setPosition(mushroom.position);
         window.draw(mushroomSprite);
     }
@@ -422,6 +542,7 @@ void PlayState::moveAvatar(sf::Time dt) {
     if (jumpPressed && !jumpHeld && onGround) {
         avatarVelocity.y = -kJumpSpeed;
         onGround = false;
+        Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
     // Let go early and the jump is cut short - the classic variable jump height.
     if (!jumpPressed && avatarVelocity.y < -kJumpSpeed * kJumpCutoff) {
@@ -475,9 +596,10 @@ void PlayState::moveAvatar(sf::Time dt) {
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             if (tileMap.activateQuestionBlock(col, row)) {
                 if (takeNextQuestionBlockReward() == BlockReward::Mushroom) {
-                    spawnMushroomPop(tile.position);
+                    spawnMushroom(tile.position);
                 } else {
                     spawnCoinPop(tile.position);
+                    Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
                 }
             }
             avatarVelocity.y = 0.f;
@@ -486,9 +608,9 @@ void PlayState::moveAvatar(sf::Time dt) {
 
     // Fell down one of the level's pits: lose a life or game over.
     if (avatarPos.y > tileMap.pixelHeight()) {
-        lives--;
-        if (lives > 0) {
-            std::cout << "[Core Engine] Avatar fell into pit. Lives remaining: " << lives << "\n";
+        Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
+        if (this->lives > 0) {
+            std::cout << "[Core Engine] Avatar fell into pit. Lives remaining: " << this->lives << "\n";
             respawnAvatar();
         } else {
             std::cout << "[Core Engine] Game Over condition met.\n";
@@ -616,11 +738,12 @@ void PlayState::render(sf::RenderWindow& window) {
     window.setView(camera);
     window.draw(tileMap);
     drawCoinPops(window);
-    drawMushroomPops(window);
+    drawMushrooms(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
+    hud.render(window);
 
     if (isPaused) {
         sf::RectangleShape overlay({Config::kViewWidth, Config::kViewHeight});
