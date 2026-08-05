@@ -431,11 +431,11 @@ void PlayState::render(sf::RenderWindow& window) {
     const sf::View screenView = window.getView();
     camera.setViewport(screenView.getViewport());
 
-    // Sky: the same blue as the level artwork, so tiles blend into the background.
-    // It is painted as a rectangle rather than with clear() so it stays inside the
-    // game area and leaves the letterbox bars black.
+    // World 1-2 stays dark while underground, then returns to the outdoor sky
+    // when the brick ceiling ends near the flag area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    sky.setFillColor(sf::Color(92, 148, 252));
+    bool underground = currentLevel == 2 && avatarPos.x < 185.f * Config::kTileSize;
+    sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
     window.setView(camera);
