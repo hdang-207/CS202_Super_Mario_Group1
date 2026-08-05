@@ -135,6 +135,9 @@ void PlayState::handleInput(const sf::Event& event) {
             // Pick the scrolling up exactly where the camera already is, so the
             // picture does not jump when the mode changes.
             freeLookCentre = camera.getCenter();
+            if (!freeLook) {
+                maxCameraCenterX = std::max(maxCameraCenterX, camera.getCenter().x);
+            }
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
         }
     }
@@ -162,6 +165,7 @@ void PlayState::respawnAvatar() {
     avatarPos = {spawn.x, spawn.y + tileMap.tileSize() - avatar.getSize().y};
     avatarVelocity = {0.f, 0.f};
     onGround = false;
+    maxCameraCenterX = avatarPos.x + avatar.getSize().x / 2.f;
 }
 
 void PlayState::moveAvatar(sf::Time dt) {
@@ -221,7 +225,10 @@ void PlayState::moveAvatar(sf::Time dt) {
             avatarVelocity.x = 0.f;
         }
     }
-    avatarPos.x = std::clamp(avatarPos.x, 0.f, std::max(0.f, tileMap.pixelWidth() - size.x));
+
+    // SMB 1985 Camera Lock: Player cannot walk back past the left edge of the screen
+    float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
+    avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
 
     onGround = false;
     avatarPos.y += avatarVelocity.y * seconds;
@@ -307,7 +314,9 @@ void PlayState::centreCamera(sf::Vector2f target) {
 }
 
 void PlayState::updateCamera() {
-    centreCamera(avatarPos + avatar.getSize() / 2.f);
+    float playerCenterX = avatarPos.x + avatar.getSize().x / 2.f;
+    maxCameraCenterX = std::max(maxCameraCenterX, playerCenterX);
+    centreCamera({maxCameraCenterX, avatarPos.y + avatar.getSize().y / 2.f});
 }
 
 void PlayState::panCamera(sf::Time dt) {

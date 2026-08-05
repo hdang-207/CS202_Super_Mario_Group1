@@ -48,10 +48,27 @@ void IntroMenuState::init() {
 }
 
 void IntroMenuState::handleInput(const sf::Event& event) {
-    if (event.is<sf::Event::KeyPressed>()) {
-        std::cout << "[Core Engine] Key pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";
-        gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
+    const auto* keyPressed = event.getIf<sf::Event::KeyPressed>();
+    if (!keyPressed) {
+        return;
     }
+
+    sf::Keyboard::Key key = keyPressed->code;
+
+    // Ignores system keys (Escape, Tab, CapsLock, F1-F12, Shift, Ctrl, Alt, System/Windows keys)
+    if (key == sf::Keyboard::Key::Escape || key == sf::Keyboard::Key::Tab ||
+        keyPressed->scancode == sf::Keyboard::Scancode::CapsLock ||
+        key == sf::Keyboard::Key::Backspace ||
+        key == sf::Keyboard::Key::LShift || key == sf::Keyboard::Key::RShift ||
+        key == sf::Keyboard::Key::LControl || key == sf::Keyboard::Key::RControl ||
+        key == sf::Keyboard::Key::LAlt || key == sf::Keyboard::Key::RAlt ||
+        key == sf::Keyboard::Key::LSystem || key == sf::Keyboard::Key::RSystem ||
+        (key >= sf::Keyboard::Key::F1 && key <= sf::Keyboard::Key::F12)) {
+        return;
+    }
+
+    std::cout << "[Core Engine] Valid key pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";
+    gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
 }
 
 void IntroMenuState::update(sf::Time dt) {
