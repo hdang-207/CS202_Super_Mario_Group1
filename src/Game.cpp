@@ -55,6 +55,7 @@ Game::Game()
 
     // Four frames laid out left to right; TileMap cycles them so the block blinks.
     assets.loadTexture("QuestionBlock", Systems::resourcePath("assets/textures/question_block.png"));
+    assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.

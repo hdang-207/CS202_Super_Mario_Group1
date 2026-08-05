@@ -4,6 +4,7 @@
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
 #include <set>
+#include <vector>
 
 /**
  * @class PlayState
@@ -32,6 +33,13 @@ private:
     sf::Vector2f avatarVelocity;
     bool onGround{false};
     bool jumpHeld{false};
+
+    struct CoinPop {
+        sf::Vector2f position;
+        float velocityY;
+        float elapsed;
+    };
+    std::vector<CoinPop> coinPops;
     // =======================================================================
 
     // Free-look: F detaches the camera from the avatar so the level can be
@@ -99,6 +107,15 @@ private:
      * @return True when a transition happened during this frame.
      */
     bool tryEnterNextLevel();
+
+    /// @brief Starts the short coin animation above an activated question block.
+    void spawnCoinPop(sf::Vector2f blockPosition);
+
+    /// @brief Advances and removes temporary question-block coins.
+    void updateCoinPops(sf::Time dt);
+
+    /// @brief Draws all temporary coins in world space.
+    void drawCoinPops(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.

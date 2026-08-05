@@ -13,8 +13,8 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   #  ground        B  brick          ?  question block   S  staircase block
-     *   [] pipe top      {} pipe body      H  hidden block     o  coin
+     *   # ground   B brick   ? question block   U used block   S staircase
+     *   [] pipe top       {} pipe body          H hidden block  o coin
      * Markers handled separately: P player spawn, E enemy spawn, . empty sky.
      * Scenery characters (M m V v l c F X W) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
@@ -23,6 +23,7 @@ namespace {
         { '#', TileType::Ground        },
         { 'B', TileType::Brick         },
         { '?', TileType::QuestionBlock },
+        { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
         { 'H', TileType::HiddenBlock   },
         { '[', TileType::Pipe          },
@@ -117,6 +118,30 @@ TileMap::TileBatch* TileMap::decorationFor(char symbol) {
     return nullptr;
 }
 
+void TileMap::rebuildTileBatch(char symbol) {
+    TileBatch* batch = batchFor(symbol);
+    if (batch == nullptr) {
+        return;
+    }
+
+    batch->vertices.clear();
+    float textureLeft = batch->frame * batch->frameWidth();
+    sf::FloatRect textureRect({textureLeft, 0.f},
+                              {batch->frameWidth(),
+                               static_cast<float>(batch->texture->getSize().y)});
+
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < columns; ++col) {
+            std::size_t index = static_cast<std::size_t>(row) * columns + col;
+            if (symbols[index] != symbol) {
+                continue;
+            }
+            appendQuad(batch->vertices, {col * tileSizePx, row * tileSizePx},
+                       {tileSizePx, tileSizePx}, textureRect);
+        }
+    }
+}
+
 bool TileMap::build(const MapParser& parser, float scale) {
     const std::vector<std::vector<char>>& grid = parser.getGrid();
     if (grid.empty()) {
@@ -128,6 +153,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
     tileSizePx = kSourceTileSize * scale;
 
     types.assign(static_cast<std::size_t>(columns) * rows, TileType::Empty);
+    symbols.assign(static_cast<std::size_t>(columns) * rows, '.');
     enemies.clear();
     spawn = {0.f, 0.f};
     levelExitAvailable = false;
@@ -148,6 +174,8 @@ bool TileMap::build(const MapParser& parser, float scale) {
         for (int col = 0; col < static_cast<int>(grid[row].size()); ++col) {
             char symbol = grid[row][col];
             sf::Vector2f worldPos(col * tileSizePx, row * tileSizePx);
+            std::size_t index = static_cast<std::size_t>(row) * columns + col;
+            symbols[index] = symbol;
 
             if (symbol == 'P') {
                 spawn = worldPos;
@@ -177,7 +205,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 continue; // sky or an unknown symbol: nothing to store, nothing to draw
             }
 
-            types[static_cast<std::size_t>(row) * columns + col] = def->type;
+            types[index] = def->type;
 
             // The hidden block is solid but must not be visible until it is struck,
             // so it is deliberately left without artwork.
@@ -223,6 +251,19 @@ void TileMap::update(sf::Time dt) {
             batch.vertices[i].texCoords.x += shift;
         }
     }
+}
+
+bool TileMap::activateQuestionBlock(int col, int row) {
+    if (typeAt(col, row) != TileType::QuestionBlock) {
+        return false;
+    }
+
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    types[index] = TileType::UsedBlock;
+    symbols[index] = 'U';
+    rebuildTileBatch('?');
+    rebuildTileBatch('U');
+    return true;
 }
 
 TileType TileMap::typeAt(int col, int row) const {

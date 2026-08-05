@@ -17,6 +17,11 @@ namespace {
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
+    /// Coin released by a question block: rises, falls back, then vanishes.
+    constexpr float kCoinPopSpeed = -480.f;
+    constexpr float kCoinPopGravity = 1400.f;
+    constexpr float kCoinPopLifetime = 0.7f;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
@@ -63,6 +68,7 @@ void PlayState::init() {
     tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
     tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('U', assets.getTexture("EmptyBlock"));
     tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
 
     // Scenery. One character places a whole object, which is why these go through
@@ -144,6 +150,7 @@ void PlayState::update(sf::Time dt) {
         }
         updateCamera();
     }
+    updateCoinPops(dt);
     tileMap.update(dt); // keeps the question blocks blinking
 }
 
@@ -164,6 +171,7 @@ bool PlayState::loadLevel(int level) {
     }
 
     currentLevel = level;
+    coinPops.clear();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
               << tileMap.enemySpawns().size() << " enemy spawns\n";
@@ -186,6 +194,37 @@ bool PlayState::tryEnterNextLevel() {
     updateCamera();
     std::cout << "[Core Engine] Warp pipe entered: Level 1 -> Level 2\n";
     return true;
+}
+
+void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
+    coinPops.push_back({blockPosition, kCoinPopSpeed, 0.f});
+}
+
+void PlayState::updateCoinPops(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    for (CoinPop& coin : coinPops) {
+        coin.elapsed += seconds;
+        coin.position.y += coin.velocityY * seconds;
+        coin.velocityY += kCoinPopGravity * seconds;
+    }
+
+    coinPops.erase(std::remove_if(coinPops.begin(), coinPops.end(), [](const CoinPop& coin) {
+        return coin.elapsed >= kCoinPopLifetime;
+    }), coinPops.end());
+}
+
+void PlayState::drawCoinPops(sf::RenderWindow& window) const {
+    sf::Sprite coinSprite(assets.getTexture("Coin"));
+    coinSprite.setScale({Config::kZoom, Config::kZoom});
+
+    for (const CoinPop& coin : coinPops) {
+        int frame = static_cast<int>(coin.elapsed / 0.08f) % 4;
+        coinSprite.setTextureRect(sf::IntRect({frame * TileMap::kSourceTileSize, 0},
+                                             {TileMap::kSourceTileSize,
+                                              TileMap::kSourceTileSize}));
+        coinSprite.setPosition(coin.position);
+        window.draw(coinSprite);
+    }
 }
 
 void PlayState::respawnAvatar() {
@@ -270,6 +309,11 @@ void PlayState::moveAvatar(sf::Time dt) {
             onGround = true;
         } else if (avatarVelocity.y < 0.f) {
             avatarPos.y = tile.position.y + tile.size.y;
+            int col = static_cast<int>(tile.position.x / tileMap.tileSize());
+            int row = static_cast<int>(tile.position.y / tileMap.tileSize());
+            if (tileMap.activateQuestionBlock(col, row)) {
+                spawnCoinPop(tile.position);
+            }
             avatarVelocity.y = 0.f;
         }
     }
@@ -396,6 +440,7 @@ void PlayState::render(sf::RenderWindow& window) {
 
     window.setView(camera);
     window.draw(tileMap);
+    drawCoinPops(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

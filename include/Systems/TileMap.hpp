@@ -14,6 +14,7 @@ enum class TileType {
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
     QuestionBlock, ///< Item block (solid).
+    UsedBlock,     ///< Question block after its item has been released (solid).
     StairBlock,    ///< Solid staircase block.
     HiddenBlock,   ///< Invisible until struck from below, but solid.
     Pipe           ///< Solid pipe segment.
@@ -79,6 +80,12 @@ public:
     /// @brief Advances the animated tiles. Call once per frame.
     void update(sf::Time dt);
 
+    /**
+     * @brief Replaces one question block with a used block.
+     * @return True only on the first activation of a question block at this cell.
+     */
+    bool activateQuestionBlock(int col, int row);
+
     /// @brief True if the tile at this grid cell blocks movement (out of bounds is not solid).
     bool isSolid(int col, int row) const;
 
@@ -132,7 +139,11 @@ private:
     /// @brief Scenery batch holding @p symbol, or nullptr when it is not scenery.
     TileBatch* decorationFor(char symbol);
 
+    /// @brief Rebuilds the vertices for one mutable tile symbol.
+    void rebuildTileBatch(char symbol);
+
     std::vector<TileType> types;        ///< Row-major grid of tile types.
+    std::vector<char> symbols;          ///< Mutable row-major map symbols.
     std::vector<TileBatch> batches;     ///< One vertex buffer per map character.
     std::vector<TileBatch> decorations; ///< Scenery, drawn first so it stays behind.
     int columns{0};
