@@ -6,6 +6,7 @@
 #include "Core/Config.hpp"
 #include <iostream>
 #include <string>
+#include "Systems/SoundController.hpp"
 
 VictoryState::VictoryState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), victoryText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")), 
@@ -13,6 +14,9 @@ VictoryState::VictoryState(GameStateManager& gsm, Systems::AssetManager& assets,
 
 void VictoryState::init() {
     std::cout << "[Core Engine] VictoryState Initialized.\n";
+
+    Systems::SoundController::getInstance().stopMusic();
+    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("VictorySound"));
 
     bgShape.setSize({Config::kViewWidth, Config::kViewHeight});
     bgShape.setFillColor(sf::Color(255, 200, 0)); // Yellow background
