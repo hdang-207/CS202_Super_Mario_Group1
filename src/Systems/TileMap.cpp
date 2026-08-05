@@ -14,8 +14,10 @@ namespace {
      * what a character means to the physics.
      *
      *   #  ground        B  brick          ?  question block   S  staircase block
-     *   [] pipe top      {} pipe body      H  hidden block
+     *   [] pipe top      {} pipe body      H  hidden block     o  coin
      * Markers handled separately: P player spawn, E enemy spawn, . empty sky.
+     * Scenery characters (M m V v l c F X) carry no entry here - they are
+     * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
         { '#', TileType::Ground        },
@@ -27,6 +29,7 @@ namespace {
         { ']', TileType::Pipe          },
         { '{', TileType::Pipe          },
         { '}', TileType::Pipe          },
+        { 'o', TileType::Coin          },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -40,7 +43,8 @@ namespace {
     }
 
     bool isSolidType(TileType type) {
-        return type != TileType::Empty && type != TileType::Decoration;
+        return type != TileType::Empty && type != TileType::Decoration
+            && type != TileType::Coin;
     }
 
     /// @brief Appends one rectangle as the two triangles SFML 3 needs.

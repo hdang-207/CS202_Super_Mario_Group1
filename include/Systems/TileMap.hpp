@@ -10,6 +10,7 @@
 enum class TileType {
     Empty,         ///< Sky / open air.
     Decoration,    ///< Drawn but never collides.
+    Coin,          ///< Pickup: drawn and animated, but never blocks movement.
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
     QuestionBlock, ///< Item block (solid).
@@ -56,8 +57,8 @@ public:
                         sf::Time frameDuration = sf::seconds(0.12f));
 
     /**
-     * @brief Registers scenery artwork - clouds, hills, bushes - for a map character.
-     * @param symbol Character as it appears in the map file, e.g. 'M' for a big hill.
+     * @brief Registers scenery artwork - clouds, flagpole, castle - for a map character.
+     * @param symbol Character as it appears in the map file, e.g. 'l' for a big cloud.
      * @param texture Picture of the whole object. Unlike a tile it may be several
      *        tiles wide and tall; it is anchored at the top-left corner of the cell
      *        holding @p symbol and keeps its own proportions.

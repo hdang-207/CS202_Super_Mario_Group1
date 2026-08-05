@@ -13,7 +13,7 @@ namespace {
     constexpr float kWalkAcceleration = 1800.f;
     constexpr float kMaxWalkSpeed = 420.f;
     constexpr float kGroundFriction = 2000.f;
-    constexpr float kJumpSpeed = 900.f;
+    constexpr float kJumpSpeed = 1000.f;
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
@@ -46,6 +46,7 @@ bool PlayState::wantsBoost() const {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
+      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
 
 void PlayState::init() {
@@ -70,6 +71,15 @@ void PlayState::init() {
     tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
     tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
+
+    // Scenery. One character places a whole object, which is why these go through
+    // setDecorationTexture: they are several tiles big, never collide, and are
+    // drawn behind the level so the cells they cover stay usable.
+    tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
+    tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
+    tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
+    tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
@@ -80,11 +90,8 @@ void PlayState::init() {
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
     avatar.setSize({tile * 0.7f, tile * 0.95f});
-    avatar.setFillColor(selectedCharacter == CharacterType::Mario
-                            ? sf::Color(216, 40, 0)     // Mario red
-                            : sf::Color(0, 168, 0));    // Luigi green
-    avatar.setOutlineThickness(-2.f);
-    avatar.setOutlineColor(sf::Color(20, 20, 20));
+    avatar.setFillColor(sf::Color::Transparent);
+    avatarSprite.setTexture(assets.getTexture(selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"));
     respawnAvatar();
     updateCamera();
 
@@ -162,8 +169,13 @@ void PlayState::moveAvatar(sf::Time dt) {
         avatarVelocity.x += direction * kWalkAcceleration * seconds;
         avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
     } else {
+
+        // SỬA TẠI ĐÂY: Kiểm tra xem nhân vật có đang đứng trên đất không
+        // Nếu trên đất -> dùng lực ma sát gốc (2000.f)
+        // Nếu trên không -> chỉ lấy 2% lực ma sát để giữ nguyên quán tính bay tới trước
+        float friction = onGround ? kGroundFriction : (kGroundFriction * 0.02f);
         // Coast to a stop instead of snapping, so movement keeps some inertia.
-        float drop = kGroundFriction * seconds;
+        float drop = friction * seconds;
         if (std::abs(avatarVelocity.x) <= drop) {
             avatarVelocity.x = 0.f;
         } else {
@@ -189,7 +201,14 @@ void PlayState::moveAvatar(sf::Time dt) {
     sf::Vector2f size = avatar.getSize();
 
     avatarPos.x += avatarVelocity.x * seconds;
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(avatarBounds())) {
+
+    // TẠO HITBOX ẢO CHO TRỤC X: Bóp hẹp chiều cao để không quẹt sàn/trần
+    sf::FloatRect xBounds = avatarBounds();
+    xBounds.position.y += 1.0f;    // Nhích mép trên (đỉnh) xuống 1 pixel
+    xBounds.size.y -= 2.0f;        // Kéo mép dưới (đáy) lên 1 pixel
+
+
+    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
         if (avatarVelocity.x > 0.f) {
             avatarPos.x = tile.position.x - size.x;
             avatarVelocity.x = 0.f;
@@ -202,7 +221,13 @@ void PlayState::moveAvatar(sf::Time dt) {
 
     onGround = false;
     avatarPos.y += avatarVelocity.y * seconds;
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(avatarBounds())) {
+    
+    // TẠO HITBOX ẢO CHO TRỤC Y: Bóp hẹp chiều rộng để không quẹt tường
+    sf::FloatRect yBounds = avatarBounds();
+    yBounds.position.x += 1.0f;    // Nhích mép trái vào trong 1 pixel
+    yBounds.size.x -= 2.0f;        // Bóp mép phải vào trong 1 pixel
+
+    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
         if (avatarVelocity.y > 0.f) {
             avatarPos.y = tile.position.y - size.y;
             avatarVelocity.y = 0.f;
@@ -219,6 +244,51 @@ void PlayState::moveAvatar(sf::Time dt) {
     }
 
     avatar.setPosition(avatarPos);
+
+    // --- Update Avatar Movement Animation & Facing Direction ---
+    if (avatarVelocity.x > 10.f) {
+        facingRight = true;
+    } else if (avatarVelocity.x < -10.f) {
+        facingRight = false;
+    }
+
+    std::string prefix = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
+
+    if (!onGround) {
+        // Trạng thái Nhảy (Jump)
+        avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
+    }
+    else if (std::abs(avatarVelocity.x) > 10.f) {
+        // Trạng thái Chạy (Lặp qua Idle -> Run 1 -> Run 2 -> Run 1)
+        runAnimTimer += dt.asSeconds();
+        if (runAnimTimer >= 0.08f) {
+            runAnimTimer = 0.0f;
+            currentRunStep = (currentRunStep + 1) % 4;
+        }
+        const std::string runTexKeys[] = {prefix + "Idle", prefix + "Run1", prefix + "Run2", prefix + "Run1"};
+        avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
+    }
+    else {
+        // Trạng thái Đứng yên (Idle)
+        runAnimTimer = 0.0f;
+        currentRunStep = 0;
+        avatarSprite.setTexture(assets.getTexture(prefix + "Idle"));
+    }
+
+    // Reset texture rect to full size of currently active texture
+    sf::Vector2u texSize = avatarSprite.getTexture().getSize();
+    avatarSprite.setTextureRect(sf::IntRect({0, 0}, {(int)texSize.x, (int)texSize.y}));
+
+    sf::FloatRect sb = avatarSprite.getLocalBounds();
+    // Align sprite origin at bottom-center so feet rest perfectly on top of ground tiles
+    avatarSprite.setOrigin({sb.position.x + sb.size.x / 2.f, sb.position.y + sb.size.y});
+
+    float targetHeight = avatar.getSize().y * 1.5f;
+    float scaleY = (sb.size.y > 0.f) ? (targetHeight / sb.size.y) : 1.f;
+    float scaleX = facingRight ? scaleY : -scaleY;
+
+    avatarSprite.setScale({scaleX, scaleY});
+    avatarSprite.setPosition({avatarPos.x + avatar.getSize().x / 2.f, avatarPos.y + avatar.getSize().y});
 }
 
 void PlayState::centreCamera(sf::Vector2f target) {
@@ -289,7 +359,7 @@ void PlayState::render(sf::RenderWindow& window) {
 
     window.setView(camera);
     window.draw(tileMap);
-    window.draw(avatar);
+    window.draw(avatarSprite);
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current

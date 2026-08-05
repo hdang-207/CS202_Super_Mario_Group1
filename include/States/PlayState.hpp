@@ -23,6 +23,10 @@ private:
     // meant to be deleted once that lands - TileMap below is the piece that
     // stays, and is what the real physics code should collide against.
     sf::RectangleShape avatar;
+    sf::Sprite avatarSprite;
+    bool facingRight{true};
+    float runAnimTimer{0.f};
+    int currentRunStep{0};
     sf::Vector2f avatarPos;
     sf::Vector2f avatarVelocity;
     bool onGround{false};

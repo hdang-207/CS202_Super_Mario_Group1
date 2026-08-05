@@ -9,6 +9,21 @@
  * (Mario or Luigi) using keyboard numbers, or press 'B' to return to the main menu.
  */
 class CharacterSelectionState : public State {
+private:
+    sf::Sprite bgSprite;           ///< Background menu sprite
+    sf::RectangleShape darkOverlay;///< Darkening overlay for contrast
+    sf::Text headerText;
+    sf::Text marioOptionText;
+    sf::Text luigiOptionText;
+    sf::Text descText;             ///< Text display for character attributes
+    sf::Text backHintText;
+
+    sf::RectangleShape previewCard;///< Outer preview frame
+    sf::Sprite previewSprite;      ///< Preview sprite for chosen character avatar
+    sf::Sprite musicIconSprite;    ///< Music toggle icon sprite
+    sf::Sprite soundIconSprite;    ///< Sound effect toggle icon sprite
+    int selectedIndex = 0;         ///< 0 for Mario, 1 for Luigi
+
 public:
     /**
      * @brief Constructor for CharacterSelectionState.
