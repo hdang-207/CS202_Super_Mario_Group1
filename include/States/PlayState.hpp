@@ -3,6 +3,7 @@
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
+#include "Systems/SaveManager.hpp"
 #include <cstddef>
 #include <random>
 #include <set>
@@ -19,6 +20,9 @@ private:
     TileMap tileMap;
     sf::View camera;
     int currentLevel{1};
+    int score{0};
+    int coins{0};
+    int lives{3};
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on

@@ -138,6 +138,33 @@ void PlayState::handleInput(const sf::Event& event) {
                 maxCameraCenterX = std::max(maxCameraCenterX, camera.getCenter().x);
             }
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
+        } else if (keyPressed->code == sf::Keyboard::Key::F5) {
+            SaveData data;
+            data.currentLevel = this->currentLevel;
+            data.score = this->score;
+            data.coins = this->coins;
+            data.lives = this->lives;
+            data.selectedCharacter = this->selectedCharacter;
+            
+            if (SaveManager::saveToFile("savegame.txt", data)) {
+                std::cout << "[Core Engine] Quick Save successful (Level " << currentLevel << ").\n";
+            }
+        } else if (keyPressed->code == sf::Keyboard::Key::F9) {
+            SaveData data;
+            if (SaveManager::loadFromFile("savegame.txt", data)) {
+                this->currentLevel = data.currentLevel;
+                this->score = data.score;
+                this->coins = data.coins;
+                this->lives = data.lives;
+                this->selectedCharacter = data.selectedCharacter;
+                
+                std::cout << "[Core Engine] Quick Load successful. Loading Level " << currentLevel << "...\n";
+                if (loadLevel(currentLevel)) {
+                    freeLook = false;
+                    respawnAvatar();
+                    updateCamera();
+                }
+            }
         }
     }
 }
