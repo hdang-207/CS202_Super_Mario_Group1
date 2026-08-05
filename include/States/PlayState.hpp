@@ -37,6 +37,7 @@ private:
     // scrolled through and inspected without playing it.
     bool freeLook{false};
     sf::Vector2f freeLookCentre;
+    float maxCameraCenterX{0.f}; ///< Maximum X position camera center has reached (SMB 1985 one-way scroll lock)
 
     /**
      * Keys held right now, tracked from the window's key events.
