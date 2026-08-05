@@ -200,7 +200,10 @@ bool PlayState::tryEnterNextLevel() {
 }
 
 void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
-    coinPops.push_back({blockPosition, kCoinPopSpeed, 0.f});
+    // The map guarantees an empty '.' cell above each question block. Start the
+    // coin there instead of drawing it inside the '?' tile that released it.
+    sf::Vector2f coinPosition(blockPosition.x, blockPosition.y - tileMap.tileSize());
+    coinPops.push_back({coinPosition, kCoinPopSpeed, 0.f});
 }
 
 void PlayState::updateCoinPops(sf::Time dt) {
