@@ -21,6 +21,8 @@ namespace {
     constexpr float kCoinPopSpeed = -480.f;
     constexpr float kCoinPopGravity = 1400.f;
     constexpr float kCoinPopLifetime = 0.7f;
+    constexpr float kMushroomRiseDuration = 0.45f;
+    constexpr std::size_t kMushroomRewardDivisor = 4; ///< About 25% mushroom rewards.
 
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
@@ -154,6 +156,7 @@ void PlayState::update(sf::Time dt) {
         updateCamera();
     }
     updateCoinPops(dt);
+    updateMushroomPops(dt);
     tileMap.update(dt); // keeps the question blocks blinking
 }
 
@@ -175,6 +178,8 @@ bool PlayState::loadLevel(int level) {
 
     currentLevel = level;
     coinPops.clear();
+    mushroomPops.clear();
+    prepareQuestionBlockRewards();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
               << tileMap.enemySpawns().size() << " enemy spawns\n";
@@ -230,6 +235,95 @@ void PlayState::drawCoinPops(sf::RenderWindow& window) const {
                                               TileMap::kSourceTileSize}));
         coinSprite.setPosition(coin.position);
         window.draw(coinSprite);
+    }
+}
+
+void PlayState::prepareQuestionBlockRewards() {
+    std::size_t questionBlockCount = 0;
+    for (const auto& row : mapParser.getGrid()) {
+        questionBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), '?'));
+    }
+
+    blockRewards.clear();
+    nextBlockReward = 0;
+
+    if (currentLevel == 1) {
+        // Level 1 contains exactly two mushroom rewards. Their positions in the
+        // reward sequence are randomized; every other question block gives a coin.
+        const std::size_t mushroomTarget = std::min<std::size_t>(2, questionBlockCount);
+        blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
+        blockRewards.insert(blockRewards.end(),
+                            questionBlockCount - mushroomTarget,
+                            BlockReward::Coin);
+        std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
+    } else if (questionBlockCount >= 4) {
+        // Keep the original guarantee: the first four hits contain two of each.
+        const BlockReward guaranteed[] = {
+            BlockReward::Coin, BlockReward::Coin,
+            BlockReward::Mushroom, BlockReward::Mushroom
+        };
+        blockRewards.insert(blockRewards.end(), std::begin(guaranteed), std::end(guaranteed));
+        std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
+
+        // Across the whole level, mushrooms make up about 25% of the rewards.
+        const std::size_t mushroomTarget = std::max<std::size_t>(
+            2, questionBlockCount / kMushroomRewardDivisor);
+        blockRewards.insert(blockRewards.end(), mushroomTarget - 2, BlockReward::Mushroom);
+        blockRewards.insert(blockRewards.end(),
+                            questionBlockCount - mushroomTarget - 2,
+                            BlockReward::Coin);
+        std::shuffle(blockRewards.begin() + 4, blockRewards.end(), rewardRandom);
+    } else {
+        // Small custom levels cannot guarantee two of each; still favor coins.
+        const std::size_t mushroomTarget = questionBlockCount / kMushroomRewardDivisor;
+        blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
+        blockRewards.insert(blockRewards.end(),
+                            questionBlockCount - mushroomTarget,
+                            BlockReward::Coin);
+        std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
+    }
+
+    std::size_t mushroomCount = static_cast<std::size_t>(std::count(
+        blockRewards.begin(), blockRewards.end(), BlockReward::Mushroom));
+    std::cout << "[Core Engine] Question rewards: "
+              << (blockRewards.size() - mushroomCount) << " coins, "
+              << mushroomCount << " mushrooms";
+    if (currentLevel == 1) {
+        std::cout << "; Level 1 has exactly two randomized mushrooms\n";
+    } else {
+        std::cout << "; mushroom rate is about 25% and the first four "
+                     "guarantee two of each\n";
+    }
+}
+
+PlayState::BlockReward PlayState::takeNextQuestionBlockReward() {
+    if (nextBlockReward >= blockRewards.size()) {
+        return BlockReward::Coin;
+    }
+    return blockRewards[nextBlockReward++];
+}
+
+void PlayState::spawnMushroomPop(sf::Vector2f blockPosition) {
+    mushroomPops.push_back({blockPosition, blockPosition, 0.f});
+}
+
+void PlayState::updateMushroomPops(sf::Time dt) {
+    for (MushroomPop& mushroom : mushroomPops) {
+        mushroom.elapsed = std::min(mushroom.elapsed + dt.asSeconds(),
+                                    kMushroomRiseDuration);
+        float progress = mushroom.elapsed / kMushroomRiseDuration;
+        mushroom.position = {mushroom.blockPosition.x,
+                             mushroom.blockPosition.y - tileMap.tileSize() * progress};
+    }
+}
+
+void PlayState::drawMushroomPops(sf::RenderWindow& window) const {
+    sf::Sprite mushroomSprite(assets.getTexture("SuperMushroom"));
+    mushroomSprite.setScale({Config::kZoom, Config::kZoom});
+
+    for (const MushroomPop& mushroom : mushroomPops) {
+        mushroomSprite.setPosition(mushroom.position);
+        window.draw(mushroomSprite);
     }
 }
 
@@ -322,7 +416,11 @@ void PlayState::moveAvatar(sf::Time dt) {
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             if (tileMap.activateQuestionBlock(col, row)) {
-                spawnCoinPop(tile.position);
+                if (takeNextQuestionBlockReward() == BlockReward::Mushroom) {
+                    spawnMushroomPop(tile.position);
+                } else {
+                    spawnCoinPop(tile.position);
+                }
             }
             avatarVelocity.y = 0.f;
         }
@@ -453,6 +551,7 @@ void PlayState::render(sf::RenderWindow& window) {
     window.setView(camera);
     window.draw(tileMap);
     drawCoinPops(window);
+    drawMushroomPops(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

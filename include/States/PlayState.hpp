@@ -3,6 +3,8 @@
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
+#include <cstddef>
+#include <random>
 #include <set>
 #include <vector>
 
@@ -40,6 +42,21 @@ private:
         float elapsed;
     };
     std::vector<CoinPop> coinPops;
+
+    struct MushroomPop {
+        sf::Vector2f blockPosition;
+        sf::Vector2f position;
+        float elapsed;
+    };
+    std::vector<MushroomPop> mushroomPops;
+
+    enum class BlockReward {
+        Coin,
+        Mushroom
+    };
+    std::vector<BlockReward> blockRewards;
+    std::size_t nextBlockReward{0};
+    std::mt19937 rewardRandom{std::random_device{}()};
     // =======================================================================
 
     // Free-look: F detaches the camera from the avatar so the level can be
@@ -117,6 +134,21 @@ private:
 
     /// @brief Draws all temporary coins in world space.
     void drawCoinPops(sf::RenderWindow& window) const;
+
+    /// @brief Builds a random reward bag with at least two coins and two mushrooms.
+    void prepareQuestionBlockRewards();
+
+    /// @brief Returns the reward assigned to the next activated question block.
+    BlockReward takeNextQuestionBlockReward();
+
+    /// @brief Starts a mushroom emerging from an activated question block.
+    void spawnMushroomPop(sf::Vector2f blockPosition);
+
+    /// @brief Raises new mushrooms by one tile and leaves them visible.
+    void updateMushroomPops(sf::Time dt);
+
+    /// @brief Draws all emerged mushrooms in world space.
+    void drawMushroomPops(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
