@@ -17,6 +17,13 @@ namespace {
     constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
+    /// Coin released by a question block: rises, falls back, then vanishes.
+    constexpr float kCoinPopSpeed = -480.f;
+    constexpr float kCoinPopGravity = 1400.f;
+    constexpr float kCoinPopLifetime = 0.7f;
+    constexpr float kMushroomRiseDuration = 0.45f;
+    constexpr std::size_t kMushroomRewardDivisor = 4; ///< About 25% mushroom rewards.
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
@@ -53,14 +60,6 @@ void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
     std::cout << "[Core Engine] PlayState Initialized with character: " << charName << "\n";
 
-    // Load level 1 map file
-    if (mapParser.loadFromFile(Systems::resourcePath("assets/maps/level1.txt"))) {
-        std::cout << "[Core Engine] Level size: " << mapParser.getWidth() << "x"
-                  << mapParser.getHeight() << " tiles\n";
-    } else {
-        std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
-    }
-
     // Artwork for every character the map file uses. 'H' is left out on purpose:
     // the hidden block has to stay invisible until it is struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
@@ -71,21 +70,25 @@ void PlayState::init() {
     tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
     tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('U', assets.getTexture("EmptyBlock"));
     tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
 
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
     // drawn behind the level so the cells they cover stay usable.
+    tileMap.setDecorationTexture('M', assets.getTexture("HillBig"));
+    tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
+    tileMap.setDecorationTexture('V', assets.getTexture("BushBig"));
+    tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
     tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
+    tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
 
-    if (!tileMap.build(mapParser, Config::kZoom)) {
-        std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
+    if (!loadLevel(1)) {
         return;
     }
-    std::cout << "[Core Engine] Enemy spawns found: " << tileMap.enemySpawns().size() << "\n";
 
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
@@ -146,13 +149,182 @@ void PlayState::update(sf::Time dt) {
         panCamera(dt);
     } else {
         moveAvatar(dt);
+        if (tryEnterNextLevel()) {
+            tileMap.update(dt);
+            return;
+        }
         updateCamera();
     }
+    updateCoinPops(dt);
+    updateMushroomPops(dt);
     tileMap.update(dt); // keeps the question blocks blinking
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
     return sf::FloatRect(avatarPos, avatar.getSize());
+}
+
+bool PlayState::loadLevel(int level) {
+    std::string mapName = "assets/maps/level" + std::to_string(level) + ".txt";
+    if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
+        std::cerr << "[Core Engine] Warning: Failed to load level" << level << ".txt map!\n";
+        return false;
+    }
+    if (!tileMap.build(mapParser, Config::kZoom)) {
+        std::cerr << "[Core Engine] Warning: Level " << level
+                  << " map is empty, nothing to play!\n";
+        return false;
+    }
+
+    currentLevel = level;
+    coinPops.clear();
+    mushroomPops.clear();
+    prepareQuestionBlockRewards();
+    std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
+              << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
+              << tileMap.enemySpawns().size() << " enemy spawns\n";
+    return true;
+}
+
+bool PlayState::tryEnterNextLevel() {
+    if (currentLevel != 1 || !tileMap.hasLevelExit()
+        || !avatarBounds().findIntersection(tileMap.levelExitBounds()).has_value()) {
+        return false;
+    }
+
+    if (!loadLevel(2)) {
+        return false;
+    }
+
+    freeLook = false;
+    respawnAvatar();
+    avatar.setPosition(avatarPos);
+    updateCamera();
+    std::cout << "[Core Engine] Warp pipe entered: Level 1 -> Level 2\n";
+    return true;
+}
+
+void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
+    // The map guarantees an empty '.' cell above each question block. Start the
+    // coin there instead of drawing it inside the '?' tile that released it.
+    sf::Vector2f coinPosition(blockPosition.x, blockPosition.y - tileMap.tileSize());
+    coinPops.push_back({coinPosition, kCoinPopSpeed, 0.f});
+}
+
+void PlayState::updateCoinPops(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    for (CoinPop& coin : coinPops) {
+        coin.elapsed += seconds;
+        coin.position.y += coin.velocityY * seconds;
+        coin.velocityY += kCoinPopGravity * seconds;
+    }
+
+    coinPops.erase(std::remove_if(coinPops.begin(), coinPops.end(), [](const CoinPop& coin) {
+        return coin.elapsed >= kCoinPopLifetime;
+    }), coinPops.end());
+}
+
+void PlayState::drawCoinPops(sf::RenderWindow& window) const {
+    sf::Sprite coinSprite(assets.getTexture("Coin"));
+    coinSprite.setScale({Config::kZoom, Config::kZoom});
+
+    for (const CoinPop& coin : coinPops) {
+        int frame = static_cast<int>(coin.elapsed / 0.08f) % 4;
+        coinSprite.setTextureRect(sf::IntRect({frame * TileMap::kSourceTileSize, 0},
+                                             {TileMap::kSourceTileSize,
+                                              TileMap::kSourceTileSize}));
+        coinSprite.setPosition(coin.position);
+        window.draw(coinSprite);
+    }
+}
+
+void PlayState::prepareQuestionBlockRewards() {
+    std::size_t questionBlockCount = 0;
+    for (const auto& row : mapParser.getGrid()) {
+        questionBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), '?'));
+    }
+
+    blockRewards.clear();
+    nextBlockReward = 0;
+
+    if (currentLevel == 1) {
+        // Level 1 contains exactly two mushroom rewards. Their positions in the
+        // reward sequence are randomized; every other question block gives a coin.
+        const std::size_t mushroomTarget = std::min<std::size_t>(2, questionBlockCount);
+        blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
+        blockRewards.insert(blockRewards.end(),
+                            questionBlockCount - mushroomTarget,
+                            BlockReward::Coin);
+        std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
+    } else if (questionBlockCount >= 4) {
+        // Keep the original guarantee: the first four hits contain two of each.
+        const BlockReward guaranteed[] = {
+            BlockReward::Coin, BlockReward::Coin,
+            BlockReward::Mushroom, BlockReward::Mushroom
+        };
+        blockRewards.insert(blockRewards.end(), std::begin(guaranteed), std::end(guaranteed));
+        std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
+
+        // Across the whole level, mushrooms make up about 25% of the rewards.
+        const std::size_t mushroomTarget = std::max<std::size_t>(
+            2, questionBlockCount / kMushroomRewardDivisor);
+        blockRewards.insert(blockRewards.end(), mushroomTarget - 2, BlockReward::Mushroom);
+        blockRewards.insert(blockRewards.end(),
+                            questionBlockCount - mushroomTarget - 2,
+                            BlockReward::Coin);
+        std::shuffle(blockRewards.begin() + 4, blockRewards.end(), rewardRandom);
+    } else {
+        // Small custom levels cannot guarantee two of each; still favor coins.
+        const std::size_t mushroomTarget = questionBlockCount / kMushroomRewardDivisor;
+        blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
+        blockRewards.insert(blockRewards.end(),
+                            questionBlockCount - mushroomTarget,
+                            BlockReward::Coin);
+        std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
+    }
+
+    std::size_t mushroomCount = static_cast<std::size_t>(std::count(
+        blockRewards.begin(), blockRewards.end(), BlockReward::Mushroom));
+    std::cout << "[Core Engine] Question rewards: "
+              << (blockRewards.size() - mushroomCount) << " coins, "
+              << mushroomCount << " mushrooms";
+    if (currentLevel == 1) {
+        std::cout << "; Level 1 has exactly two randomized mushrooms\n";
+    } else {
+        std::cout << "; mushroom rate is about 25% and the first four "
+                     "guarantee two of each\n";
+    }
+}
+
+PlayState::BlockReward PlayState::takeNextQuestionBlockReward() {
+    if (nextBlockReward >= blockRewards.size()) {
+        return BlockReward::Coin;
+    }
+    return blockRewards[nextBlockReward++];
+}
+
+void PlayState::spawnMushroomPop(sf::Vector2f blockPosition) {
+    mushroomPops.push_back({blockPosition, blockPosition, 0.f});
+}
+
+void PlayState::updateMushroomPops(sf::Time dt) {
+    for (MushroomPop& mushroom : mushroomPops) {
+        mushroom.elapsed = std::min(mushroom.elapsed + dt.asSeconds(),
+                                    kMushroomRiseDuration);
+        float progress = mushroom.elapsed / kMushroomRiseDuration;
+        mushroom.position = {mushroom.blockPosition.x,
+                             mushroom.blockPosition.y - tileMap.tileSize() * progress};
+    }
+}
+
+void PlayState::drawMushroomPops(sf::RenderWindow& window) const {
+    sf::Sprite mushroomSprite(assets.getTexture("SuperMushroom"));
+    mushroomSprite.setScale({Config::kZoom, Config::kZoom});
+
+    for (const MushroomPop& mushroom : mushroomPops) {
+        mushroomSprite.setPosition(mushroom.position);
+        window.draw(mushroomSprite);
+    }
 }
 
 void PlayState::respawnAvatar() {
@@ -241,6 +413,15 @@ void PlayState::moveAvatar(sf::Time dt) {
             onGround = true;
         } else if (avatarVelocity.y < 0.f) {
             avatarPos.y = tile.position.y + tile.size.y;
+            int col = static_cast<int>(tile.position.x / tileMap.tileSize());
+            int row = static_cast<int>(tile.position.y / tileMap.tileSize());
+            if (tileMap.activateQuestionBlock(col, row)) {
+                if (takeNextQuestionBlockReward() == BlockReward::Mushroom) {
+                    spawnMushroomPop(tile.position);
+                } else {
+                    spawnCoinPop(tile.position);
+                }
+            }
             avatarVelocity.y = 0.f;
         }
     }
@@ -333,11 +514,12 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
     unsigned size = 16;
 
     if (freeLook) {
-        // Show which columns of level1.txt are on screen, so what is drawn can be
-        // matched against the map file straight away.
+        // Show which columns of the current level are on screen, so what is drawn
+        // can be matched against its map file straight away.
         float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
         int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
-        label = "MAP VIEW   COL " + std::to_string(firstColumn) + "-"
+        label = "MAP VIEW L" + std::to_string(currentLevel)
+              + "   COL " + std::to_string(firstColumn) + "-"
               + std::to_string(firstColumn + Config::kViewTilesX - 1)
               + "   A/D SCROLL   SHIFT FASTER   F EXIT";
         position = {16.f, 12.f};
@@ -359,15 +541,17 @@ void PlayState::render(sf::RenderWindow& window) {
     const sf::View screenView = window.getView();
     camera.setViewport(screenView.getViewport());
 
-    // Sky: the same blue as the level artwork, so tiles blend into the background.
-    // It is painted as a rectangle rather than with clear() so it stays inside the
-    // game area and leaves the letterbox bars black.
+    // World 1-2 stays dark while underground, then returns to the outdoor sky
+    // when the brick ceiling ends near the flag area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    sky.setFillColor(sf::Color(92, 148, 252));
+    bool underground = currentLevel == 2 && avatarPos.x < 185.f * Config::kTileSize;
+    sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
     window.setView(camera);
     window.draw(tileMap);
+    drawCoinPops(window);
+    drawMushroomPops(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

@@ -55,15 +55,22 @@ Game::Game()
 
     // Four frames laid out left to right; TileMap cycles them so the block blinks.
     assets.loadTexture("QuestionBlock", Systems::resourcePath("assets/textures/question_block.png"));
+    assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
+    assets.loadTexture("SuperMushroom", Systems::resourcePath("assets/textures/super_mushroom.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
+    assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
+    assets.loadTexture("HillSmall", Systems::resourcePath("assets/textures/hill_small.png"));
+    assets.loadTexture("BushBig", Systems::resourcePath("assets/textures/bush_big.png"));
+    assets.loadTexture("BushSmall", Systems::resourcePath("assets/textures/bush_small.png"));
     assets.loadTexture("CloudBig", Systems::resourcePath("assets/textures/cloud_big.png"));
     assets.loadTexture("CloudSmall", Systems::resourcePath("assets/textures/cloud_small.png"));
 
     // End of the level.
-    assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/flagpole.png"));
-    assets.loadTexture("Castle", Systems::resourcePath("assets/textures/castle.png"));
+    assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));
+    assets.loadTexture("Castle", Systems::resourcePath("assets/textures/Fortress.png"));
+    assets.loadTexture("WarpPipeForked", Systems::resourcePath("assets/textures/warp_pipe_forked.png"));
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
@@ -162,4 +169,3 @@ void Game::render() {
     gsm.render(window);           // Render the current state
     window.display();             // Swap buffers to display drawn contents
 }
-

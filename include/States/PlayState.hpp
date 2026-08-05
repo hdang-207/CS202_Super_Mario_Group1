@@ -3,7 +3,10 @@
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
+#include <cstddef>
+#include <random>
 #include <set>
+#include <vector>
 
 /**
  * @class PlayState
@@ -15,6 +18,7 @@ private:
     MapParser mapParser;
     TileMap tileMap;
     sf::View camera;
+    int currentLevel{1};
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -31,6 +35,28 @@ private:
     sf::Vector2f avatarVelocity;
     bool onGround{false};
     bool jumpHeld{false};
+
+    struct CoinPop {
+        sf::Vector2f position;
+        float velocityY;
+        float elapsed;
+    };
+    std::vector<CoinPop> coinPops;
+
+    struct MushroomPop {
+        sf::Vector2f blockPosition;
+        sf::Vector2f position;
+        float elapsed;
+    };
+    std::vector<MushroomPop> mushroomPops;
+
+    enum class BlockReward {
+        Coin,
+        Mushroom
+    };
+    std::vector<BlockReward> blockRewards;
+    std::size_t nextBlockReward{0};
+    std::mt19937 rewardRandom{std::random_device{}()};
     // =======================================================================
 
     // Free-look: F detaches the camera from the avatar so the level can be
@@ -86,6 +112,43 @@ private:
      * @brief Respawns the test avatar at the player spawn location.
      */
     void respawnAvatar();
+
+    /**
+     * @brief Loads and builds one numbered map file.
+     * @param level Level number used in assets/maps/levelN.txt.
+     * @return True when the map was loaded and built successfully.
+     */
+    bool loadLevel(int level);
+
+    /**
+     * @brief Enters level 2 when the avatar reaches level 1's warp pipe.
+     * @return True when a transition happened during this frame.
+     */
+    bool tryEnterNextLevel();
+
+    /// @brief Starts the short coin animation above an activated question block.
+    void spawnCoinPop(sf::Vector2f blockPosition);
+
+    /// @brief Advances and removes temporary question-block coins.
+    void updateCoinPops(sf::Time dt);
+
+    /// @brief Draws all temporary coins in world space.
+    void drawCoinPops(sf::RenderWindow& window) const;
+
+    /// @brief Builds a random reward bag with at least two coins and two mushrooms.
+    void prepareQuestionBlockRewards();
+
+    /// @brief Returns the reward assigned to the next activated question block.
+    BlockReward takeNextQuestionBlockReward();
+
+    /// @brief Starts a mushroom emerging from an activated question block.
+    void spawnMushroomPop(sf::Vector2f blockPosition);
+
+    /// @brief Raises new mushrooms by one tile and leaves them visible.
+    void updateMushroomPops(sf::Time dt);
+
+    /// @brief Draws all emerged mushrooms in world space.
+    void drawMushroomPops(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
