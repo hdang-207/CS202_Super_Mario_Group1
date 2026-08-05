@@ -15,6 +15,7 @@ private:
     MapParser mapParser;
     TileMap tileMap;
     sf::View camera;
+    int currentLevel{1};
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -85,6 +86,19 @@ private:
      * @brief Respawns the test avatar at the player spawn location.
      */
     void respawnAvatar();
+
+    /**
+     * @brief Loads and builds one numbered map file.
+     * @param level Level number used in assets/maps/levelN.txt.
+     * @return True when the map was loaded and built successfully.
+     */
+    bool loadLevel(int level);
+
+    /**
+     * @brief Enters level 2 when the avatar reaches level 1's warp pipe.
+     * @return True when a transition happened during this frame.
+     */
+    bool tryEnterNextLevel();
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.

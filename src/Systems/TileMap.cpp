@@ -16,7 +16,7 @@ namespace {
      *   #  ground        B  brick          ?  question block   S  staircase block
      *   [] pipe top      {} pipe body      H  hidden block     o  coin
      * Markers handled separately: P player spawn, E enemy spawn, . empty sky.
-     * Scenery characters (M m V v l c F X) carry no entry here - they are
+     * Scenery characters (M m V v l c F X W) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
@@ -130,6 +130,8 @@ bool TileMap::build(const MapParser& parser, float scale) {
     types.assign(static_cast<std::size_t>(columns) * rows, TileType::Empty);
     enemies.clear();
     spawn = {0.f, 0.f};
+    levelExitAvailable = false;
+    levelExitTrigger = sf::FloatRect();
 
     // Rebuilding restarts every animation, so the baked texture coordinates below
     // (which all point at frame 0) stay in step with what update() thinks is shown.
@@ -160,7 +162,12 @@ bool TileMap::build(const MapParser& parser, float scale) {
             // picture needs, so it is handled before the one-cell tiles below.
             if (TileBatch* decor = decorationFor(symbol)) {
                 sf::Vector2f artSize(decor->texture->getSize());
-                appendQuad(decor->vertices, worldPos, artSize * scale,
+                sf::Vector2f drawSize = artSize * scale;
+                if (symbol == 'W') {
+                    levelExitAvailable = true;
+                    levelExitTrigger = sf::FloatRect(worldPos, drawSize);
+                }
+                appendQuad(decor->vertices, worldPos, drawSize,
                            sf::FloatRect({0.f, 0.f}, artSize));
                 continue;
             }

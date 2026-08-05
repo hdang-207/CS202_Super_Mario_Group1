@@ -53,14 +53,6 @@ void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
     std::cout << "[Core Engine] PlayState Initialized with character: " << charName << "\n";
 
-    // Load level 1 map file
-    if (mapParser.loadFromFile(Systems::resourcePath("assets/maps/level1.txt"))) {
-        std::cout << "[Core Engine] Level size: " << mapParser.getWidth() << "x"
-                  << mapParser.getHeight() << " tiles\n";
-    } else {
-        std::cerr << "[Core Engine] Warning: Failed to load level1.txt map!\n";
-    }
-
     // Artwork for every character the map file uses. 'H' is left out on purpose:
     // the hidden block has to stay invisible until it is struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
@@ -84,12 +76,11 @@ void PlayState::init() {
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
+    tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
 
-    if (!tileMap.build(mapParser, Config::kZoom)) {
-        std::cerr << "[Core Engine] Warning: Level map is empty, nothing to play!\n";
+    if (!loadLevel(1)) {
         return;
     }
-    std::cout << "[Core Engine] Enemy spawns found: " << tileMap.enemySpawns().size() << "\n";
 
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
@@ -147,6 +138,10 @@ void PlayState::update(sf::Time dt) {
         panCamera(dt);
     } else {
         moveAvatar(dt);
+        if (tryEnterNextLevel()) {
+            tileMap.update(dt);
+            return;
+        }
         updateCamera();
     }
     tileMap.update(dt); // keeps the question blocks blinking
@@ -154,6 +149,43 @@ void PlayState::update(sf::Time dt) {
 
 sf::FloatRect PlayState::avatarBounds() const {
     return sf::FloatRect(avatarPos, avatar.getSize());
+}
+
+bool PlayState::loadLevel(int level) {
+    std::string mapName = "assets/maps/level" + std::to_string(level) + ".txt";
+    if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
+        std::cerr << "[Core Engine] Warning: Failed to load level" << level << ".txt map!\n";
+        return false;
+    }
+    if (!tileMap.build(mapParser, Config::kZoom)) {
+        std::cerr << "[Core Engine] Warning: Level " << level
+                  << " map is empty, nothing to play!\n";
+        return false;
+    }
+
+    currentLevel = level;
+    std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
+              << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
+              << tileMap.enemySpawns().size() << " enemy spawns\n";
+    return true;
+}
+
+bool PlayState::tryEnterNextLevel() {
+    if (currentLevel != 1 || !tileMap.hasLevelExit()
+        || !avatarBounds().findIntersection(tileMap.levelExitBounds()).has_value()) {
+        return false;
+    }
+
+    if (!loadLevel(2)) {
+        return false;
+    }
+
+    freeLook = false;
+    respawnAvatar();
+    avatar.setPosition(avatarPos);
+    updateCamera();
+    std::cout << "[Core Engine] Warp pipe entered: Level 1 -> Level 2\n";
+    return true;
 }
 
 void PlayState::respawnAvatar() {
@@ -328,11 +360,12 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
     unsigned size = 16;
 
     if (freeLook) {
-        // Show which columns of level1.txt are on screen, so what is drawn can be
-        // matched against the map file straight away.
+        // Show which columns of the current level are on screen, so what is drawn
+        // can be matched against its map file straight away.
         float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
         int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
-        label = "MAP VIEW   COL " + std::to_string(firstColumn) + "-"
+        label = "MAP VIEW L" + std::to_string(currentLevel)
+              + "   COL " + std::to_string(firstColumn) + "-"
               + std::to_string(firstColumn + Config::kViewTilesX - 1)
               + "   A/D SCROLL   SHIFT FASTER   F EXIT";
         position = {16.f, 12.f};

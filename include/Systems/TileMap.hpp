@@ -101,6 +101,12 @@ public:
     /// @brief Top-left world position of every enemy spawn marker in the map.
     const std::vector<sf::Vector2f>& enemySpawns() const { return enemies; }
 
+    /// @brief True when the map contains a level-exit decoration marker ('W').
+    bool hasLevelExit() const { return levelExitAvailable; }
+
+    /// @brief World-space area occupied by the level-exit decoration.
+    sf::FloatRect levelExitBounds() const { return levelExitTrigger; }
+
 private:
     /// Every tile written with the same map character, batched into one buffer.
     struct TileBatch {
@@ -134,4 +140,6 @@ private:
     float tileSizePx{16.f};
     sf::Vector2f spawn{0.f, 0.f};
     std::vector<sf::Vector2f> enemies;
+    bool levelExitAvailable{false};
+    sf::FloatRect levelExitTrigger;
 };
