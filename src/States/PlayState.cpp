@@ -2,6 +2,8 @@
 #include "Core/Config.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/IntroMenuState.hpp"
+#include "States/GameOverState.hpp"
+#include "States/VictoryState.hpp"
 #include "Systems/ResourcePath.hpp"
 #include <algorithm>
 #include <iostream>
@@ -55,6 +57,17 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, Chara
     : State(gsm, assets), selectedCharacter(character),
       avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
+
+PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
+    : State(gsm, assets), selectedCharacter(data.selectedCharacter),
+      avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")),
+      camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) 
+{
+    this->currentLevel = data.currentLevel;
+    this->score = data.score;
+    this->coins = data.coins;
+    this->lives = data.lives;
+}
 
 void PlayState::init() {
     std::string charName = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
@@ -125,6 +138,21 @@ void PlayState::handleInput(const sf::Event& event) {
             return;
         }
 
+        // Toggle Pause
+        if (keyPressed->code == sf::Keyboard::Key::P) {
+            isPaused = !isPaused;
+            std::cout << "[Core Engine] Pause " << (isPaused ? "ON" : "OFF") << "\n";
+            return;
+        }
+
+        if (isPaused) {
+            if (keyPressed->code == sf::Keyboard::Key::Escape) {
+                std::cout << "[Core Engine] Escape pressed during pause. Returning to IntroMenuState...\n";
+                gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+            }
+            return;
+        }
+
         // Press Escape to return to Main Menu
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
@@ -138,11 +166,42 @@ void PlayState::handleInput(const sf::Event& event) {
                 maxCameraCenterX = std::max(maxCameraCenterX, camera.getCenter().x);
             }
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
+        } else if (keyPressed->code == sf::Keyboard::Key::F5) {
+            SaveData data;
+            data.currentLevel = this->currentLevel;
+            data.score = this->score;
+            data.coins = this->coins;
+            data.lives = this->lives;
+            data.selectedCharacter = this->selectedCharacter;
+            
+            if (SaveManager::saveToFile("savegame.txt", data)) {
+                std::cout << "[Core Engine] Quick Save successful (Level " << currentLevel << ").\n";
+            }
+        } else if (keyPressed->code == sf::Keyboard::Key::F9) {
+            SaveData data;
+            if (SaveManager::loadFromFile("savegame.txt", data)) {
+                this->currentLevel = data.currentLevel;
+                this->score = data.score;
+                this->coins = data.coins;
+                this->lives = data.lives;
+                this->selectedCharacter = data.selectedCharacter;
+                
+                std::cout << "[Core Engine] Quick Load successful. Loading Level " << currentLevel << "...\n";
+                if (loadLevel(currentLevel)) {
+                    freeLook = false;
+                    respawnAvatar();
+                    updateCamera();
+                }
+            }
         }
     }
 }
 
 void PlayState::update(sf::Time dt) {
+    if (isPaused) {
+        return;
+    }
+
     if (freeLook) {
         // The avatar is deliberately frozen: left it running it would walk off or
         // fall into a pit while the camera is somewhere else entirely.
@@ -187,20 +246,19 @@ bool PlayState::loadLevel(int level) {
 }
 
 bool PlayState::tryEnterNextLevel() {
-    if (currentLevel != 1 || !tileMap.hasLevelExit()
-        || !avatarBounds().findIntersection(tileMap.levelExitBounds()).has_value()) {
+    if (!tileMap.hasLevelExit() || !avatarBounds().findIntersection(tileMap.levelExitBounds()).has_value()) {
         return false;
     }
 
-    if (!loadLevel(2)) {
-        return false;
-    }
+    SaveData progress;
+    progress.currentLevel = this->currentLevel;
+    progress.score = this->score;
+    progress.coins = this->coins;
+    progress.lives = this->lives;
+    progress.selectedCharacter = this->selectedCharacter;
 
-    freeLook = false;
-    respawnAvatar();
-    avatar.setPosition(avatarPos);
-    updateCamera();
-    std::cout << "[Core Engine] Warp pipe entered: Level 1 -> Level 2\n";
+    std::cout << "[Core Engine] Level exit reached. Transitioning to VictoryState...\n";
+    gsm.changeState(std::make_unique<VictoryState>(gsm, assets, progress));
     return true;
 }
 
@@ -426,9 +484,16 @@ void PlayState::moveAvatar(sf::Time dt) {
         }
     }
 
-    // Fell down one of the level's pits: start over from the spawn point.
+    // Fell down one of the level's pits: lose a life or game over.
     if (avatarPos.y > tileMap.pixelHeight()) {
-        respawnAvatar();
+        lives--;
+        if (lives > 0) {
+            std::cout << "[Core Engine] Avatar fell into pit. Lives remaining: " << lives << "\n";
+            respawnAvatar();
+        } else {
+            std::cout << "[Core Engine] Game Over condition met.\n";
+            gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+        }
     }
 
     avatar.setPosition(avatarPos);
@@ -556,4 +621,19 @@ void PlayState::render(sf::RenderWindow& window) {
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
+
+    if (isPaused) {
+        sf::RectangleShape overlay({Config::kViewWidth, Config::kViewHeight});
+        overlay.setFillColor(sf::Color(0, 0, 0, 150));
+        window.draw(overlay);
+
+        sf::Text pauseText(assets.getFont("MarioFont"), "PAUSED\n\nPRESS P TO RESUME\nPRESS ESC TO MENU", 32);
+        pauseText.setFillColor(sf::Color::White);
+        pauseText.setOutlineColor(sf::Color::Black);
+        pauseText.setOutlineThickness(3.f);
+        sf::FloatRect pBounds = pauseText.getLocalBounds();
+        pauseText.setOrigin({pBounds.position.x + pBounds.size.x / 2.f, pBounds.position.y + pBounds.size.y / 2.f});
+        pauseText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight / 2.f});
+        window.draw(pauseText);
+    }
 }

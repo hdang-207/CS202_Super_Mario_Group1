@@ -3,6 +3,7 @@
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
+#include "Systems/SaveManager.hpp"
 #include <cstddef>
 #include <random>
 #include <set>
@@ -19,6 +20,9 @@ private:
     TileMap tileMap;
     sf::View camera;
     int currentLevel{1};
+    int score{0};
+    int coins{0};
+    int lives{3};
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -62,6 +66,7 @@ private:
     // Free-look: F detaches the camera from the avatar so the level can be
     // scrolled through and inspected without playing it.
     bool freeLook{false};
+    bool isPaused{false};
     sf::Vector2f freeLookCentre;
     float maxCameraCenterX{0.f}; ///< Maximum X position camera center has reached (SMB 1985 one-way scroll lock)
 
@@ -180,13 +185,15 @@ private:
     void drawFreeLookHint(sf::RenderWindow& window) const;
 
 public:
+    PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character);
+
     /**
-     * @brief Constructor for PlayState.
+     * @brief Constructor for PlayState using existing progress.
      * @param gsm Reference to GameStateManager.
      * @param assets Reference to the central AssetManager.
-     * @param character The character selected by the player (Mario / Luigi).
+     * @param data SaveData containing current progress.
      */
-    PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character);
+    PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data);
 
     /**
      * @brief Destructor.
