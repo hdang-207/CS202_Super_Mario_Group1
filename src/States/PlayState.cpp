@@ -28,9 +28,20 @@ namespace {
     constexpr float kMushroomRiseDuration = 0.45f;
     constexpr std::size_t kMushroomRewardDivisor = 4; ///< About 25% mushroom rewards.
 
+    /// Goombas wake up when their spawn enters the camera, then walk until defeated.
+    constexpr float kGoombaSpeed = 72.f;
+    constexpr float kGoombaFrameDuration = 0.3f;
+    constexpr float kBlueKoopaSpeed = 60.f;
+    constexpr float kBlueKoopaFrameDuration = 0.2f;
+    constexpr float kGoombaStompBounce = 550.f;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
+
+    /// World 1-2's original underground grid is 158 columns wide. The adapted
+    /// outdoor goal area begins immediately after it.
+    constexpr int kLevel2UndergroundColumns = 158;
 
 }
 
@@ -271,6 +282,7 @@ void PlayState::update(sf::Time dt) {
             tileMap.update(dt);
             return;
         }
+        updateWalkingEnemies(dt);
         updateCamera();
     }
     updateCoinPops(dt);
@@ -285,11 +297,26 @@ sf::FloatRect PlayState::avatarBounds() const {
 }
 
 bool PlayState::loadLevel(int level) {
-    std::string mapName = "assets/maps/level" + std::to_string(level) + ".txt";
+    const std::string mapName = level == 2
+        ? "assets/maps/level1-2.txt"
+        : "assets/maps/level" + std::to_string(level) + ".txt";
     if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
-        std::cerr << "[Core Engine] Warning: Failed to load level" << level << ".txt map!\n";
+        std::cerr << "[Core Engine] Warning: Failed to load " << mapName << " map!\n";
         return false;
     }
+
+    // Level 1-2 uses its own cyan underground artwork. Switching the registered
+    // batches here keeps every outdoor tile in level 1 unchanged.
+    tileMap.setTileTexture('#', assets.getTexture(
+        level == 2 ? "GroundUndergroundTile" : "GroundTile"));
+    tileMap.setTileTexture('B', assets.getTexture(
+        level == 2 ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('S', assets.getTexture(
+        level == 2 ? "HardBlockUndergroundTile" : "HardBlockTile"));
+    tileMap.setTileTexture('?', assets.getTexture(
+        level == 2 ? "QuestionBlockUnderground" : "QuestionBlock"),
+        level == 2 ? 6 : 4, sf::seconds(0.15f));
+
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level " << level
                   << " map is empty, nothing to play!\n";
@@ -299,10 +326,12 @@ bool PlayState::loadLevel(int level) {
     currentLevel = level;
     coinPops.clear();
     mushrooms.clear();
+    spawnWalkingEnemies();
     prepareQuestionBlockRewards();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
-              << tileMap.enemySpawns().size() << " enemy spawns\n";
+              << tileMap.enemySpawns().size() << " Goombas, "
+              << tileMap.blueKoopaSpawns().size() << " Blue Koopas\n";
     return true;
 }
 
@@ -502,6 +531,167 @@ void PlayState::drawMushrooms(sf::RenderWindow& window) const {
     for (const MushroomEntity& mushroom : mushrooms) {
         mushroomSprite.setPosition(mushroom.position);
         window.draw(mushroomSprite);
+    }
+}
+
+void PlayState::spawnWalkingEnemies() {
+    walkingEnemies.clear();
+    walkingEnemies.reserve(tileMap.enemySpawns().size()
+                           + tileMap.blueKoopaSpawns().size());
+
+    for (sf::Vector2f spawn : tileMap.enemySpawns()) {
+        walkingEnemies.push_back(
+            {EnemyKind::Goomba, spawn, {-kGoombaSpeed, 0.f}});
+    }
+
+    // A Koopa sprite is 24px tall while one map cell is 16px. Markers remain
+    // bottom-aligned with Goomba markers, so lift the Koopa by half a tile.
+    const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
+    for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        walkingEnemies.push_back(
+            {EnemyKind::BlueKoopa, spawn, {-kBlueKoopaSpeed, 0.f}});
+    }
+}
+
+void PlayState::updateWalkingEnemies(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float tileSize = tileMap.tileSize();
+    const float cameraLeft = camera.getCenter().x - Config::kViewWidth / 2.f - tileSize;
+    const float cameraRight = camera.getCenter().x + Config::kViewWidth / 2.f + tileSize;
+    bool resetEnemies = false;
+
+    for (WalkingEnemy& enemy : walkingEnemies) {
+        if (!enemy.alive) {
+            continue;
+        }
+
+        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
+        const float walkSpeed = isKoopa ? kBlueKoopaSpeed : kGoombaSpeed;
+        const float frameDuration = isKoopa
+            ? kBlueKoopaFrameDuration : kGoombaFrameDuration;
+        const sf::Vector2f size(tileSize, isKoopa ? tileSize * 1.5f : tileSize);
+
+        if (!enemy.active) {
+            const float centreX = enemy.position.x + size.x / 2.f;
+            if (centreX < cameraLeft || centreX > cameraRight) {
+                continue;
+            }
+            enemy.active = true;
+        }
+
+        enemy.animationElapsed += seconds;
+        if (enemy.animationElapsed >= frameDuration) {
+            enemy.animationElapsed -= frameDuration;
+            enemy.animationFrame = (enemy.animationFrame + 1) % 2;
+        }
+
+        enemy.velocity.y = std::min(enemy.velocity.y + kGravity * seconds,
+                                    kMaxFallSpeed);
+
+        // Resolve horizontal movement first. Hitting a solid tile turns the
+        // enemy around instead of stopping it permanently.
+        enemy.position.x += enemy.velocity.x * seconds;
+        sf::FloatRect xBounds(enemy.position, size);
+        xBounds.position.y += 1.f;
+        xBounds.size.y -= 2.f;
+
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
+            if (enemy.velocity.x > 0.f) {
+                enemy.position.x = tile.position.x - size.x;
+                enemy.velocity.x = -walkSpeed;
+            } else {
+                enemy.position.x = tile.position.x + tile.size.x;
+                enemy.velocity.x = walkSpeed;
+            }
+            break;
+        }
+
+        if (enemy.position.x < 0.f) {
+            enemy.position.x = 0.f;
+            enemy.velocity.x = walkSpeed;
+        } else if (enemy.position.x + size.x > tileMap.pixelWidth()) {
+            enemy.position.x = tileMap.pixelWidth() - size.x;
+            enemy.velocity.x = -walkSpeed;
+        }
+
+        // Gravity and floor/platform collision use the same tile geometry as Mario.
+        enemy.position.y += enemy.velocity.y * seconds;
+        sf::FloatRect yBounds(enemy.position, size);
+        yBounds.position.x += 1.f;
+        yBounds.size.x -= 2.f;
+
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
+            if (enemy.velocity.y > 0.f) {
+                enemy.position.y = tile.position.y - size.y;
+                enemy.velocity.y = 0.f;
+            } else if (enemy.velocity.y < 0.f) {
+                enemy.position.y = tile.position.y + tile.size.y;
+                enemy.velocity.y = 0.f;
+            }
+            break;
+        }
+
+        if (enemy.position.y > tileMap.pixelHeight()) {
+            enemy.alive = false;
+            continue;
+        }
+
+        sf::FloatRect enemyBounds(enemy.position, size);
+        if (!avatarBounds().findIntersection(enemyBounds).has_value()) {
+            continue;
+        }
+
+        const float avatarBottom = avatarPos.y + avatar.getSize().y;
+        const bool stomped = avatarVelocity.y > 0.f
+                          && avatarBottom <= enemy.position.y + size.y * 0.55f;
+        if (stomped) {
+            enemy.alive = false;
+            avatarVelocity.y = -kGoombaStompBounce;
+            onGround = false;
+        } else {
+            respawnAvatar();
+            resetEnemies = true;
+            break;
+        }
+    }
+
+    if (resetEnemies) {
+        spawnWalkingEnemies();
+        avatar.setPosition(avatarPos);
+        return;
+    }
+
+    walkingEnemies.erase(std::remove_if(
+        walkingEnemies.begin(), walkingEnemies.end(), [](const WalkingEnemy& enemy) {
+            return !enemy.alive;
+        }), walkingEnemies.end());
+}
+
+void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
+    const std::string goombaTextureKey = currentLevel == 2
+        ? "GoombaUnderground" : "Goomba";
+    sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
+    sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
+
+    for (const WalkingEnemy& enemy : walkingEnemies) {
+        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
+        sf::Sprite& sprite = isKoopa ? koopaSprite : goombaSprite;
+        const int sourceHeight = isKoopa ? 24 : TileMap::kSourceTileSize;
+
+        sprite.setTextureRect(sf::IntRect(
+            {enemy.animationFrame * TileMap::kSourceTileSize, 0},
+            {TileMap::kSourceTileSize, sourceHeight}));
+
+        // The supplied Koopa faces left. Mirror it only after a wall sends it right.
+        if (isKoopa && enemy.velocity.x > 0.f) {
+            sprite.setScale({-Config::kZoom, Config::kZoom});
+            sprite.setPosition({enemy.position.x + tileMap.tileSize(), enemy.position.y});
+        } else {
+            sprite.setScale({Config::kZoom, Config::kZoom});
+            sprite.setPosition(enemy.position);
+        }
+        window.draw(sprite);
     }
 }
 
@@ -729,9 +919,10 @@ void PlayState::render(sf::RenderWindow& window) {
     camera.setViewport(screenView.getViewport());
 
     // World 1-2 stays dark while underground, then returns to the outdoor sky
-    // when the brick ceiling ends near the flag area.
+    // for the adapted pipe, staircase, flag and castle goal area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    bool underground = currentLevel == 2 && avatarPos.x < 185.f * Config::kTileSize;
+    bool underground = currentLevel == 2
+                    && avatarPos.x < kLevel2UndergroundColumns * Config::kTileSize;
     sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
@@ -739,6 +930,7 @@ void PlayState::render(sf::RenderWindow& window) {
     window.draw(tileMap);
     drawCoinPops(window);
     drawMushrooms(window);
+    drawWalkingEnemies(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

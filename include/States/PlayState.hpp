@@ -59,6 +59,22 @@ private:
     };
     std::vector<MushroomEntity> mushrooms;
 
+    enum class EnemyKind {
+        Goomba,
+        BlueKoopa
+    };
+
+    struct WalkingEnemy {
+        EnemyKind kind;
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        bool active{false};
+        bool alive{true};
+        float animationElapsed{0.f};
+        int animationFrame{0};
+    };
+    std::vector<WalkingEnemy> walkingEnemies;
+
     enum class BlockReward {
         Coin,
         Mushroom
@@ -125,7 +141,7 @@ private:
 
     /**
      * @brief Loads and builds one numbered map file.
-     * @param level Level number used in assets/maps/levelN.txt.
+     * @param level Internal level index: 1 loads level1.txt and 2 loads level1-2.txt.
      * @return True when the map was loaded and built successfully.
      */
     bool loadLevel(int level);
@@ -159,6 +175,15 @@ private:
 
     /// @brief Draws all emerged mushrooms in world space.
     void drawMushrooms(sf::RenderWindow& window) const;
+
+    /// @brief Creates Goombas and Blue Koopas from their map markers.
+    void spawnWalkingEnemies();
+
+    /// @brief Updates walking-enemy activation, movement, gravity, and collisions.
+    void updateWalkingEnemies(sf::Time dt);
+
+    /// @brief Draws all animated walking enemies.
+    void drawWalkingEnemies(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.

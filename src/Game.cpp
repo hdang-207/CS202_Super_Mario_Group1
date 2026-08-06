@@ -54,18 +54,31 @@ Game::Game()
 
     // Level artwork: one image per map character, no tile atlas involved.
     assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
+    assets.loadTexture("GroundUndergroundTile",
+                       Systems::resourcePath("assets/textures/ground_underground.png"));
     assets.loadTexture("BrickTile", Systems::resourcePath("assets/textures/brick.png"));
+    assets.loadTexture("BrickUndergroundTile",
+                       Systems::resourcePath("assets/textures/brick_underground.png"));
     assets.loadTexture("HardBlockTile", Systems::resourcePath("assets/textures/hard_block.png"));
+    assets.loadTexture("HardBlockUndergroundTile",
+                       Systems::resourcePath("assets/textures/hard_block_underground.png"));
     assets.loadTexture("PipeTopLeft", Systems::resourcePath("assets/textures/pipe_top_left.png"));
     assets.loadTexture("PipeTopRight", Systems::resourcePath("assets/textures/pipe_top_right.png"));
     assets.loadTexture("PipeBodyLeft", Systems::resourcePath("assets/textures/pipe_body_left.png"));
     assets.loadTexture("PipeBodyRight", Systems::resourcePath("assets/textures/pipe_body_right.png"));
 
-    // Four frames laid out left to right; TileMap cycles them so the block blinks.
+    // Frames are laid out left to right; TileMap cycles them so the blocks blink.
     assets.loadTexture("QuestionBlock", Systems::resourcePath("assets/textures/question_block.png"));
+    assets.loadTexture("QuestionBlockUnderground",
+                       Systems::resourcePath("assets/textures/question_block_underground.png"));
     assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
     assets.loadTexture("SuperMushroom", Systems::resourcePath("assets/textures/super_mushroom.png"));
+    assets.loadTexture("Goomba", Systems::resourcePath("assets/textures/goomba.png"));
+    assets.loadTexture("GoombaUnderground",
+                       Systems::resourcePath("assets/textures/goomba_underground.png"));
+    assets.loadTexture("BlueKoopaUnderground",
+                       Systems::resourcePath("assets/textures/blue_koopa_underground.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
