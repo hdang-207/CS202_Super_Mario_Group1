@@ -1,3 +1,5 @@
+#pragma once
+
 #include "PlayerInput.hpp"
 #include "Input/PlayerCommand.hpp"
 
