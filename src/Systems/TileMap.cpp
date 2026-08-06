@@ -15,7 +15,8 @@ namespace {
      *
      *   # ground   B brick   ? question block   U used block   S staircase
      *   [] pipe top       {} pipe body          H hidden block  o coin
-     * Markers handled separately: P player spawn, E enemy spawn, . empty sky.
+     * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
+     * and . empty sky.
      * Scenery characters (M m V v l c F X W) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
@@ -155,6 +156,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
     types.assign(static_cast<std::size_t>(columns) * rows, TileType::Empty);
     symbols.assign(static_cast<std::size_t>(columns) * rows, '.');
     enemies.clear();
+    blueKoopas.clear();
     spawn = {0.f, 0.f};
     levelExitAvailable = false;
     levelExitTrigger = sf::FloatRect();
@@ -183,6 +185,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'E') {
                 enemies.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'K') {
+                blueKoopas.push_back(worldPos);
                 continue;
             }
 

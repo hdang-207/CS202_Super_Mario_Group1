@@ -27,6 +27,8 @@ namespace {
     /// Goombas wake up when their spawn enters the camera, then walk until defeated.
     constexpr float kGoombaSpeed = 72.f;
     constexpr float kGoombaFrameDuration = 0.3f;
+    constexpr float kBlueKoopaSpeed = 60.f;
+    constexpr float kBlueKoopaFrameDuration = 0.2f;
     constexpr float kGoombaStompBounce = 550.f;
 
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
@@ -162,7 +164,7 @@ void PlayState::update(sf::Time dt) {
             tileMap.update(dt);
             return;
         }
-        updateGoombas(dt);
+        updateWalkingEnemies(dt);
         updateCamera();
     }
     updateCoinPops(dt);
@@ -204,11 +206,12 @@ bool PlayState::loadLevel(int level) {
     currentLevel = level;
     coinPops.clear();
     mushroomPops.clear();
-    spawnGoombas();
+    spawnWalkingEnemies();
     prepareQuestionBlockRewards();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
-              << tileMap.enemySpawns().size() << " enemy spawns\n";
+              << tileMap.enemySpawns().size() << " Goombas, "
+              << tileMap.blueKoopaSpawns().size() << " Blue Koopas\n";
     return true;
 }
 
@@ -353,102 +356,119 @@ void PlayState::drawMushroomPops(sf::RenderWindow& window) const {
     }
 }
 
-void PlayState::spawnGoombas() {
-    goombas.clear();
-    goombas.reserve(tileMap.enemySpawns().size());
+void PlayState::spawnWalkingEnemies() {
+    walkingEnemies.clear();
+    walkingEnemies.reserve(tileMap.enemySpawns().size()
+                           + tileMap.blueKoopaSpawns().size());
 
     for (sf::Vector2f spawn : tileMap.enemySpawns()) {
-        goombas.push_back({spawn, {-kGoombaSpeed, 0.f}});
+        walkingEnemies.push_back(
+            {EnemyKind::Goomba, spawn, {-kGoombaSpeed, 0.f}});
+    }
+
+    // A Koopa sprite is 24px tall while one map cell is 16px. Markers remain
+    // bottom-aligned with Goomba markers, so lift the Koopa by half a tile.
+    const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
+    for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        walkingEnemies.push_back(
+            {EnemyKind::BlueKoopa, spawn, {-kBlueKoopaSpeed, 0.f}});
     }
 }
 
-void PlayState::updateGoombas(sf::Time dt) {
+void PlayState::updateWalkingEnemies(sf::Time dt) {
     const float seconds = dt.asSeconds();
-    const float size = tileMap.tileSize();
-    const float cameraLeft = camera.getCenter().x - Config::kViewWidth / 2.f - size;
-    const float cameraRight = camera.getCenter().x + Config::kViewWidth / 2.f + size;
+    const float tileSize = tileMap.tileSize();
+    const float cameraLeft = camera.getCenter().x - Config::kViewWidth / 2.f - tileSize;
+    const float cameraRight = camera.getCenter().x + Config::kViewWidth / 2.f + tileSize;
     bool resetEnemies = false;
 
-    for (Goomba& goomba : goombas) {
-        if (!goomba.alive) {
+    for (WalkingEnemy& enemy : walkingEnemies) {
+        if (!enemy.alive) {
             continue;
         }
 
-        if (!goomba.active) {
-            const float centreX = goomba.position.x + size / 2.f;
+        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
+        const float walkSpeed = isKoopa ? kBlueKoopaSpeed : kGoombaSpeed;
+        const float frameDuration = isKoopa
+            ? kBlueKoopaFrameDuration : kGoombaFrameDuration;
+        const sf::Vector2f size(tileSize, isKoopa ? tileSize * 1.5f : tileSize);
+
+        if (!enemy.active) {
+            const float centreX = enemy.position.x + size.x / 2.f;
             if (centreX < cameraLeft || centreX > cameraRight) {
                 continue;
             }
-            goomba.active = true;
+            enemy.active = true;
         }
 
-        goomba.animationElapsed += seconds;
-        if (goomba.animationElapsed >= kGoombaFrameDuration) {
-            goomba.animationElapsed -= kGoombaFrameDuration;
-            goomba.animationFrame = (goomba.animationFrame + 1) % 2;
+        enemy.animationElapsed += seconds;
+        if (enemy.animationElapsed >= frameDuration) {
+            enemy.animationElapsed -= frameDuration;
+            enemy.animationFrame = (enemy.animationFrame + 1) % 2;
         }
 
-        goomba.velocity.y = std::min(goomba.velocity.y + kGravity * seconds,
-                                     kMaxFallSpeed);
+        enemy.velocity.y = std::min(enemy.velocity.y + kGravity * seconds,
+                                    kMaxFallSpeed);
 
         // Resolve horizontal movement first. Hitting a solid tile turns the
-        // Goomba around instead of stopping it permanently.
-        goomba.position.x += goomba.velocity.x * seconds;
-        sf::FloatRect xBounds(goomba.position, {size, size});
+        // enemy around instead of stopping it permanently.
+        enemy.position.x += enemy.velocity.x * seconds;
+        sf::FloatRect xBounds(enemy.position, size);
         xBounds.position.y += 1.f;
         xBounds.size.y -= 2.f;
 
         for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
-            if (goomba.velocity.x > 0.f) {
-                goomba.position.x = tile.position.x - size;
-                goomba.velocity.x = -kGoombaSpeed;
+            if (enemy.velocity.x > 0.f) {
+                enemy.position.x = tile.position.x - size.x;
+                enemy.velocity.x = -walkSpeed;
             } else {
-                goomba.position.x = tile.position.x + tile.size.x;
-                goomba.velocity.x = kGoombaSpeed;
+                enemy.position.x = tile.position.x + tile.size.x;
+                enemy.velocity.x = walkSpeed;
             }
             break;
         }
 
-        if (goomba.position.x < 0.f) {
-            goomba.position.x = 0.f;
-            goomba.velocity.x = kGoombaSpeed;
-        } else if (goomba.position.x + size > tileMap.pixelWidth()) {
-            goomba.position.x = tileMap.pixelWidth() - size;
-            goomba.velocity.x = -kGoombaSpeed;
+        if (enemy.position.x < 0.f) {
+            enemy.position.x = 0.f;
+            enemy.velocity.x = walkSpeed;
+        } else if (enemy.position.x + size.x > tileMap.pixelWidth()) {
+            enemy.position.x = tileMap.pixelWidth() - size.x;
+            enemy.velocity.x = -walkSpeed;
         }
 
         // Gravity and floor/platform collision use the same tile geometry as Mario.
-        goomba.position.y += goomba.velocity.y * seconds;
-        sf::FloatRect yBounds(goomba.position, {size, size});
+        enemy.position.y += enemy.velocity.y * seconds;
+        sf::FloatRect yBounds(enemy.position, size);
         yBounds.position.x += 1.f;
         yBounds.size.x -= 2.f;
 
         for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
-            if (goomba.velocity.y > 0.f) {
-                goomba.position.y = tile.position.y - size;
-                goomba.velocity.y = 0.f;
-            } else if (goomba.velocity.y < 0.f) {
-                goomba.position.y = tile.position.y + tile.size.y;
-                goomba.velocity.y = 0.f;
+            if (enemy.velocity.y > 0.f) {
+                enemy.position.y = tile.position.y - size.y;
+                enemy.velocity.y = 0.f;
+            } else if (enemy.velocity.y < 0.f) {
+                enemy.position.y = tile.position.y + tile.size.y;
+                enemy.velocity.y = 0.f;
             }
             break;
         }
 
-        if (goomba.position.y > tileMap.pixelHeight()) {
-            goomba.alive = false;
+        if (enemy.position.y > tileMap.pixelHeight()) {
+            enemy.alive = false;
             continue;
         }
 
-        sf::FloatRect enemyBounds(goomba.position, {size, size});
+        sf::FloatRect enemyBounds(enemy.position, size);
         if (!avatarBounds().findIntersection(enemyBounds).has_value()) {
             continue;
         }
 
         const float avatarBottom = avatarPos.y + avatar.getSize().y;
         const bool stomped = avatarVelocity.y > 0.f
-                          && avatarBottom <= goomba.position.y + size * 0.55f;
+                          && avatarBottom <= enemy.position.y + size.y * 0.55f;
         if (stomped) {
-            goomba.alive = false;
+            enemy.alive = false;
             avatarVelocity.y = -kGoombaStompBounce;
             onGround = false;
         } else {
@@ -459,26 +479,40 @@ void PlayState::updateGoombas(sf::Time dt) {
     }
 
     if (resetEnemies) {
-        spawnGoombas();
+        spawnWalkingEnemies();
         avatar.setPosition(avatarPos);
         return;
     }
 
-    goombas.erase(std::remove_if(goombas.begin(), goombas.end(), [](const Goomba& goomba) {
-        return !goomba.alive;
-    }), goombas.end());
+    walkingEnemies.erase(std::remove_if(
+        walkingEnemies.begin(), walkingEnemies.end(), [](const WalkingEnemy& enemy) {
+            return !enemy.alive;
+        }), walkingEnemies.end());
 }
 
-void PlayState::drawGoombas(sf::RenderWindow& window) const {
-    const std::string textureKey = currentLevel == 2 ? "GoombaUnderground" : "Goomba";
-    sf::Sprite sprite(assets.getTexture(textureKey));
-    sprite.setScale({Config::kZoom, Config::kZoom});
+void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
+    const std::string goombaTextureKey = currentLevel == 2
+        ? "GoombaUnderground" : "Goomba";
+    sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
+    sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
 
-    for (const Goomba& goomba : goombas) {
+    for (const WalkingEnemy& enemy : walkingEnemies) {
+        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
+        sf::Sprite& sprite = isKoopa ? koopaSprite : goombaSprite;
+        const int sourceHeight = isKoopa ? 24 : TileMap::kSourceTileSize;
+
         sprite.setTextureRect(sf::IntRect(
-            {goomba.animationFrame * TileMap::kSourceTileSize, 0},
-            {TileMap::kSourceTileSize, TileMap::kSourceTileSize}));
-        sprite.setPosition(goomba.position);
+            {enemy.animationFrame * TileMap::kSourceTileSize, 0},
+            {TileMap::kSourceTileSize, sourceHeight}));
+
+        // The supplied Koopa faces left. Mirror it only after a wall sends it right.
+        if (isKoopa && enemy.velocity.x > 0.f) {
+            sprite.setScale({-Config::kZoom, Config::kZoom});
+            sprite.setPosition({enemy.position.x + tileMap.tileSize(), enemy.position.y});
+        } else {
+            sprite.setScale({Config::kZoom, Config::kZoom});
+            sprite.setPosition(enemy.position);
+        }
         window.draw(sprite);
     }
 }
@@ -709,7 +743,7 @@ void PlayState::render(sf::RenderWindow& window) {
     window.draw(tileMap);
     drawCoinPops(window);
     drawMushroomPops(window);
-    drawGoombas(window);
+    drawWalkingEnemies(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

@@ -108,6 +108,9 @@ public:
     /// @brief Top-left world position of every enemy spawn marker in the map.
     const std::vector<sf::Vector2f>& enemySpawns() const { return enemies; }
 
+    /// @brief Bottom-aligned map cells containing Blue Koopa spawn markers ('K').
+    const std::vector<sf::Vector2f>& blueKoopaSpawns() const { return blueKoopas; }
+
     /// @brief True when the map contains a level-exit decoration marker ('W').
     bool hasLevelExit() const { return levelExitAvailable; }
 
@@ -150,7 +153,8 @@ private:
     int rows{0};
     float tileSizePx{16.f};
     sf::Vector2f spawn{0.f, 0.f};
-    std::vector<sf::Vector2f> enemies;
+    std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
+    std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
 };

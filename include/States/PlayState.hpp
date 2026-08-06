@@ -50,7 +50,13 @@ private:
     };
     std::vector<MushroomPop> mushroomPops;
 
-    struct Goomba {
+    enum class EnemyKind {
+        Goomba,
+        BlueKoopa
+    };
+
+    struct WalkingEnemy {
+        EnemyKind kind;
         sf::Vector2f position;
         sf::Vector2f velocity;
         bool active{false};
@@ -58,7 +64,7 @@ private:
         float animationElapsed{0.f};
         int animationFrame{0};
     };
-    std::vector<Goomba> goombas;
+    std::vector<WalkingEnemy> walkingEnemies;
 
     enum class BlockReward {
         Coin,
@@ -160,14 +166,14 @@ private:
     /// @brief Draws all emerged mushrooms in world space.
     void drawMushroomPops(sf::RenderWindow& window) const;
 
-    /// @brief Creates one Goomba for every 'E' marker in the loaded map.
-    void spawnGoombas();
+    /// @brief Creates Goombas and Blue Koopas from their map markers.
+    void spawnWalkingEnemies();
 
-    /// @brief Updates Goomba activation, walking, gravity, and collisions.
-    void updateGoombas(sf::Time dt);
+    /// @brief Updates walking-enemy activation, movement, gravity, and collisions.
+    void updateWalkingEnemies(sf::Time dt);
 
-    /// @brief Draws the animated Goombas with the palette for the current level.
-    void drawGoombas(sf::RenderWindow& window) const;
+    /// @brief Draws all animated walking enemies.
+    void drawWalkingEnemies(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.

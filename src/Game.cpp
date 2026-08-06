@@ -69,6 +69,8 @@ Game::Game()
     assets.loadTexture("Goomba", Systems::resourcePath("assets/textures/goomba.png"));
     assets.loadTexture("GoombaUnderground",
                        Systems::resourcePath("assets/textures/goomba_underground.png"));
+    assets.loadTexture("BlueKoopaUnderground",
+                       Systems::resourcePath("assets/textures/blue_koopa_underground.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
