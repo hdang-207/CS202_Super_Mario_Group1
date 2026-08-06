@@ -6,6 +6,7 @@
 #include "Systems/SaveManager.hpp"
 #include <cstddef>
 #include <random>
+#include "UI/HUD.hpp"
 #include <set>
 #include <vector>
 
@@ -23,6 +24,7 @@ private:
     int score{0};
     int coins{0};
     int lives{3};
+    UI::HUD hud;
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -47,12 +49,15 @@ private:
     };
     std::vector<CoinPop> coinPops;
 
-    struct MushroomPop {
+    enum class MushroomState { Emerging, Moving };
+    struct MushroomEntity {
         sf::Vector2f blockPosition;
         sf::Vector2f position;
+        sf::Vector2f velocity;
+        MushroomState state;
         float elapsed;
     };
-    std::vector<MushroomPop> mushroomPops;
+    std::vector<MushroomEntity> mushrooms;
 
     enum class BlockReward {
         Coin,
@@ -147,13 +152,13 @@ private:
     BlockReward takeNextQuestionBlockReward();
 
     /// @brief Starts a mushroom emerging from an activated question block.
-    void spawnMushroomPop(sf::Vector2f blockPosition);
+    void spawnMushroom(sf::Vector2f blockPosition);
 
-    /// @brief Raises new mushrooms by one tile and leaves them visible.
-    void updateMushroomPops(sf::Time dt);
+    /// @brief Updates mushroom physics and collision
+    void updateMushrooms(sf::Time dt);
 
     /// @brief Draws all emerged mushrooms in world space.
-    void drawMushroomPops(sf::RenderWindow& window) const;
+    void drawMushrooms(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.

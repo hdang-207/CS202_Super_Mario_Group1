@@ -2,6 +2,7 @@
 #include <SFML/Audio.hpp>
 #include <string>
 #include <iostream>
+#include <list>
 
 namespace Systems {
     /**
@@ -13,7 +14,11 @@ namespace Systems {
     class SoundController {
     private:
         sf::Music _bgMusic;         ///< Unique background music stream
+        std::list<sf::Sound> _activeSounds; ///< Active sound effects
+        
         float _musicVolume = 60.0f; ///< Current music volume (0 - 100)
+        float _soundVolume = 60.0f; ///< Current SFX volume (0 - 100)
+        
         bool _musicMuted{false};    ///< Track music mute state
         bool _soundMuted{false};    ///< Track sound effect mute state
 
@@ -113,6 +118,28 @@ namespace Systems {
 
         void toggleSoundMuted() {
             setSoundMuted(!_soundMuted);
+        }
+
+        /**
+         * @brief Plays a sound effect.
+         * @param buffer The sound buffer to play.
+         */
+        void playSound(const sf::SoundBuffer& buffer) {
+            if (_soundMuted) return;
+            
+            _activeSounds.emplace_back(buffer);
+            _activeSounds.back().setVolume(_soundVolume);
+            _activeSounds.back().play();
+        }
+
+        /**
+         * @brief Cleans up finished sounds to prevent memory/resource leaks.
+         * Call this periodically in the game loop.
+         */
+        void update() {
+            _activeSounds.remove_if([](const sf::Sound& sound) {
+                return sound.getStatus() == sf::Sound::Status::Stopped;
+            });
         }
     };
 }
