@@ -27,8 +27,16 @@ Game::Game()
 
     // 2. Load Âm thanh
     assets.loadSoundBuffer("ThemeSong", Systems::resourcePath("assets/audio/Theme.mp3"));
+    assets.loadSoundBuffer("CoinSound", Systems::resourcePath("assets/audio/sound/coin_received.mp3"));
+    assets.loadSoundBuffer("DieSound", Systems::resourcePath("assets/audio/sound/die.mp3"));
+    assets.loadSoundBuffer("GameOverSound", Systems::resourcePath("assets/audio/sound/game_over.mp3"));
+    assets.loadSoundBuffer("JumpSound", Systems::resourcePath("assets/audio/sound/jump.mp3"));
+    assets.loadSoundBuffer("OneMoreLifeSound", Systems::resourcePath("assets/audio/sound/onemorelife.mp3"));
+    assets.loadSoundBuffer("PowerUpSound", Systems::resourcePath("assets/audio/sound/powerup.mp3"));
+    assets.loadSoundBuffer("VictorySound", Systems::resourcePath("assets/audio/sound/victory.mp3"));
 
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
+    assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));
 
     // Character preview & movement textures
     assets.loadTexture("MarioPreview", Systems::resourcePath("assets/character/Mario_preview.png"));
