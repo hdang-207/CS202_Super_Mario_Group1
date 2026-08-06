@@ -169,18 +169,23 @@ sf::FloatRect PlayState::avatarBounds() const {
 }
 
 bool PlayState::loadLevel(int level) {
-    std::string mapName = "assets/maps/level" + std::to_string(level) + ".txt";
+    const std::string mapName = level == 2
+        ? "assets/maps/level1-2.txt"
+        : "assets/maps/level" + std::to_string(level) + ".txt";
     if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
-        std::cerr << "[Core Engine] Warning: Failed to load level" << level << ".txt map!\n";
+        std::cerr << "[Core Engine] Warning: Failed to load " << mapName << " map!\n";
         return false;
     }
 
-    // Level 1-2 uses its own cyan underground floor and brick artwork. Switching
-    // them here keeps the outdoor tiles in level 1 unchanged.
+    // Level 1-2 uses its own cyan underground artwork. Switching the registered
+    // batches here keeps every outdoor tile in level 1 unchanged.
     tileMap.setTileTexture('#', assets.getTexture(
         level == 2 ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
         level == 2 ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('?', assets.getTexture(
+        level == 2 ? "QuestionBlockUnderground" : "QuestionBlock"),
+        level == 2 ? 6 : 4, sf::seconds(0.15f));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level " << level

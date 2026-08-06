@@ -115,7 +115,7 @@ private:
 
     /**
      * @brief Loads and builds one numbered map file.
-     * @param level Level number used in assets/maps/levelN.txt.
+     * @param level Internal level index: 1 loads level1.txt and 2 loads level1-2.txt.
      * @return True when the map was loaded and built successfully.
      */
     bool loadLevel(int level);
