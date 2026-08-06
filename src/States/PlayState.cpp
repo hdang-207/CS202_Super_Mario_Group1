@@ -183,6 +183,8 @@ bool PlayState::loadLevel(int level) {
         level == 2 ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
         level == 2 ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('S', assets.getTexture(
+        level == 2 ? "HardBlockUndergroundTile" : "HardBlockTile"));
     tileMap.setTileTexture('?', assets.getTexture(
         level == 2 ? "QuestionBlockUnderground" : "QuestionBlock"),
         level == 2 ? 6 : 4, sf::seconds(0.15f));

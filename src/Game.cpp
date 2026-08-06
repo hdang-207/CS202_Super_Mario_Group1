@@ -52,6 +52,8 @@ Game::Game()
     assets.loadTexture("BrickUndergroundTile",
                        Systems::resourcePath("assets/textures/brick_underground.png"));
     assets.loadTexture("HardBlockTile", Systems::resourcePath("assets/textures/hard_block.png"));
+    assets.loadTexture("HardBlockUndergroundTile",
+                       Systems::resourcePath("assets/textures/hard_block_underground.png"));
     assets.loadTexture("PipeTopLeft", Systems::resourcePath("assets/textures/pipe_top_left.png"));
     assets.loadTexture("PipeTopRight", Systems::resourcePath("assets/textures/pipe_top_right.png"));
     assets.loadTexture("PipeBodyLeft", Systems::resourcePath("assets/textures/pipe_body_left.png"));
