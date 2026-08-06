@@ -175,10 +175,12 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
-    // Level 1-2 uses the cyan underground floor supplied for that tileset;
-    // switching only '#' keeps the outdoor ground in level 1 unchanged.
+    // Level 1-2 uses its own cyan underground floor and brick artwork. Switching
+    // them here keeps the outdoor tiles in level 1 unchanged.
     tileMap.setTileTexture('#', assets.getTexture(
         level == 2 ? "GroundUndergroundTile" : "GroundTile"));
+    tileMap.setTileTexture('B', assets.getTexture(
+        level == 2 ? "BrickUndergroundTile" : "BrickTile"));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level " << level
