@@ -66,6 +66,9 @@ Game::Game()
     assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
     assets.loadTexture("SuperMushroom", Systems::resourcePath("assets/textures/super_mushroom.png"));
+    assets.loadTexture("Goomba", Systems::resourcePath("assets/textures/goomba.png"));
+    assets.loadTexture("GoombaUnderground",
+                       Systems::resourcePath("assets/textures/goomba_underground.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));

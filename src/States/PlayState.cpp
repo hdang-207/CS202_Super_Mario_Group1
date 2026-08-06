@@ -24,6 +24,11 @@ namespace {
     constexpr float kMushroomRiseDuration = 0.45f;
     constexpr std::size_t kMushroomRewardDivisor = 4; ///< About 25% mushroom rewards.
 
+    /// Goombas wake up when their spawn enters the camera, then walk until defeated.
+    constexpr float kGoombaSpeed = 72.f;
+    constexpr float kGoombaFrameDuration = 0.3f;
+    constexpr float kGoombaStompBounce = 550.f;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
@@ -157,6 +162,7 @@ void PlayState::update(sf::Time dt) {
             tileMap.update(dt);
             return;
         }
+        updateGoombas(dt);
         updateCamera();
     }
     updateCoinPops(dt);
@@ -198,6 +204,7 @@ bool PlayState::loadLevel(int level) {
     currentLevel = level;
     coinPops.clear();
     mushroomPops.clear();
+    spawnGoombas();
     prepareQuestionBlockRewards();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
@@ -343,6 +350,136 @@ void PlayState::drawMushroomPops(sf::RenderWindow& window) const {
     for (const MushroomPop& mushroom : mushroomPops) {
         mushroomSprite.setPosition(mushroom.position);
         window.draw(mushroomSprite);
+    }
+}
+
+void PlayState::spawnGoombas() {
+    goombas.clear();
+    goombas.reserve(tileMap.enemySpawns().size());
+
+    for (sf::Vector2f spawn : tileMap.enemySpawns()) {
+        goombas.push_back({spawn, {-kGoombaSpeed, 0.f}});
+    }
+}
+
+void PlayState::updateGoombas(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float size = tileMap.tileSize();
+    const float cameraLeft = camera.getCenter().x - Config::kViewWidth / 2.f - size;
+    const float cameraRight = camera.getCenter().x + Config::kViewWidth / 2.f + size;
+    bool resetEnemies = false;
+
+    for (Goomba& goomba : goombas) {
+        if (!goomba.alive) {
+            continue;
+        }
+
+        if (!goomba.active) {
+            const float centreX = goomba.position.x + size / 2.f;
+            if (centreX < cameraLeft || centreX > cameraRight) {
+                continue;
+            }
+            goomba.active = true;
+        }
+
+        goomba.animationElapsed += seconds;
+        if (goomba.animationElapsed >= kGoombaFrameDuration) {
+            goomba.animationElapsed -= kGoombaFrameDuration;
+            goomba.animationFrame = (goomba.animationFrame + 1) % 2;
+        }
+
+        goomba.velocity.y = std::min(goomba.velocity.y + kGravity * seconds,
+                                     kMaxFallSpeed);
+
+        // Resolve horizontal movement first. Hitting a solid tile turns the
+        // Goomba around instead of stopping it permanently.
+        goomba.position.x += goomba.velocity.x * seconds;
+        sf::FloatRect xBounds(goomba.position, {size, size});
+        xBounds.position.y += 1.f;
+        xBounds.size.y -= 2.f;
+
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
+            if (goomba.velocity.x > 0.f) {
+                goomba.position.x = tile.position.x - size;
+                goomba.velocity.x = -kGoombaSpeed;
+            } else {
+                goomba.position.x = tile.position.x + tile.size.x;
+                goomba.velocity.x = kGoombaSpeed;
+            }
+            break;
+        }
+
+        if (goomba.position.x < 0.f) {
+            goomba.position.x = 0.f;
+            goomba.velocity.x = kGoombaSpeed;
+        } else if (goomba.position.x + size > tileMap.pixelWidth()) {
+            goomba.position.x = tileMap.pixelWidth() - size;
+            goomba.velocity.x = -kGoombaSpeed;
+        }
+
+        // Gravity and floor/platform collision use the same tile geometry as Mario.
+        goomba.position.y += goomba.velocity.y * seconds;
+        sf::FloatRect yBounds(goomba.position, {size, size});
+        yBounds.position.x += 1.f;
+        yBounds.size.x -= 2.f;
+
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
+            if (goomba.velocity.y > 0.f) {
+                goomba.position.y = tile.position.y - size;
+                goomba.velocity.y = 0.f;
+            } else if (goomba.velocity.y < 0.f) {
+                goomba.position.y = tile.position.y + tile.size.y;
+                goomba.velocity.y = 0.f;
+            }
+            break;
+        }
+
+        if (goomba.position.y > tileMap.pixelHeight()) {
+            goomba.alive = false;
+            continue;
+        }
+
+        sf::FloatRect enemyBounds(goomba.position, {size, size});
+        if (!avatarBounds().findIntersection(enemyBounds).has_value()) {
+            continue;
+        }
+
+        const float avatarBottom = avatarPos.y + avatar.getSize().y;
+        const bool stomped = avatarVelocity.y > 0.f
+                          && avatarBottom <= goomba.position.y + size * 0.55f;
+        if (stomped) {
+            goomba.alive = false;
+            avatarVelocity.y = -kGoombaStompBounce;
+            onGround = false;
+        } else {
+            respawnAvatar();
+            resetEnemies = true;
+            break;
+        }
+    }
+
+    if (resetEnemies) {
+        spawnGoombas();
+        avatar.setPosition(avatarPos);
+        return;
+    }
+
+    goombas.erase(std::remove_if(goombas.begin(), goombas.end(), [](const Goomba& goomba) {
+        return !goomba.alive;
+    }), goombas.end());
+}
+
+void PlayState::drawGoombas(sf::RenderWindow& window) const {
+    const std::string textureKey = currentLevel == 2 ? "GoombaUnderground" : "Goomba";
+    sf::Sprite sprite(assets.getTexture(textureKey));
+    sprite.setScale({Config::kZoom, Config::kZoom});
+
+    for (const Goomba& goomba : goombas) {
+        sprite.setTextureRect(sf::IntRect(
+            {goomba.animationFrame * TileMap::kSourceTileSize, 0},
+            {TileMap::kSourceTileSize, TileMap::kSourceTileSize}));
+        sprite.setPosition(goomba.position);
+        window.draw(sprite);
     }
 }
 
@@ -572,6 +709,7 @@ void PlayState::render(sf::RenderWindow& window) {
     window.draw(tileMap);
     drawCoinPops(window);
     drawMushroomPops(window);
+    drawGoombas(window);
     window.draw(avatarSprite);
 
     window.setView(screenView);

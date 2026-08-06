@@ -50,6 +50,16 @@ private:
     };
     std::vector<MushroomPop> mushroomPops;
 
+    struct Goomba {
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        bool active{false};
+        bool alive{true};
+        float animationElapsed{0.f};
+        int animationFrame{0};
+    };
+    std::vector<Goomba> goombas;
+
     enum class BlockReward {
         Coin,
         Mushroom
@@ -149,6 +159,15 @@ private:
 
     /// @brief Draws all emerged mushrooms in world space.
     void drawMushroomPops(sf::RenderWindow& window) const;
+
+    /// @brief Creates one Goomba for every 'E' marker in the loaded map.
+    void spawnGoombas();
+
+    /// @brief Updates Goomba activation, walking, gravity, and collisions.
+    void updateGoombas(sf::Time dt);
+
+    /// @brief Draws the animated Goombas with the palette for the current level.
+    void drawGoombas(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
