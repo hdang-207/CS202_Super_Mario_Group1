@@ -28,6 +28,10 @@ namespace {
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
 
+    /// World 1-2's original underground grid is 158 columns wide. The adapted
+    /// outdoor goal area begins immediately after it.
+    constexpr int kLevel2UndergroundColumns = 158;
+
 }
 
 bool PlayState::holding(sf::Keyboard::Key key) const {
@@ -170,6 +174,12 @@ bool PlayState::loadLevel(int level) {
         std::cerr << "[Core Engine] Warning: Failed to load level" << level << ".txt map!\n";
         return false;
     }
+
+    // Level 1-2 uses the cyan underground floor supplied for that tileset;
+    // switching only '#' keeps the outdoor ground in level 1 unchanged.
+    tileMap.setTileTexture('#', assets.getTexture(
+        level == 2 ? "GroundUndergroundTile" : "GroundTile"));
+
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: Level " << level
                   << " map is empty, nothing to play!\n";
@@ -542,9 +552,10 @@ void PlayState::render(sf::RenderWindow& window) {
     camera.setViewport(screenView.getViewport());
 
     // World 1-2 stays dark while underground, then returns to the outdoor sky
-    // when the brick ceiling ends near the flag area.
+    // for the adapted pipe, staircase, flag and castle goal area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    bool underground = currentLevel == 2 && avatarPos.x < 185.f * Config::kTileSize;
+    bool underground = currentLevel == 2
+                    && avatarPos.x < kLevel2UndergroundColumns * Config::kTileSize;
     sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
