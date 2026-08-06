@@ -21,6 +21,9 @@
  * sky fills the top, the same framing as the original Super Mario Bros.
  */
 namespace Config {
+    /// This project currently ships World 1-1 and World 1-2 only.
+    inline constexpr int kFinalLevel = 2;
+
     /// Size of one tile in the atlas artwork, in pixels.
     inline constexpr float kSourceTileSize = 16.f;
 

@@ -68,18 +68,22 @@ bool PlayState::wantsBoost() const {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
-      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")),
-      camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) {}
+      camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
+      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
-      avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")),
-      camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})) 
+      camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
+      avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"))
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
     this->coins = data.coins;
     this->lives = data.lives;
+}
+
+PlayState::~PlayState() {
+    Core::EventSystem::getInstance().clearAllListeners();
 }
 
 void PlayState::init() {
@@ -92,12 +96,13 @@ void PlayState::init() {
     hud.setScore(this->score);
     hud.setCoins(this->coins);
     hud.setLives(this->lives);
+    hud.setWorld(this->currentLevel);
 
     // Setup SoundController and Data event listeners
     auto& events = Core::EventSystem::getInstance();
-    auto& sounds = Systems::SoundController::getInstance();
     
-    events.subscribe(Core::EventType::CoinCollected, [&sounds, this](const Core::Event&) {
+    events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("CoinSound"));
         this->coins += 1;
         this->score += 200;
@@ -109,29 +114,27 @@ void PlayState::init() {
         this->hud.setScore(this->score);
     });
     
-    events.subscribe(Core::EventType::MushroomCollected, [&sounds, this](const Core::Event&) {
+    events.subscribe(Core::EventType::MushroomCollected, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("PowerUpSound"));
         this->score += 1000;
         this->hud.setScore(this->score);
     });
     
-    events.subscribe(Core::EventType::PlayerJumped, [&sounds, this](const Core::Event&) {
+    events.subscribe(Core::EventType::PlayerJumped, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("JumpSound"));
     });
     
-    events.subscribe(Core::EventType::PlayerDied, [&sounds, this](const Core::Event&) {
+    events.subscribe(Core::EventType::PlayerDied, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("DieSound"));
-        sounds.stopMusic();
-        
-        this->lives -= 1;
+        this->lives = std::max(0, this->lives - 1);
         this->hud.setLives(this->lives);
-        if (this->lives <= 0) {
-            std::cout << "[Core Engine] Game Over condition met.\n";
-            Core::EventSystem::getInstance().broadcast({Core::EventType::GameOver});
-        }
     });
 
-    events.subscribe(Core::EventType::OneMoreLife, [&sounds, this](const Core::Event&) {
+    events.subscribe(Core::EventType::OneMoreLife, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
         this->lives += 1;
         this->hud.setLives(this->lives);
@@ -167,11 +170,7 @@ void PlayState::init() {
         return;
     }
 
-    if (currentLevel == 2) {
-        Systems::SoundController::getInstance().playMusic(Systems::resourcePath("assets/audio/Theme2.mp3"));
-    } else {
-        Systems::SoundController::getInstance().playMusic(Systems::resourcePath("assets/audio/Theme.mp3"));
-    }
+    playLevelMusic();
 
     // Placeholder avatar: slightly narrower than a tile so it slips into gaps cleanly.
     float tile = tileMap.tileSize();
@@ -187,6 +186,10 @@ void PlayState::init() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
+    if (transitionPending) {
+        return;
+    }
+
     // A key held while the window loses focus never sends its release, so it would
     // stay down forever and the level would scroll on its own.
     if (event.is<sf::Event::FocusLost>()) {
@@ -211,6 +214,11 @@ void PlayState::handleInput(const sf::Event& event) {
         // Toggle Pause
         if (keyPressed->code == sf::Keyboard::Key::P) {
             isPaused = !isPaused;
+            if (isPaused) {
+                Systems::SoundController::getInstance().pauseMusic();
+            } else {
+                Systems::SoundController::getInstance().resumeMusic();
+            }
             std::cout << "[Core Engine] Pause " << (isPaused ? "ON" : "OFF") << "\n";
             return;
         }
@@ -218,6 +226,7 @@ void PlayState::handleInput(const sf::Event& event) {
         if (isPaused) {
             if (keyPressed->code == sf::Keyboard::Key::Escape) {
                 std::cout << "[Core Engine] Escape pressed during pause. Returning to IntroMenuState...\n";
+                transitionPending = true;
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
             }
             return;
@@ -226,6 +235,7 @@ void PlayState::handleInput(const sf::Event& event) {
         // Press Escape to return to Main Menu
         if (keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
+            transitionPending = true;
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         } else if (keyPressed->code == sf::Keyboard::Key::F) {
             freeLook = !freeLook;
@@ -250,17 +260,26 @@ void PlayState::handleInput(const sf::Event& event) {
         } else if (keyPressed->code == sf::Keyboard::Key::F9) {
             SaveData data;
             if (SaveManager::loadFromFile("savegame.txt", data)) {
-                this->currentLevel = data.currentLevel;
-                this->score = data.score;
-                this->coins = data.coins;
-                this->lives = data.lives;
-                this->selectedCharacter = data.selectedCharacter;
-                
-                std::cout << "[Core Engine] Quick Load successful. Loading Level " << currentLevel << "...\n";
-                if (loadLevel(currentLevel)) {
+                std::cout << "[Core Engine] Quick Load successful. Loading Level "
+                          << data.currentLevel << "...\n";
+                if (loadLevel(data.currentLevel)) {
+                    score = data.score;
+                    coins = data.coins;
+                    lives = data.lives;
+                    selectedCharacter = data.selectedCharacter;
+                    hud.setCharacter(selectedCharacter);
+                    hud.setScore(score);
+                    hud.setCoins(coins);
+                    hud.setLives(lives);
+                    avatarSprite.setTexture(assets.getTexture(
+                        selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"), true);
                     freeLook = false;
+                    isPaused = false;
+                    heldKeys.clear();
+                    jumpHeld = false;
                     respawnAvatar();
                     updateCamera();
+                    playLevelMusic();
                 }
             }
         }
@@ -268,7 +287,7 @@ void PlayState::handleInput(const sf::Event& event) {
 }
 
 void PlayState::update(sf::Time dt) {
-    if (isPaused) {
+    if (isPaused || transitionPending) {
         return;
     }
 
@@ -276,19 +295,34 @@ void PlayState::update(sf::Time dt) {
         // The avatar is deliberately frozen: left it running it would walk off or
         // fall into a pit while the camera is somewhere else entirely.
         panCamera(dt);
-    } else {
-        moveAvatar(dt);
-        if (tryEnterNextLevel()) {
-            tileMap.update(dt);
-            return;
-        }
-        updateWalkingEnemies(dt);
-        updateCamera();
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
     }
+
+    if (!moveAvatar(dt)) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+    if (tryEnterNextLevel()) {
+        tileMap.update(dt);
+        return;
+    }
+    if (!updateWalkingEnemies(dt)) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+    updateCamera();
     updateCoinPops(dt);
     updateMushrooms(dt);
     tileMap.update(dt); // keeps the question blocks blinking
     hud.update(dt);     // updates the HUD (timer, etc.)
+    if (hud.getTime() <= 0.f) {
+        std::cout << "[Core Engine] Time expired.\n";
+        handlePlayerDeath();
+    }
     Systems::SoundController::getInstance().update(); // Clean up finished sounds
 }
 
@@ -296,7 +330,45 @@ sf::FloatRect PlayState::avatarBounds() const {
     return sf::FloatRect(avatarPos, avatar.getSize());
 }
 
+void PlayState::playLevelMusic() {
+    const std::string theme = currentLevel == 2
+        ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
+    Systems::SoundController::getInstance().playMusic(Systems::resourcePath(theme));
+}
+
+void PlayState::handlePlayerDeath() {
+    Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
+
+    if (lives <= 0) {
+        std::cout << "[Core Engine] No lives remaining. Transitioning to Game Over.\n";
+        transitionPending = true;
+        gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+        return;
+    }
+
+    std::cout << "[Core Engine] Restarting level " << currentLevel
+              << ". Lives remaining: " << lives << "\n";
+    if (!loadLevel(currentLevel)) {
+        std::cerr << "[Core Engine] Could not restart the current level. Returning to menu.\n";
+        transitionPending = true;
+        gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+        return;
+    }
+
+    freeLook = false;
+    heldKeys.clear();
+    jumpHeld = false;
+    respawnAvatar();
+    avatar.setPosition(avatarPos);
+    updateCamera();
+}
+
 bool PlayState::loadLevel(int level) {
+    if (level < 1 || level > Config::kFinalLevel) {
+        std::cerr << "[Core Engine] Invalid level number: " << level << "\n";
+        return false;
+    }
+
     const std::string mapName = level == 2
         ? "assets/maps/level1-2.txt"
         : "assets/maps/level" + std::to_string(level) + ".txt";
@@ -324,6 +396,8 @@ bool PlayState::loadLevel(int level) {
     }
 
     currentLevel = level;
+    hud.setWorld(currentLevel);
+    hud.setTime(400.f);
     coinPops.clear();
     mushrooms.clear();
     spawnWalkingEnemies();
@@ -336,7 +410,15 @@ bool PlayState::loadLevel(int level) {
 }
 
 bool PlayState::tryEnterNextLevel() {
-    if (!tileMap.hasLevelExit() || !avatarBounds().findIntersection(tileMap.levelExitBounds()).has_value()) {
+    const sf::FloatRect player = avatarBounds();
+    const bool reachedLevelExit = currentLevel < Config::kFinalLevel
+        && tileMap.hasLevelExit()
+        && player.findIntersection(tileMap.levelExitBounds()).has_value();
+    const bool reachedFinalGoal = currentLevel == Config::kFinalLevel
+        && tileMap.hasGoal()
+        && player.findIntersection(tileMap.goalBounds()).has_value();
+
+    if (!reachedLevelExit && !reachedFinalGoal) {
         return false;
     }
 
@@ -348,6 +430,7 @@ bool PlayState::tryEnterNextLevel() {
     progress.selectedCharacter = this->selectedCharacter;
 
     std::cout << "[Core Engine] Level exit reached. Transitioning to VictoryState...\n";
+    transitionPending = true;
     gsm.changeState(std::make_unique<VictoryState>(gsm, assets, progress));
     return true;
 }
@@ -554,12 +637,12 @@ void PlayState::spawnWalkingEnemies() {
     }
 }
 
-void PlayState::updateWalkingEnemies(sf::Time dt) {
+bool PlayState::updateWalkingEnemies(sf::Time dt) {
     const float seconds = dt.asSeconds();
     const float tileSize = tileMap.tileSize();
     const float cameraLeft = camera.getCenter().x - Config::kViewWidth / 2.f - tileSize;
     const float cameraRight = camera.getCenter().x + Config::kViewWidth / 2.f + tileSize;
-    bool resetEnemies = false;
+    bool playerHit = false;
 
     for (WalkingEnemy& enemy : walkingEnemies) {
         if (!enemy.alive) {
@@ -649,23 +732,24 @@ void PlayState::updateWalkingEnemies(sf::Time dt) {
             enemy.alive = false;
             avatarVelocity.y = -kGoombaStompBounce;
             onGround = false;
+            score += isKoopa ? 200 : 100;
+            hud.setScore(score);
         } else {
-            respawnAvatar();
-            resetEnemies = true;
+            playerHit = true;
             break;
         }
     }
 
-    if (resetEnemies) {
-        spawnWalkingEnemies();
-        avatar.setPosition(avatarPos);
-        return;
+    if (playerHit) {
+        handlePlayerDeath();
+        return false;
     }
 
     walkingEnemies.erase(std::remove_if(
         walkingEnemies.begin(), walkingEnemies.end(), [](const WalkingEnemy& enemy) {
             return !enemy.alive;
         }), walkingEnemies.end());
+    return true;
 }
 
 void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
@@ -704,7 +788,7 @@ void PlayState::respawnAvatar() {
     maxCameraCenterX = avatarPos.x + avatar.getSize().x / 2.f;
 }
 
-void PlayState::moveAvatar(sf::Time dt) {
+bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
     // --- horizontal intent -------------------------------------------------
@@ -796,16 +880,16 @@ void PlayState::moveAvatar(sf::Time dt) {
         }
     }
 
+    const int collectedCoins = tileMap.collectCoinsOverlapping(avatarBounds());
+    for (int i = 0; i < collectedCoins; ++i) {
+        Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
+    }
+
     // Fell down one of the level's pits: lose a life or game over.
     if (avatarPos.y > tileMap.pixelHeight()) {
-        Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
-        if (this->lives > 0) {
-            std::cout << "[Core Engine] Avatar fell into pit. Lives remaining: " << this->lives << "\n";
-            respawnAvatar();
-        } else {
-            std::cout << "[Core Engine] Game Over condition met.\n";
-            gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
-        }
+        std::cout << "[Core Engine] Avatar fell into a pit.\n";
+        handlePlayerDeath();
+        return false;
     }
 
     avatar.setPosition(avatarPos);
@@ -854,6 +938,7 @@ void PlayState::moveAvatar(sf::Time dt) {
 
     avatarSprite.setScale({scaleX, scaleY});
     avatarSprite.setPosition({avatarPos.x + avatar.getSize().x / 2.f, avatarPos.y + avatar.getSize().y});
+    return true;
 }
 
 void PlayState::centreCamera(sf::Vector2f target) {
