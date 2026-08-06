@@ -22,7 +22,13 @@ void GameStateManager::clearStates() {
 }
 
 void GameStateManager::applyPendingChanges() {
-    for (auto& change : pendingChanges) {
+    // State::init() is allowed to queue another transition. Work on a snapshot so
+    // that such a request is safely deferred to the next frame instead of
+    // invalidating this loop's iterators.
+    std::vector<PendingChange> changes;
+    changes.swap(pendingChanges);
+
+    for (auto& change : changes) {
         switch (change.action) {
             case Action::Push:
                 // Pause the previous top state if one exists
@@ -59,7 +65,6 @@ void GameStateManager::applyPendingChanges() {
                 break;
         }
     }
-    pendingChanges.clear(); // Empty the queue after processing
 }
 
 void GameStateManager::processStateChanges() {
@@ -90,4 +95,3 @@ void GameStateManager::render(sf::RenderWindow& window) {
 bool GameStateManager::isEmpty() const {
     return states.empty();
 }
-
