@@ -2,6 +2,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <map>
+#include <iostream>
 #include <string>
 #include <utility>
 
@@ -29,6 +30,9 @@ namespace Systems {
             sf::Texture texture;
             if (texture.loadFromFile(path)) {
                 _textures[name] = std::move(texture);
+            } else {
+                std::cerr << "[AssetManager] Failed to load texture '" << name
+                          << "' from " << path << "\n";
             }
         }
 
@@ -50,6 +54,9 @@ namespace Systems {
             sf::Font font;
             if (font.openFromFile(path)) {
                 _fonts[name] = std::move(font);
+            } else {
+                std::cerr << "[AssetManager] Failed to load font '" << name
+                          << "' from " << path << "\n";
             }
         }
 
@@ -71,6 +78,9 @@ namespace Systems {
             sf::SoundBuffer buffer;
             if (buffer.loadFromFile(path)) {
                 _soundBuffers[name] = std::move(buffer);
+            } else {
+                std::cerr << "[AssetManager] Failed to load sound '" << name
+                          << "' from " << path << "\n";
             }
         }
 

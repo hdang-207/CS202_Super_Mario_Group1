@@ -98,6 +98,9 @@ public:
     /// @brief True if any solid tile overlaps @p box.
     bool intersectsSolid(const sf::FloatRect& box) const;
 
+    /// @brief Removes map coins overlapping @p box and returns how many were collected.
+    int collectCoinsOverlapping(const sf::FloatRect& box);
+
     float tileSize() const { return tileSizePx; }              ///< Tile size on screen, in pixels.
     float pixelWidth() const { return columns * tileSizePx; }  ///< Full level width, in pixels.
     float pixelHeight() const { return rows * tileSizePx; }    ///< Full level height, in pixels.
@@ -116,6 +119,12 @@ public:
 
     /// @brief World-space area occupied by the level-exit decoration.
     sf::FloatRect levelExitBounds() const { return levelExitTrigger; }
+
+    /// @brief True when the map contains a final flagpole marker ('F').
+    bool hasGoal() const { return goalAvailable; }
+
+    /// @brief World-space area occupied by the final flagpole.
+    sf::FloatRect goalBounds() const { return goalTrigger; }
 
 private:
     /// Every tile written with the same map character, batched into one buffer.
@@ -157,4 +166,6 @@ private:
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
+    bool goalAvailable{false};
+    sf::FloatRect goalTrigger;
 };

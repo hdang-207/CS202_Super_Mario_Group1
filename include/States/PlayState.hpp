@@ -88,6 +88,7 @@ private:
     // scrolled through and inspected without playing it.
     bool freeLook{false};
     bool isPaused{false};
+    bool transitionPending{false};
     sf::Vector2f freeLookCentre;
     float maxCameraCenterX{0.f}; ///< Maximum X position camera center has reached (SMB 1985 one-way scroll lock)
 
@@ -133,6 +134,12 @@ private:
      * @return FloatRect bounds of avatar.
      */
     sf::FloatRect avatarBounds() const;
+
+    /// @brief Applies one life loss and either restarts the level or opens Game Over.
+    void handlePlayerDeath();
+
+    /// @brief Starts the background theme matching the current level.
+    void playLevelMusic();
 
     /**
      * @brief Respawns the test avatar at the player spawn location.
@@ -180,7 +187,7 @@ private:
     void spawnWalkingEnemies();
 
     /// @brief Updates walking-enemy activation, movement, gravity, and collisions.
-    void updateWalkingEnemies(sf::Time dt);
+    bool updateWalkingEnemies(sf::Time dt);
 
     /// @brief Draws all animated walking enemies.
     void drawWalkingEnemies(sf::RenderWindow& window) const;
@@ -189,7 +196,7 @@ private:
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
      * @param dt Time elapsed since last update frame.
      */
-    void moveAvatar(sf::Time dt);
+    bool moveAvatar(sf::Time dt);
 
     /**
      * @brief Centers camera on a target position within map boundaries.
@@ -228,7 +235,7 @@ public:
     /**
      * @brief Destructor.
      */
-    ~PlayState() override = default;
+    ~PlayState() override;
 
     /**
      * @brief Initializes gameplay resources and loads level map.

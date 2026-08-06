@@ -21,7 +21,10 @@ void VictoryState::init() {
     bgShape.setSize({Config::kViewWidth, Config::kViewHeight});
     bgShape.setFillColor(sf::Color(255, 200, 0)); // Yellow background
 
-    std::string title = (progress.currentLevel >= 3) ? "YOU WIN THE GAME!" : "LEVEL " + std::to_string(progress.currentLevel) + " CLEAR!";
+    const bool gameComplete = progress.currentLevel >= Config::kFinalLevel;
+    std::string title = gameComplete
+        ? "YOU WIN THE GAME!"
+        : "LEVEL " + std::to_string(progress.currentLevel) + " CLEAR!";
     victoryText.setString(title);
     victoryText.setCharacterSize(48);
     victoryText.setFillColor(sf::Color::White);
@@ -43,7 +46,9 @@ void VictoryState::init() {
     statsText.setOrigin({sBounds.position.x + sBounds.size.x / 2.f, sBounds.position.y + sBounds.size.y / 2.f});
     statsText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.5f});
 
-    std::string prompt = (progress.currentLevel >= 3) ? "PRESS ENTER TO MENU" : "PRESS ENTER TO NEXT LEVEL\nPRESS S TO SAVE & MENU";
+    std::string prompt = gameComplete
+        ? "PRESS ENTER TO MENU"
+        : "PRESS ENTER TO NEXT LEVEL\nPRESS S TO SAVE & MENU";
     promptText.setString(prompt);
     promptText.setCharacterSize(20);
     promptText.setFillColor(sf::Color::Black);
@@ -55,23 +60,28 @@ void VictoryState::init() {
 void VictoryState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         if (keyPressed->code == sf::Keyboard::Key::Enter) {
-            if (progress.currentLevel >= 3) {
+            if (progress.currentLevel >= Config::kFinalLevel) {
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
             } else {
                 progress.currentLevel++;
                 gsm.changeState(std::make_unique<PlayState>(gsm, assets, progress));
             }
-        } else if (keyPressed->code == sf::Keyboard::Key::S && progress.currentLevel < 3) {
+        } else if (keyPressed->code == sf::Keyboard::Key::S
+                   && progress.currentLevel < Config::kFinalLevel) {
             // Save and return to menu
             progress.currentLevel++; // Save next level's progress
-            SaveManager::saveToFile("savegame.txt", progress);
-            std::cout << "[Core Engine] Progress saved. Returning to Menu.\n";
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+            if (SaveManager::saveToFile("savegame.txt", progress)) {
+                std::cout << "[Core Engine] Progress saved. Returning to Menu.\n";
+                gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+            } else {
+                --progress.currentLevel;
+                std::cerr << "[Core Engine] Save failed; staying on Victory screen.\n";
+            }
         }
     }
 }
 
-void VictoryState::update(sf::Time dt) {
+void VictoryState::update(sf::Time) {
 }
 
 void VictoryState::render(sf::RenderWindow& window) {

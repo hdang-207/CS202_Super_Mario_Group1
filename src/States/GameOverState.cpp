@@ -2,12 +2,11 @@
 #include "States/IntroMenuState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Core/Config.hpp"
+#include "Systems/SoundController.hpp"
 #include <iostream>
 
 GameOverState::GameOverState(GameStateManager& gsm, Systems::AssetManager& assets)
     : State(gsm, assets), gameOverText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")) {}
-
-#include "Systems/SoundController.hpp"
 
 void GameOverState::init() {
     std::cout << "[Core Engine] GameOverState Initialized.\n";
@@ -45,7 +44,7 @@ void GameOverState::handleInput(const sf::Event& event) {
     }
 }
 
-void GameOverState::update(sf::Time dt) {
+void GameOverState::update(sf::Time) {
 }
 
 void GameOverState::render(sf::RenderWindow& window) {

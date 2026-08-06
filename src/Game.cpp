@@ -3,8 +3,8 @@
 #include "States/IntroMenuState.hpp"
 #include "Systems/HighDpi.hpp"
 #include "Systems/ResourcePath.hpp"
+#include <algorithm>
 #include <iostream>
-#include <optional>
 
 namespace {
     const char* kWindowTitle = "Super Mario Bros - Group 1";
@@ -110,6 +110,7 @@ void Game::run() {
     // Core Game Loop
     while (window.isOpen()) {
         sf::Time dt = clock.restart();
+        dt = std::min(dt, sf::seconds(0.25f));
         timeSinceLastUpdate += dt;
 
         // 1. Process any pending state additions/removals before handling input or updates
@@ -117,6 +118,10 @@ void Game::run() {
 
         // 2. Poll window and input events
         processEvents();
+
+        if (!window.isOpen()) {
+            break;
+        }
 
         // If all states have been popped, exit the game
         if (gsm.isEmpty()) {

@@ -8,7 +8,8 @@
 #include <iostream>
 
 IntroMenuState::IntroMenuState(GameStateManager& gsm, Systems::AssetManager& assets) 
-    : State(gsm, assets), titleText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")), bgSprite(assets.getTexture("MenuBackground")) {}
+    : State(gsm, assets), bgSprite(assets.getTexture("MenuBackground")),
+      titleText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")) {}
 
 void IntroMenuState::init() {
     // Log info representing game starting up.
@@ -86,4 +87,3 @@ void IntroMenuState::render(sf::RenderWindow& window) {
         window.draw(promptText);
     }
 }
-
