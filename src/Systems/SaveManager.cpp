@@ -1,8 +1,24 @@
 #include "Systems/SaveManager.hpp"
+#include "Core/Config.hpp"
 #include <fstream>
 #include <iostream>
 
+namespace {
+    bool isValidSave(const SaveData& data) {
+        const bool validCharacter = data.selectedCharacter == CharacterType::Mario
+                                 || data.selectedCharacter == CharacterType::Luigi;
+        return data.currentLevel >= 1 && data.currentLevel <= Config::kFinalLevel
+            && data.score >= 0 && data.coins >= 0 && data.coins < 100
+            && data.lives > 0 && validCharacter;
+    }
+}
+
 bool SaveManager::saveToFile(const std::string& filepath, const SaveData& data) {
+    if (!isValidSave(data)) {
+        std::cerr << "[SaveManager Error] Refusing to save invalid progress data.\n";
+        return false;
+    }
+
     std::ofstream outFile(filepath);
     if (!outFile.is_open()) {
         std::cerr << "[SaveManager Error] Failed to open save file for writing: " << filepath << std::endl;
@@ -28,12 +44,18 @@ bool SaveManager::loadFromFile(const std::string& filepath, SaveData& outData) {
         return false;
     }
 
+    SaveData loaded;
     int charTypeInt = 0;
-    if (inFile >> outData.currentLevel >> outData.score >> outData.coins >> outData.lives >> charTypeInt) {
-        outData.selectedCharacter = static_cast<CharacterType>(charTypeInt);
-        inFile.close();
-        std::cout << "[SaveManager] Successfully loaded progress from: " << filepath << std::endl;
-        return true;
+    if (inFile >> loaded.currentLevel >> loaded.score >> loaded.coins
+               >> loaded.lives >> charTypeInt) {
+        loaded.selectedCharacter = static_cast<CharacterType>(charTypeInt);
+        if (isValidSave(loaded)) {
+            outData = loaded;
+            inFile.close();
+            std::cout << "[SaveManager] Successfully loaded progress from: "
+                      << filepath << std::endl;
+            return true;
+        }
     }
 
     std::cerr << "[SaveManager Error] Invalid or corrupted save file format: " << filepath << std::endl;
