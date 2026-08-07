@@ -62,3 +62,11 @@ bool SaveManager::loadFromFile(const std::string& filepath, SaveData& outData) {
     inFile.close();
     return false;
 }
+
+bool SaveManager::saveProgress(const std::string& filepath, const SaveData& data) {
+    return saveToFile(filepath, data);
+}
+
+bool SaveManager::loadProgress(const std::string& filepath, SaveData& outData) {
+    return loadFromFile(filepath, outData);
+}

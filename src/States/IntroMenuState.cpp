@@ -1,8 +1,10 @@
 #include "States/IntroMenuState.hpp"
 #include "Core/Config.hpp"
 #include "States/CharacterSelectionState.hpp"
+#include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Systems/ResourcePath.hpp"
+#include "Systems/SaveManager.hpp"
 #include "Systems/SoundController.hpp"
 #include <algorithm>
 #include <iostream>
@@ -13,7 +15,7 @@ IntroMenuState::IntroMenuState(GameStateManager& gsm, Systems::AssetManager& ass
 
 void IntroMenuState::init() {
     // Log info representing game starting up.
-    std::cout << "[Core Engine] IntroMenuState Initialized. Press ANY KEY to select character.\n";
+    std::cout << "[Core Engine] IntroMenuState Initialized. Press ENTER for new game or L to load.\n";
 
     // Phóng ảnh nền để phủ kín màn hình mà không bị méo (giữ nguyên tỉ lệ gốc),
     // phần thừa được cắt đều hai bên.
@@ -34,8 +36,8 @@ void IntroMenuState::init() {
                          titleBounds.position.y + titleBounds.size.y / 2.f});
     titleText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.25f});
 
-    promptText.setString("PRESS ANY KEY TO START");
-    promptText.setCharacterSize(24);
+    promptText.setString("PRESS ANY KEY TO START | PRESS L TO LOAD GAME");
+    promptText.setCharacterSize(20);
     promptText.setFillColor(sf::Color::Yellow);
     promptText.setOutlineColor(sf::Color::Black);
     promptText.setOutlineThickness(2.f);
@@ -66,6 +68,17 @@ void IntroMenuState::handleInput(const sf::Event& event) {
         key == sf::Keyboard::Key::LSystem || key == sf::Keyboard::Key::RSystem ||
         (key >= sf::Keyboard::Key::F1 && key <= sf::Keyboard::Key::F12)) {
         return;
+    }
+
+    if (key == sf::Keyboard::Key::L) {
+        SaveData data;
+        if (SaveManager::loadProgress("savegame.txt", data)) {
+            std::cout << "[Core Engine] Loaded saved game successfully! Launching PlayState...\n";
+            gsm.changeState(std::make_unique<PlayState>(gsm, assets, data));
+            return;
+        } else {
+            std::cout << "[Core Engine] No valid save file found or failed to load.\n";
+        }
     }
 
     std::cout << "[Core Engine] Valid key pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";

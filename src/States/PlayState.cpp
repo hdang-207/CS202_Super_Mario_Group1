@@ -4,6 +4,9 @@
 #include "States/IntroMenuState.hpp"
 #include "States/GameOverState.hpp"
 #include "States/VictoryState.hpp"
+#include "States/PauseState.hpp"
+#include "States/RespawnState.hpp"
+#include "States/LevelCompleteState.hpp"
 #include "Systems/ResourcePath.hpp"
 #include "Core/EventSystem.hpp"
 #include "Systems/SoundController.hpp"
@@ -211,32 +214,11 @@ void PlayState::handleInput(const sf::Event& event) {
             return;
         }
 
-        // Toggle Pause
-        if (keyPressed->code == sf::Keyboard::Key::P) {
-            isPaused = !isPaused;
-            if (isPaused) {
-                Systems::SoundController::getInstance().pauseMusic();
-            } else {
-                Systems::SoundController::getInstance().resumeMusic();
-            }
-            std::cout << "[Core Engine] Pause " << (isPaused ? "ON" : "OFF") << "\n";
+        // Push interactive PauseState menu overlay on P or Escape
+        if (keyPressed->code == sf::Keyboard::Key::P || keyPressed->code == sf::Keyboard::Key::Escape) {
+            std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
+            gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
-        }
-
-        if (isPaused) {
-            if (keyPressed->code == sf::Keyboard::Key::Escape) {
-                std::cout << "[Core Engine] Escape pressed during pause. Returning to IntroMenuState...\n";
-                transitionPending = true;
-                gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
-            }
-            return;
-        }
-
-        // Press Escape to return to Main Menu
-        if (keyPressed->code == sf::Keyboard::Key::Escape) {
-            std::cout << "[Core Engine] Escape pressed in PlayState. Returning to IntroMenuState...\n";
-            transitionPending = true;
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         } else if (keyPressed->code == sf::Keyboard::Key::F) {
             freeLook = !freeLook;
             // Pick the scrolling up exactly where the camera already is, so the
@@ -247,40 +229,12 @@ void PlayState::handleInput(const sf::Event& event) {
             }
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
         } else if (keyPressed->code == sf::Keyboard::Key::F5) {
-            SaveData data;
-            data.currentLevel = this->currentLevel;
-            data.score = this->score;
-            data.coins = this->coins;
-            data.lives = this->lives;
-            data.selectedCharacter = this->selectedCharacter;
-            
-            if (SaveManager::saveToFile("savegame.txt", data)) {
+            if (SaveManager::saveProgress("savegame.txt", getSaveData())) {
                 std::cout << "[Core Engine] Quick Save successful (Level " << currentLevel << ").\n";
             }
         } else if (keyPressed->code == sf::Keyboard::Key::F9) {
-            SaveData data;
-            if (SaveManager::loadFromFile("savegame.txt", data)) {
-                std::cout << "[Core Engine] Quick Load successful. Loading Level "
-                          << data.currentLevel << "...\n";
-                if (loadLevel(data.currentLevel)) {
-                    score = data.score;
-                    coins = data.coins;
-                    lives = data.lives;
-                    selectedCharacter = data.selectedCharacter;
-                    hud.setCharacter(selectedCharacter);
-                    hud.setScore(score);
-                    hud.setCoins(coins);
-                    hud.setLives(lives);
-                    avatarSprite.setTexture(assets.getTexture(
-                        selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"), true);
-                    freeLook = false;
-                    isPaused = false;
-                    heldKeys.clear();
-                    jumpHeld = false;
-                    respawnAvatar();
-                    updateCamera();
-                    playLevelMusic();
-                }
+            if (quickLoad()) {
+                std::cout << "[Core Engine] Quick Load successful.\n";
             }
         }
     }
@@ -339,28 +293,11 @@ void PlayState::playLevelMusic() {
 void PlayState::handlePlayerDeath() {
     Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
 
-    if (lives <= 0) {
-        std::cout << "[Core Engine] No lives remaining. Transitioning to Game Over.\n";
-        transitionPending = true;
-        gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
-        return;
-    }
-
-    std::cout << "[Core Engine] Restarting level " << currentLevel
-              << ". Lives remaining: " << lives << "\n";
-    if (!loadLevel(currentLevel)) {
-        std::cerr << "[Core Engine] Could not restart the current level. Returning to menu.\n";
-        transitionPending = true;
-        gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
-        return;
-    }
-
-    freeLook = false;
-    heldKeys.clear();
-    jumpHeld = false;
-    respawnAvatar();
-    avatar.setPosition(avatarPos);
-    updateCamera();
+    lives--;
+    SaveData data = getSaveData();
+    std::cout << "[Core Engine] Player died. Transitioning to RespawnState. Lives remaining: " << lives << "\n";
+    transitionPending = true;
+    gsm.changeState(std::make_unique<RespawnState>(gsm, assets, data));
 }
 
 bool PlayState::loadLevel(int level) {
@@ -422,16 +359,11 @@ bool PlayState::tryEnterNextLevel() {
         return false;
     }
 
-    SaveData progress;
-    progress.currentLevel = this->currentLevel;
-    progress.score = this->score;
-    progress.coins = this->coins;
-    progress.lives = this->lives;
-    progress.selectedCharacter = this->selectedCharacter;
+    SaveData progress = getSaveData();
 
-    std::cout << "[Core Engine] Level exit reached. Transitioning to VictoryState...\n";
+    std::cout << "[Core Engine] Level exit reached. Transitioning to LevelCompleteState...\n";
     transitionPending = true;
-    gsm.changeState(std::make_unique<VictoryState>(gsm, assets, progress));
+    gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, progress));
     return true;
 }
 
@@ -1021,19 +953,42 @@ void PlayState::render(sf::RenderWindow& window) {
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
     hud.render(window);
+}
 
-    if (isPaused) {
-        sf::RectangleShape overlay({Config::kViewWidth, Config::kViewHeight});
-        overlay.setFillColor(sf::Color(0, 0, 0, 150));
-        window.draw(overlay);
+SaveData PlayState::getSaveData() const {
+    SaveData data;
+    data.currentLevel = this->currentLevel;
+    data.score = this->score;
+    data.coins = this->coins;
+    data.lives = this->lives;
+    data.selectedCharacter = this->selectedCharacter;
+    return data;
+}
 
-        sf::Text pauseText(assets.getFont("MarioFont"), "PAUSED\n\nPRESS P TO RESUME\nPRESS ESC TO MENU", 32);
-        pauseText.setFillColor(sf::Color::White);
-        pauseText.setOutlineColor(sf::Color::Black);
-        pauseText.setOutlineThickness(3.f);
-        sf::FloatRect pBounds = pauseText.getLocalBounds();
-        pauseText.setOrigin({pBounds.position.x + pBounds.size.x / 2.f, pBounds.position.y + pBounds.size.y / 2.f});
-        pauseText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight / 2.f});
-        window.draw(pauseText);
+bool PlayState::quickLoad() {
+    SaveData data;
+    if (SaveManager::loadProgress("savegame.txt", data)) {
+        std::cout << "[Core Engine] Quick Load loading Level " << data.currentLevel << "...\n";
+        if (loadLevel(data.currentLevel)) {
+            score = data.score;
+            coins = data.coins;
+            lives = data.lives;
+            selectedCharacter = data.selectedCharacter;
+            hud.setCharacter(selectedCharacter);
+            hud.setScore(score);
+            hud.setCoins(coins);
+            hud.setLives(lives);
+            avatarSprite.setTexture(assets.getTexture(
+                selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"), true);
+            freeLook = false;
+            isPaused = false;
+            heldKeys.clear();
+            jumpHeld = false;
+            respawnAvatar();
+            updateCamera();
+            playLevelMusic();
+            return true;
+        }
     }
+    return false;
 }
