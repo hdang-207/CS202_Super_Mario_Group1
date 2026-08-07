@@ -254,12 +254,12 @@ void PlayState::handleInput(const sf::Event& event) {
             data.lives = this->lives;
             data.selectedCharacter = this->selectedCharacter;
             
-            if (SaveManager::saveToFile("savegame.txt", data)) {
+            if (SaveManager::saveProgress("savegame.txt", data)) {
                 std::cout << "[Core Engine] Quick Save successful (Level " << currentLevel << ").\n";
             }
         } else if (keyPressed->code == sf::Keyboard::Key::F9) {
             SaveData data;
-            if (SaveManager::loadFromFile("savegame.txt", data)) {
+            if (SaveManager::loadProgress("savegame.txt", data)) {
                 std::cout << "[Core Engine] Quick Load successful. Loading Level "
                           << data.currentLevel << "...\n";
                 if (loadLevel(data.currentLevel)) {
