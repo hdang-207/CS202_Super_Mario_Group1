@@ -37,6 +37,7 @@ namespace {
     constexpr float kBlueKoopaSpeed = 60.f;
     constexpr float kBlueKoopaFrameDuration = 0.2f;
     constexpr float kGoombaStompBounce = 550.f;
+    constexpr float kDamageProtectionDuration = 0.75f;
 
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
@@ -245,6 +246,9 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    damageProtectionRemaining = std::max(
+        0.f, damageProtectionRemaining - dt.asSeconds());
+
     if (freeLook) {
         // The avatar is deliberately frozen: left it running it would walk off or
         // fall into a pit while the camera is somewhere else entirely.
@@ -282,6 +286,50 @@ void PlayState::update(sf::Time dt) {
 
 sf::FloatRect PlayState::avatarBounds() const {
     return sf::FloatRect(avatarPos, avatar.getSize());
+}
+
+void PlayState::becomeSuper() {
+    if (playerForm == PlayerForm::Super) {
+        return;
+    }
+
+    const float feetY = avatarPos.y + avatar.getSize().y;
+    const sf::Vector2f superSize(avatar.getSize().x, tileMap.tileSize() * 1.9f);
+
+    playerForm = PlayerForm::Super;
+    avatar.setSize(superSize);
+    avatarPos.y = feetY - superSize.y;
+    avatar.setPosition(avatarPos);
+
+    // The available character art is shared between forms. Keep its existing
+    // bottom-centred convention and scale it to the new collider immediately.
+    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
+    const float scale = spriteBounds.size.y > 0.f
+        ? (superSize.y * 1.5f / spriteBounds.size.y)
+        : 1.f;
+    avatarSprite.setScale({facingRight ? scale : -scale, scale});
+    avatarSprite.setPosition({avatarPos.x + superSize.x / 2.f, feetY});
+}
+
+void PlayState::becomeSmall() {
+    if (playerForm == PlayerForm::Small) {
+        return;
+    }
+
+    const float feetY = avatarPos.y + avatar.getSize().y;
+    const sf::Vector2f smallSize(avatar.getSize().x, tileMap.tileSize() * 0.95f);
+
+    playerForm = PlayerForm::Small;
+    avatar.setSize(smallSize);
+    avatarPos.y = feetY - smallSize.y;
+    avatar.setPosition(avatarPos);
+
+    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
+    const float scale = spriteBounds.size.y > 0.f
+        ? (smallSize.y * 1.5f / spriteBounds.size.y)
+        : 1.f;
+    avatarSprite.setScale({facingRight ? scale : -scale, scale});
+    avatarSprite.setPosition({avatarPos.x + smallSize.x / 2.f, feetY});
 }
 
 void PlayState::playLevelMusic() {
@@ -528,6 +576,7 @@ void PlayState::updateMushrooms(sf::Time dt) {
         
         sf::FloatRect mushroomBounds(it->position, sf::Vector2f(tileMap.tileSize(), tileMap.tileSize()));
         if (it->state == MushroomState::Moving && ab.findIntersection(mushroomBounds)) {
+            becomeSuper();
             Core::EventSystem::getInstance().broadcast({Core::EventType::MushroomCollected});
             it = mushrooms.erase(it);
         } else if (it->position.y > tileMap.pixelHeight()) {
@@ -667,6 +716,12 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             score += isKoopa ? 200 : 100;
             hud.setScore(score);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
+        } else if (damageProtectionRemaining > 0.f) {
+            continue;
+        } else if (playerForm == PlayerForm::Super) {
+            becomeSmall();
+            damageProtectionRemaining = kDamageProtectionDuration;
+            break;
         } else {
             playerHit = true;
             break;
