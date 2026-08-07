@@ -42,6 +42,10 @@ private:
     bool onGround{false};
     bool jumpHeld{false};
 
+    enum class PlayerForm { Small, Super };
+    PlayerForm playerForm{PlayerForm::Small};
+    float damageProtectionRemaining{0.f};
+
     struct CoinPop {
         sf::Vector2f position;
         float velocityY;
@@ -134,6 +138,12 @@ private:
      * @return FloatRect bounds of avatar.
      */
     sf::FloatRect avatarBounds() const;
+
+    /// @brief Changes a Small avatar to Super while keeping its feet fixed.
+    void becomeSuper();
+
+    /// @brief Changes a Super avatar back to Small while keeping its feet fixed.
+    void becomeSmall();
 
     /// @brief Applies one life loss and either restarts the level or opens Game Over.
     void handlePlayerDeath();
