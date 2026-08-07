@@ -730,9 +730,9 @@ bool PlayState::moveAvatar(sf::Time dt) {
         avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
     } else {
 
-        // SỬA TẠI ĐÂY: Kiểm tra xem nhân vật có đang đứng trên đất không
-        // Nếu trên đất -> dùng lực ma sát gốc (2000.f)
-        // Nếu trên không -> chỉ lấy 2% lực ma sát để giữ nguyên quán tính bay tới trước
+        // Friction logic: check if character is grounded
+        // If grounded -> apply full ground friction
+        // If airborne -> apply reduced air resistance to retain forward momentum
         float friction = onGround ? kGroundFriction : (kGroundFriction * 0.02f);
         // Coast to a stop instead of snapping, so movement keeps some inertia.
         float drop = friction * seconds;
@@ -763,10 +763,10 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     avatarPos.x += avatarVelocity.x * seconds;
 
-    // TẠO HITBOX ẢO CHO TRỤC X: Bóp hẹp chiều cao để không quẹt sàn/trần
+    // Virtual X-axis hitbox: slightly narrow height to prevent snagging on floor/ceiling tiles
     sf::FloatRect xBounds = avatarBounds();
-    xBounds.position.y += 1.0f;    // Nhích mép trên (đỉnh) xuống 1 pixel
-    xBounds.size.y -= 2.0f;        // Kéo mép dưới (đáy) lên 1 pixel
+    xBounds.position.y += 1.0f;    // Shift top edge down by 1 pixel
+    xBounds.size.y -= 2.0f;        // Shift bottom edge up by 1 pixel
 
 
     for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
@@ -786,10 +786,10 @@ bool PlayState::moveAvatar(sf::Time dt) {
     onGround = false;
     avatarPos.y += avatarVelocity.y * seconds;
     
-    // TẠO HITBOX ẢO CHO TRỤC Y: Bóp hẹp chiều rộng để không quẹt tường
+    // Virtual Y-axis hitbox: slightly narrow width to prevent snagging on wall tiles
     sf::FloatRect yBounds = avatarBounds();
-    yBounds.position.x += 1.0f;    // Nhích mép trái vào trong 1 pixel
-    yBounds.size.x -= 2.0f;        // Bóp mép phải vào trong 1 pixel
+    yBounds.position.x += 1.0f;    // Shift left edge inward by 1 pixel
+    yBounds.size.x -= 2.0f;        // Shift right edge inward by 1 pixel
 
     for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
         if (avatarVelocity.y > 0.f) {
@@ -836,11 +836,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
     std::string prefix = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
 
     if (!onGround) {
-        // Trạng thái Nhảy (Jump)
+        // Jumping state
         avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
     }
     else if (std::abs(avatarVelocity.x) > 10.f) {
-        // Trạng thái Chạy (Lặp qua Idle -> Run 1 -> Run 2 -> Run 1)
+        // Running state (cycle Idle -> Run1 -> Run2 -> Run1)
         runAnimTimer += dt.asSeconds();
         if (runAnimTimer >= 0.08f) {
             runAnimTimer = 0.0f;
@@ -850,7 +850,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
         avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
     }
     else {
-        // Trạng thái Đứng yên (Idle)
+        // Idle state
         runAnimTimer = 0.0f;
         currentRunStep = 0;
         avatarSprite.setTexture(assets.getTexture(prefix + "Idle"));

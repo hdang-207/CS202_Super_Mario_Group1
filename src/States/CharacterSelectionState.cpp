@@ -24,16 +24,16 @@ CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems:
 void CharacterSelectionState::init() {
     std::cout << "[Core Engine] CharacterSelectionState Initialized.\n";
 
-    // Phóng ảnh nền menu phủ kín màn hình
+    // Scale menu background image to fill screen
     sf::Vector2f bgSize(bgSprite.getTexture().getSize());
     float bgScale = std::max(Config::kViewWidth / bgSize.x, Config::kViewHeight / bgSize.y);
     bgSprite.setScale({bgScale, bgScale});
     bgSprite.setPosition({(Config::kViewWidth - bgSize.x * bgScale) / 2.f,
                           (Config::kViewHeight - bgSize.y * bgScale) / 2.f});
 
-    // Lớp phủ màu đen làm tối hình nền (Dark Overlay) giúp chữ và ảnh nổi bật hơn
+    // Dark overlay rectangle to increase contrast for text and preview sprites
     darkOverlay.setSize({Config::kViewWidth, Config::kViewHeight});
-    darkOverlay.setFillColor(sf::Color(0, 0, 0, 160)); // Độ tối 160/255
+    darkOverlay.setFillColor(sf::Color(0, 0, 0, 160));
 
     headerText.setString("SELECT YOUR CHARACTER");
     headerText.setCharacterSize(32);

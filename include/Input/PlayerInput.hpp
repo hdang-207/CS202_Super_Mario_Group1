@@ -2,13 +2,10 @@
 
 
 struct PlayerInput {
-    // Hướng di chuyển ngang:
-    // -1.0f: sang trái
-    //  0.0f: đứng yên
-    //  1.0f: sang phải
+    // Horizontal movement direction: -1.0f (left), 0.0f (idle), 1.0f (right)
     float moveAxis{0.0f};
 
-    // True tại toàn bộ frame người chơi giữ nút nhảy.
+    // True while the player holds the jump key
     bool jumpHeld{false};
 };
 

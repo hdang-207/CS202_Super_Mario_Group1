@@ -15,10 +15,10 @@ void PhysicsSystem::update(
         return;
     }
 
-    // Xóa các kết quả collision của physics step trước.
+    // Clear collision results from previous physics step.
     body.beginPhysicsStep();
 
-    // Gravity là acceleration theo hướng Y dương.
+    // Gravity acts as acceleration along positive Y axis.
     sf::Vector2f acceleration =
         body.getAcceleration();
 
@@ -43,7 +43,7 @@ void PhysicsSystem::update(
         deltaTime
     );
 
-    // Acceleration chỉ có hiệu lực trong physics step này.
+    // Acceleration is only effective during this physics step.
     body.setAcceleration({0.0f, 0.0f});
 }
 
@@ -60,7 +60,7 @@ void PhysicsSystem::integrateVelocity(
     velocity.x += acceleration.x * deltaTime;
     velocity.y += acceleration.y * deltaTime;
 
-    // Không cho vận tốc rơi vượt quá giới hạn.
+    // Clamp fall velocity to maximum allowed speed.
     velocity.y = std::min(
         velocity.y,
         m_maxFallSpeed
@@ -79,7 +79,7 @@ void PhysicsSystem::moveAndResolveHorizontal(PhysicsBody& body, const std::vecto
 
     const float movementDirection = velocity.x;
 
-    // Chỉ di chuyển theo X.
+    // Move along X axis only.
     sf::Vector2f position =
         body.getPosition();
 
@@ -99,8 +99,7 @@ void PhysicsSystem::moveAndResolveHorizontal(PhysicsBody& body, const std::vecto
         position = body.getPosition();
 
         if (movementDirection > 0.0f) {
-            // Player đang đi sang phải.
-            // Đẩy cạnh phải của Player về cạnh trái tile.
+            // Moving right: push right edge of collider to left edge of tile.
             const float correction =
                 solid.left() - bodyBox.right();
 
@@ -108,8 +107,7 @@ void PhysicsSystem::moveAndResolveHorizontal(PhysicsBody& body, const std::vecto
 
             body.setHitWallRight(true);
         } else {
-            // Player đang đi sang trái.
-            // Đẩy cạnh trái của Player về cạnh phải tile.
+            // Moving left: push left edge of collider to right edge of tile.
             const float correction =
                 solid.right() - bodyBox.left();
 
@@ -142,7 +140,7 @@ void PhysicsSystem::moveAndResolveVertical(
 
     const float movementDirection = velocity.y;
 
-    // Chỉ di chuyển theo Y.
+    // Move along Y axis only.
     sf::Vector2f position =
         body.getPosition();
 
@@ -162,8 +160,7 @@ void PhysicsSystem::moveAndResolveVertical(
         position = body.getPosition();
 
         if (movementDirection > 0.0f) {
-            // Player đang rơi xuống.
-            // Đưa đáy collider lên đúng mặt trên tile.
+            // Falling down: snap bottom of collider to top of tile.
             const float correction =
                 solid.top() - bodyBox.bottom();
 
@@ -171,8 +168,7 @@ void PhysicsSystem::moveAndResolveVertical(
 
             body.setGrounded(true);
         } else {
-            // Player đang bay lên.
-            // Đưa đỉnh collider xuống dưới tile.
+            // Moving upward: snap top of collider to bottom of tile.
             const float correction =
                 solid.bottom() - bodyBox.top();
 

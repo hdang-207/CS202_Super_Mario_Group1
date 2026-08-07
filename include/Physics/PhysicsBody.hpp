@@ -16,8 +16,9 @@ public:
         const sf::Vector2f& colliderOffset = {0.0f, 0.0f}
     );
 
-    // Được gọi ở đầu mỗi physics step.
-    // Chỉ reset kết quả collision tạm thời.
+    /**
+     * @brief Called at start of physics step. Resets transient collision flags.
+     */
     void beginPhysicsStep();
 
     void setPosition(const sf::Vector2f& position);
@@ -52,7 +53,9 @@ public:
     [[nodiscard]]
     const sf::Vector2f& getColliderOffset() const noexcept;
 
-    // Trả về collider tại vị trí thật trong world.
+    /**
+     * @brief Returns collider AABB bounding box at world position.
+     */
     [[nodiscard]]
     AABB getAABB() const noexcept;
 
@@ -84,13 +87,13 @@ private:
 
     sf::Vector2f m_acceleration{0.0f, 0.0f};
 
-    // Kích thước vùng collision.
+    // Collision box size
     sf::Vector2f m_colliderSize{0.0f, 0.0f};
 
-    // Độ lệch giữa position của entity và collider.
+    // Offset between entity position and collider origin
     sf::Vector2f m_colliderOffset{0.0f, 0.0f};
 
-    // Kết quả collision của physics step hiện tại.
+    // Collision results for the current physics step
     bool m_grounded = false;
     bool m_hitCeiling = false;
     bool m_hitWallLeft = false;

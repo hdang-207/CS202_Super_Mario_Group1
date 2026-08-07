@@ -22,8 +22,7 @@ void Player::setInput(const PlayerInput& input) noexcept {
 }
 
 void Player::update(float deltaTime) {
-    // Phiên bản movement hiện tại đặt velocity trực tiếp,
-    // vì vậy chưa cần dùng deltaTime.
+    // Current movement version sets velocity directly, deltaTime unreferenced for now
     (void)deltaTime;
 
     processHorizontalMovement();
@@ -56,8 +55,7 @@ void Player::processJump() {
 
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
-    // Trong hệ tọa độ SFML:
-    // Y âm là đi lên.
+    // In SFML coordinate system: negative Y is upward
     velocity.y = -m_movementConfig.jumpSpeed;
 
     m_physicsBody.setVelocity(velocity);
