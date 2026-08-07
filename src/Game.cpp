@@ -22,10 +22,10 @@ Game::Game()
     // Keep the picture centred and unstretched at the starting window size.
     updateScreenView();
 
-    // 1. Load Font chữ cho UI
+    // 1. Load UI fonts
     assets.loadFont("MarioFont", Systems::resourcePath("assets/fonts/MarioFont.otf"));
 
-    // 2. Load Âm thanh
+    // 2. Load audio buffers
     assets.loadSoundBuffer("ThemeSong", Systems::resourcePath("assets/audio/Theme.mp3"));
     assets.loadSoundBuffer("CoinSound", Systems::resourcePath("assets/audio/sound/coin_received.mp3"));
     assets.loadSoundBuffer("DieSound", Systems::resourcePath("assets/audio/sound/die.mp3"));

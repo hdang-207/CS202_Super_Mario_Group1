@@ -17,8 +17,7 @@ void IntroMenuState::init() {
     // Log info representing game starting up.
     std::cout << "[Core Engine] IntroMenuState Initialized. Press ENTER for new game or L to load.\n";
 
-    // Phóng ảnh nền để phủ kín màn hình mà không bị méo (giữ nguyên tỉ lệ gốc),
-    // phần thừa được cắt đều hai bên.
+    // Scale background image to fill screen while preserving aspect ratio
     sf::Vector2f bgSize(bgSprite.getTexture().getSize());
     float bgScale = std::max(Config::kViewWidth / bgSize.x, Config::kViewHeight / bgSize.y);
     bgSprite.setScale({bgScale, bgScale});

@@ -14,10 +14,14 @@ class Character {
 public:
     virtual ~Character() = default;
 
-    // Mỗi lớp con tự định nghĩa gameplay logic.
+    /**
+     * @brief Each subclass defines its own gameplay update logic.
+     */
     virtual void update(float deltaTime) = 0;
 
-    // Mỗi lớp con tự quản lý cách render sprite/animation.
+    /**
+     * @brief Each subclass handles rendering its sprite/animation.
+     */
     virtual void render(sf::RenderTarget& target) const = 0;
 
     [[nodiscard]]
