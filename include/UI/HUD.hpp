@@ -70,6 +70,7 @@ public:
     void addScore(int amount);
     void setCoins(int coins);
     void addCoins(int amount);
+    void setWorld(int level);
     void setTime(float time);
     void setLives(int lives);
     void addLives(int amount);
@@ -77,6 +78,7 @@ public:
     int getScore() const { return currentScore; }
     int getCoins() const { return currentCoins; }
     int getLives() const { return currentLives; }
+    float getTime() const { return timeRemaining; }
 };
 
 } // namespace UI

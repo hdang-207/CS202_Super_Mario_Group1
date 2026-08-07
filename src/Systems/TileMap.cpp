@@ -15,7 +15,8 @@ namespace {
      *
      *   # ground   B brick   ? question block   U used block   S staircase
      *   [] pipe top       {} pipe body          H hidden block  o coin
-     * Markers handled separately: P player spawn, E enemy spawn, . empty sky.
+     * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
+     * and . empty sky.
      * Scenery characters (M m V v l c F X W) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
@@ -155,9 +156,12 @@ bool TileMap::build(const MapParser& parser, float scale) {
     types.assign(static_cast<std::size_t>(columns) * rows, TileType::Empty);
     symbols.assign(static_cast<std::size_t>(columns) * rows, '.');
     enemies.clear();
+    blueKoopas.clear();
     spawn = {0.f, 0.f};
     levelExitAvailable = false;
     levelExitTrigger = sf::FloatRect();
+    goalAvailable = false;
+    goalTrigger = sf::FloatRect();
 
     // Rebuilding restarts every animation, so the baked texture coordinates below
     // (which all point at frame 0) stay in step with what update() thinks is shown.
@@ -185,6 +189,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 enemies.push_back(worldPos);
                 continue;
             }
+            if (symbol == 'K') {
+                blueKoopas.push_back(worldPos);
+                continue;
+            }
 
             // Scenery is placed by a single character but covers whatever area its
             // picture needs, so it is handled before the one-cell tiles below.
@@ -194,6 +202,9 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 if (symbol == 'W') {
                     levelExitAvailable = true;
                     levelExitTrigger = sf::FloatRect(worldPos, drawSize);
+                } else if (symbol == 'F') {
+                    goalAvailable = true;
+                    goalTrigger = sf::FloatRect(worldPos, drawSize);
                 }
                 appendQuad(decor->vertices, worldPos, drawSize,
                            sf::FloatRect({0.f, 0.f}, artSize));
@@ -284,9 +295,11 @@ std::vector<sf::FloatRect> TileMap::solidTilesOverlapping(const sf::FloatRect& b
     }
 
     int firstCol = std::max(0, static_cast<int>(std::floor(box.position.x / tileSizePx)));
-    int lastCol = std::min(columns - 1, static_cast<int>(std::floor((box.position.x + box.size.x) / tileSizePx)));
+    int lastCol = std::min(columns - 1, static_cast<int>(std::floor(
+        (box.position.x + box.size.x - 0.001f) / tileSizePx)));
     int firstRow = std::max(0, static_cast<int>(std::floor(box.position.y / tileSizePx)));
-    int lastRow = std::min(rows - 1, static_cast<int>(std::floor((box.position.y + box.size.y) / tileSizePx)));
+    int lastRow = std::min(rows - 1, static_cast<int>(std::floor(
+        (box.position.y + box.size.y - 0.001f) / tileSizePx)));
 
     for (int row = firstRow; row <= lastRow; ++row) {
         for (int col = firstCol; col <= lastCol; ++col) {
@@ -301,6 +314,37 @@ std::vector<sf::FloatRect> TileMap::solidTilesOverlapping(const sf::FloatRect& b
 
 bool TileMap::intersectsSolid(const sf::FloatRect& box) const {
     return !solidTilesOverlapping(box).empty();
+}
+
+int TileMap::collectCoinsOverlapping(const sf::FloatRect& box) {
+    if (tileSizePx <= 0.f) {
+        return 0;
+    }
+
+    int firstCol = std::max(0, static_cast<int>(std::floor(box.position.x / tileSizePx)));
+    int lastCol = std::min(columns - 1, static_cast<int>(
+        std::floor((box.position.x + box.size.x - 0.001f) / tileSizePx)));
+    int firstRow = std::max(0, static_cast<int>(std::floor(box.position.y / tileSizePx)));
+    int lastRow = std::min(rows - 1, static_cast<int>(
+        std::floor((box.position.y + box.size.y - 0.001f) / tileSizePx)));
+
+    int collected = 0;
+    for (int row = firstRow; row <= lastRow; ++row) {
+        for (int col = firstCol; col <= lastCol; ++col) {
+            std::size_t index = static_cast<std::size_t>(row) * columns + col;
+            if (types[index] != TileType::Coin) {
+                continue;
+            }
+            types[index] = TileType::Empty;
+            symbols[index] = '.';
+            ++collected;
+        }
+    }
+
+    if (collected > 0) {
+        rebuildTileBatch('o');
+    }
+    return collected;
 }
 
 void TileMap::draw(sf::RenderTarget& target, sf::RenderStates states) const {

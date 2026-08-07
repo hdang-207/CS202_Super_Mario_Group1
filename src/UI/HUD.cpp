@@ -1,6 +1,5 @@
 #include "UI/HUD.hpp"
 #include "Core/Config.hpp"
-#include "Core/EventSystem.hpp"
 #include <iomanip>
 #include <sstream>
 
@@ -106,6 +105,12 @@ void HUD::addCoins(int amount) {
         // In the future: EventSystem::broadcast(PlayerEarnedLife)
     }
     setCoins(currentCoins);
+}
+
+void HUD::setWorld(int level) {
+    if (worldText) {
+        worldText->setString(level == 2 ? "1-2" : "1-1");
+    }
 }
 
 void HUD::setTime(float time) {

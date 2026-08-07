@@ -5,6 +5,7 @@
 #include "States/GameStateManager.hpp"
 #include "Core/CharacterType.hpp"
 #include "Systems/SoundController.hpp"
+#include "Systems/SaveManager.hpp"
 #include <iostream>
 #include <cmath>
 
@@ -64,7 +65,7 @@ void CharacterSelectionState::init() {
     luigiOptionText.setOutlineColor(sf::Color::Black);
     luigiOptionText.setOutlineThickness(2.f);
 
-    backHintText.setString("PRESS 'B' TO GO BACK TO MENU | ENTER/SPACE TO CONFIRM\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
+    backHintText.setString("B: MENU | ENTER/SPACE: START | L: LOAD SAVE\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
     backHintText.setCharacterSize(13);
     backHintText.setFillColor(sf::Color::White);
     backHintText.setOutlineColor(sf::Color::Black);
@@ -109,6 +110,14 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Going back to IntroMenuState...\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         }
+        else if (keyPressed->code == sf::Keyboard::Key::L) {
+            SaveData data;
+            if (SaveManager::loadFromFile("savegame.txt", data)) {
+                std::cout << "[Core Engine] Loading saved game at level "
+                          << data.currentLevel << "...\n";
+                gsm.changeState(std::make_unique<PlayState>(gsm, assets, data));
+            }
+        }
         else if (keyPressed->code == sf::Keyboard::Key::M) {
             Systems::SoundController::getInstance().toggleMusicMuted();
         }
@@ -140,7 +149,7 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
     }
 }
 
-void CharacterSelectionState::update(sf::Time dt) {
+void CharacterSelectionState::update(sf::Time) {
     // Map current mouse position for hover effects across resized/maximized windows
     sf::Vector2f mousePos(-9999.f, -9999.f);
     if (gsm.getWindow() != nullptr) {
@@ -243,4 +252,3 @@ void CharacterSelectionState::render(sf::RenderWindow& window) {
         drawRedSlash(soundIconSprite.getGlobalBounds());
     }
 }
-

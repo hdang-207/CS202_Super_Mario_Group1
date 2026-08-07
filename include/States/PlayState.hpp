@@ -59,6 +59,22 @@ private:
     };
     std::vector<MushroomEntity> mushrooms;
 
+    enum class EnemyKind {
+        Goomba,
+        BlueKoopa
+    };
+
+    struct WalkingEnemy {
+        EnemyKind kind;
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        bool active{false};
+        bool alive{true};
+        float animationElapsed{0.f};
+        int animationFrame{0};
+    };
+    std::vector<WalkingEnemy> walkingEnemies;
+
     enum class BlockReward {
         Coin,
         Mushroom
@@ -72,6 +88,7 @@ private:
     // scrolled through and inspected without playing it.
     bool freeLook{false};
     bool isPaused{false};
+    bool transitionPending{false};
     sf::Vector2f freeLookCentre;
     float maxCameraCenterX{0.f}; ///< Maximum X position camera center has reached (SMB 1985 one-way scroll lock)
 
@@ -118,6 +135,12 @@ private:
      */
     sf::FloatRect avatarBounds() const;
 
+    /// @brief Applies one life loss and either restarts the level or opens Game Over.
+    void handlePlayerDeath();
+
+    /// @brief Starts the background theme matching the current level.
+    void playLevelMusic();
+
     /**
      * @brief Respawns the test avatar at the player spawn location.
      */
@@ -125,7 +148,7 @@ private:
 
     /**
      * @brief Loads and builds one numbered map file.
-     * @param level Level number used in assets/maps/levelN.txt.
+     * @param level Internal level index: 1 loads level1.txt and 2 loads level1-2.txt.
      * @return True when the map was loaded and built successfully.
      */
     bool loadLevel(int level);
@@ -160,11 +183,20 @@ private:
     /// @brief Draws all emerged mushrooms in world space.
     void drawMushrooms(sf::RenderWindow& window) const;
 
+    /// @brief Creates Goombas and Blue Koopas from their map markers.
+    void spawnWalkingEnemies();
+
+    /// @brief Updates walking-enemy activation, movement, gravity, and collisions.
+    bool updateWalkingEnemies(sf::Time dt);
+
+    /// @brief Draws all animated walking enemies.
+    void drawWalkingEnemies(sf::RenderWindow& window) const;
+
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
      * @param dt Time elapsed since last update frame.
      */
-    void moveAvatar(sf::Time dt);
+    bool moveAvatar(sf::Time dt);
 
     /**
      * @brief Centers camera on a target position within map boundaries.
@@ -203,7 +235,7 @@ public:
     /**
      * @brief Destructor.
      */
-    ~PlayState() override = default;
+    ~PlayState() override;
 
     /**
      * @brief Initializes gameplay resources and loads level map.
