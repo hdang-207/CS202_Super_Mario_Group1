@@ -259,4 +259,14 @@ public:
      * @param window The target render window.
      */
     void render(sf::RenderWindow& window) override;
+
+    /**
+     * @brief Gets current SaveData progress snapshot.
+     */
+    SaveData getSaveData() const;
+
+    /**
+     * @brief Performs quick load from savegame.txt.
+     */
+    bool quickLoad();
 };

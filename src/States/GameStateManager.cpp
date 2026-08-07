@@ -86,9 +86,10 @@ void GameStateManager::update(sf::Time dt) {
 }
 
 void GameStateManager::render(sf::RenderWindow& window) {
-    // Forward rendering window to the top-most active state
-    if (!states.empty()) {
-        states.back()->render(window);
+    // Render all active states from bottom to top so overlays (like PauseState)
+    // draw on top of frozen lower states (like PlayState).
+    for (const auto& state : states) {
+        state->render(window);
     }
 }
 

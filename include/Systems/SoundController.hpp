@@ -88,10 +88,27 @@ namespace Systems {
         }
 
         /**
-         * @brief Gets current volume level.
+         * @brief Gets current music volume level.
          */
         float getMusicVolume() const {
             return _musicVolume;
+        }
+
+        /**
+         * @brief Sets global sound effect volume (0.0f - 100.0f).
+         */
+        void setSoundVolume(float volume) {
+            _soundVolume = volume;
+            for (auto& sound : _activeSounds) {
+                sound.setVolume(_soundVolume);
+            }
+        }
+
+        /**
+         * @brief Gets current sound effect volume level.
+         */
+        float getSoundVolume() const {
+            return _soundVolume;
         }
 
         bool isMusicMuted() const { return _musicMuted; }
