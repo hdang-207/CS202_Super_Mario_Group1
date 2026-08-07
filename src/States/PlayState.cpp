@@ -666,6 +666,7 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             onGround = false;
             score += isKoopa ? 200 : 100;
             hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
         } else {
             playerHit = true;
             break;
@@ -845,6 +846,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
         if (runAnimTimer >= 0.08f) {
             runAnimTimer = 0.0f;
             currentRunStep = (currentRunStep + 1) % 4;
+            
+            // Play walking sound on specific steps when on the ground
+            if (currentRunStep == 1 || currentRunStep == 3) {
+                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("WalkingSound"));
+            }
         }
         const std::string runTexKeys[] = {prefix + "Idle", prefix + "Run1", prefix + "Run2", prefix + "Run1"};
         avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));

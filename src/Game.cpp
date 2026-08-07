@@ -34,6 +34,11 @@ Game::Game()
     assets.loadSoundBuffer("OneMoreLifeSound", Systems::resourcePath("assets/audio/sound/onemorelife.mp3"));
     assets.loadSoundBuffer("PowerUpSound", Systems::resourcePath("assets/audio/sound/powerup.mp3"));
     assets.loadSoundBuffer("VictorySound", Systems::resourcePath("assets/audio/sound/victory.mp3"));
+    
+    // New sounds
+    assets.loadSoundBuffer("SelectSound", Systems::resourcePath("assets/audio/sound/selecting.wav"));
+    assets.loadSoundBuffer("StompSound", Systems::resourcePath("assets/audio/sound/kill.wav"));
+    assets.loadSoundBuffer("WalkingSound", Systems::resourcePath("assets/audio/sound/walking.wav"));
 
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));

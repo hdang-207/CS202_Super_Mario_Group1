@@ -96,12 +96,15 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         if (keyPressed->code == sf::Keyboard::Key::Up || keyPressed->code == sf::Keyboard::Key::W ||
             keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
             selectedIndex = 0; // Select Mario
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         } 
         else if (keyPressed->code == sf::Keyboard::Key::Down || keyPressed->code == sf::Keyboard::Key::S ||
                  keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
             selectedIndex = 1; // Select Luigi
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         }
         else if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space) {
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             CharacterType chosen = (selectedIndex == 0) ? CharacterType::Mario : CharacterType::Luigi;
             std::cout << "[Core Engine] Character confirmed! Transitioning to PlayState...\n";
             gsm.changeState(std::make_unique<PlayState>(gsm, assets, chosen));

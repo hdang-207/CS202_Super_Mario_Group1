@@ -70,6 +70,7 @@ void IntroMenuState::handleInput(const sf::Event& event) {
     }
 
     if (key == sf::Keyboard::Key::L) {
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         SaveData data;
         if (SaveManager::loadProgress("savegame.txt", data)) {
             std::cout << "[Core Engine] Loaded saved game successfully! Launching PlayState...\n";
@@ -81,6 +82,7 @@ void IntroMenuState::handleInput(const sf::Event& event) {
     }
 
     std::cout << "[Core Engine] Valid key pressed in IntroMenu. Transitioning to CharacterSelectionState...\n";
+    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
     gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
 }
 
