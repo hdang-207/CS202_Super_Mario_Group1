@@ -39,16 +39,26 @@ namespace Systems {
             return instance;
         }
 
+        std::string _currentMusicPath; ///< Currently loaded music file path
+
         /**
          * @brief Plays background music from a file. Keeps playing across state changes.
          * @param filePath Path to the audio file (e.g. "assets/audio/Theme.mp3").
          * @param loop Set to true to loop continuously.
          */
         bool playMusic(const std::string& filePath, bool loop = true) {
+            if (_currentMusicPath == filePath) {
+                if (_bgMusic.getStatus() == sf::Music::Status::Paused) {
+                    _bgMusic.play();
+                }
+                return true;
+            }
+
             if (!_bgMusic.openFromFile(filePath)) {
                 std::cerr << "[SoundController] Error: Could not load music file: " << filePath << "\n";
                 return false;
             }
+            _currentMusicPath = filePath;
             _bgMusic.setLooping(loop);
             _bgMusic.setVolume(_musicMuted ? 0.f : _musicVolume);
             _bgMusic.play();
@@ -61,6 +71,7 @@ namespace Systems {
          */
         void stopMusic() {
             _bgMusic.stop();
+            _currentMusicPath.clear();
         }
 
         /**

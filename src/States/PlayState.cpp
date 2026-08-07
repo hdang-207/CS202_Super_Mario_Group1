@@ -5,6 +5,8 @@
 #include "States/GameOverState.hpp"
 #include "States/VictoryState.hpp"
 #include "States/PauseState.hpp"
+#include "States/RespawnState.hpp"
+#include "States/LevelCompleteState.hpp"
 #include "Systems/ResourcePath.hpp"
 #include "Core/EventSystem.hpp"
 #include "Systems/SoundController.hpp"
@@ -291,28 +293,11 @@ void PlayState::playLevelMusic() {
 void PlayState::handlePlayerDeath() {
     Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
 
-    if (lives <= 0) {
-        std::cout << "[Core Engine] No lives remaining. Transitioning to Game Over.\n";
-        transitionPending = true;
-        gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
-        return;
-    }
-
-    std::cout << "[Core Engine] Restarting level " << currentLevel
-              << ". Lives remaining: " << lives << "\n";
-    if (!loadLevel(currentLevel)) {
-        std::cerr << "[Core Engine] Could not restart the current level. Returning to menu.\n";
-        transitionPending = true;
-        gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
-        return;
-    }
-
-    freeLook = false;
-    heldKeys.clear();
-    jumpHeld = false;
-    respawnAvatar();
-    avatar.setPosition(avatarPos);
-    updateCamera();
+    lives--;
+    SaveData data = getSaveData();
+    std::cout << "[Core Engine] Player died. Transitioning to RespawnState. Lives remaining: " << lives << "\n";
+    transitionPending = true;
+    gsm.changeState(std::make_unique<RespawnState>(gsm, assets, data));
 }
 
 bool PlayState::loadLevel(int level) {
@@ -374,16 +359,11 @@ bool PlayState::tryEnterNextLevel() {
         return false;
     }
 
-    SaveData progress;
-    progress.currentLevel = this->currentLevel;
-    progress.score = this->score;
-    progress.coins = this->coins;
-    progress.lives = this->lives;
-    progress.selectedCharacter = this->selectedCharacter;
+    SaveData progress = getSaveData();
 
-    std::cout << "[Core Engine] Level exit reached. Transitioning to VictoryState...\n";
+    std::cout << "[Core Engine] Level exit reached. Transitioning to LevelCompleteState...\n";
     transitionPending = true;
-    gsm.changeState(std::make_unique<VictoryState>(gsm, assets, progress));
+    gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, progress));
     return true;
 }
 
