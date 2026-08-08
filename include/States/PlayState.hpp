@@ -41,6 +41,7 @@ private:
     sf::Vector2f avatarVelocity;
     bool onGround{false};
     bool jumpHeld{false};
+    float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
 
     struct CoinPop {
         sf::Vector2f position;
@@ -58,6 +59,31 @@ private:
         float elapsed;
     };
     std::vector<MushroomEntity> mushrooms;
+
+    struct FireFlowerEntity {
+        sf::Vector2f blockPosition;
+        sf::Vector2f position;
+        MushroomState state; // Can reuse Emerging and Moving(stay still)
+        float elapsed;
+    };
+    std::vector<FireFlowerEntity> fireFlowers;
+
+    struct BulletEntity {
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        bool facingRight;
+    };
+    std::vector<BulletEntity> bullets;
+
+    struct ExplosionEntity {
+        sf::Vector2f position;
+        float elapsed;
+        int currentFrame;
+    };
+    std::vector<ExplosionEntity> explosions;
+
+    enum class AvatarForm { Normal, Fire };
+    AvatarForm currentForm{AvatarForm::Normal};
 
     enum class EnemyKind {
         Goomba,
@@ -77,7 +103,8 @@ private:
 
     enum class BlockReward {
         Coin,
-        Mushroom
+        Mushroom,
+        FireFlower
     };
     std::vector<BlockReward> blockRewards;
     std::size_t nextBlockReward{0};
@@ -182,6 +209,18 @@ private:
 
     /// @brief Draws all emerged mushrooms in world space.
     void drawMushrooms(sf::RenderWindow& window) const;
+
+    void spawnFireFlower(sf::Vector2f blockPosition);
+    void updateFireFlowers(sf::Time dt);
+    void drawFireFlowers(sf::RenderWindow& window) const;
+
+    void spawnBullet();
+    void updateBullets(sf::Time dt);
+    void drawBullets(sf::RenderWindow& window) const;
+
+    void spawnExplosion(sf::Vector2f position);
+    void updateExplosions(sf::Time dt);
+    void drawExplosions(sf::RenderWindow& window) const;
 
     /// @brief Creates Goombas and Blue Koopas from their map markers.
     void spawnWalkingEnemies();

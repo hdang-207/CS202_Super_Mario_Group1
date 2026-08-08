@@ -39,6 +39,9 @@ Game::Game()
     assets.loadSoundBuffer("SelectSound", Systems::resourcePath("assets/audio/sound/selecting.wav"));
     assets.loadSoundBuffer("StompSound", Systems::resourcePath("assets/audio/sound/kill.wav"));
     assets.loadSoundBuffer("WalkingSound", Systems::resourcePath("assets/audio/sound/walking.wav"));
+    assets.loadSoundBuffer("FireSound", Systems::resourcePath("assets/audio/sound/Fire.wav"));
+    assets.loadSoundBuffer("ExplodeSound", Systems::resourcePath("assets/audio/sound/Explode.wav"));
+    assets.loadSoundBuffer("DowngradeSound", Systems::resourcePath("assets/audio/sound/downgrade.wav"));
 
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));
@@ -46,16 +49,38 @@ Game::Game()
     // Character preview & movement textures
     assets.loadTexture("MarioPreview", Systems::resourcePath("assets/character/Mario_preview.png"));
     assets.loadTexture("LuigiPreview", Systems::resourcePath("assets/character/Luigi_preview.png"));
+    
+    // Normal Mario
     assets.loadTexture("MarioIdle", Systems::resourcePath("assets/character/Mario_idle.png"));
     assets.loadTexture("MarioJump", Systems::resourcePath("assets/character/Mario_jump.png"));
     assets.loadTexture("MarioRun1", Systems::resourcePath("assets/character/Mario_run1.png"));
     assets.loadTexture("MarioRun2", Systems::resourcePath("assets/character/Mario_run2.png"));
+    
+    // Fire Mario
+    assets.loadTexture("FireMarioIdle", Systems::resourcePath("assets/character/FireMarioIdle.png"));
+    assets.loadTexture("FireMarioJump", Systems::resourcePath("assets/character/FireMarioJump.png"));
+    assets.loadTexture("FireMarioRun1", Systems::resourcePath("assets/character/FireMarioRun1.png"));
+    assets.loadTexture("FireMarioRun2", Systems::resourcePath("assets/character/FireMarioRun2.png"));
+    
+    // Normal Luigi
     assets.loadTexture("LuigiIdle", Systems::resourcePath("assets/character/Luigi_idle.png"));
     assets.loadTexture("LuigiJump", Systems::resourcePath("assets/character/Luigi_jump.png"));
     assets.loadTexture("LuigiRun1", Systems::resourcePath("assets/character/Luigi_run1.png"));
     assets.loadTexture("LuigiRun2", Systems::resourcePath("assets/character/Luigi_run2.png"));
+
+    // Fire Luigi
+    assets.loadTexture("FireLuigiIdle", Systems::resourcePath("assets/character/FireLuigiIdle.png"));
+    assets.loadTexture("FireLuigiJump", Systems::resourcePath("assets/character/FireLuigiJump.png"));
+    assets.loadTexture("FireLuigiRun1", Systems::resourcePath("assets/character/FireLuigiRun1.png"));
+    assets.loadTexture("FireLuigiRun2", Systems::resourcePath("assets/character/FireLuigiRun2.png"));
+
     assets.loadTexture("MusicSymbol", Systems::resourcePath("assets/textures/music_symbol.png"));
     assets.loadTexture("SoundSymbol", Systems::resourcePath("assets/textures/sound_symbol.png"));
+
+    // Items and projectiles
+    assets.loadTexture("FireFlower", Systems::resourcePath("assets/textures/FireFlower.png"));
+    assets.loadTexture("Bullet", Systems::resourcePath("assets/textures/Bullet.png"));
+    assets.loadTexture("Explosion", Systems::resourcePath("assets/textures/explosion.png"));
 
     // Level artwork: one image per map character, no tile atlas involved.
     assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
