@@ -39,6 +39,12 @@ namespace {
     constexpr float kGoombaStompBounce = 550.f;
     constexpr float kDamageProtectionDuration = 0.75f;
 
+    constexpr float kBulletSpeed = 500.f;
+    constexpr float kBulletLifetime = 2.f;
+    constexpr float kShootCooldown = 0.25f;
+    constexpr float kBulletRechargeTime = 10.f;
+    constexpr int kMaxBullets = 3;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
@@ -101,6 +107,7 @@ void PlayState::init() {
     hud.setCoins(this->coins);
     hud.setLives(this->lives);
     hud.setWorld(this->currentLevel);
+    hud.setAmmo(availableBullets, kMaxBullets);
 
     // Setup SoundController and Data event listeners
     auto& events = Core::EventSystem::getInstance();
@@ -184,7 +191,7 @@ void PlayState::init() {
     respawnAvatar();
     updateCamera();
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Esc to quit.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, left click to shoot, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
                  "through the level with A/D (hold Shift to go faster).\n";
 }
@@ -206,6 +213,13 @@ void PlayState::handleInput(const sf::Event& event) {
         return;
     }
 
+    if (const auto* mousePressed = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mousePressed->button == sf::Mouse::Button::Left) {
+            spawnBullet();
+        }
+        return;
+    }
+
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // Holding a key makes the system repeat KeyPressed; the toggles below must
         // only fire on the first one, otherwise resting on F would flicker the mode.
@@ -220,10 +234,6 @@ void PlayState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
-        } else if (keyPressed->code == sf::Keyboard::Key::LShift || keyPressed->code == sf::Keyboard::Key::RShift) {
-            if (currentForm == AvatarForm::Fire) {
-                spawnBullet();
-            }
         } else if (keyPressed->code == sf::Keyboard::Key::F) {
             freeLook = !freeLook;
             // Pick the scrolling up exactly where the camera already is, so the
@@ -252,6 +262,23 @@ void PlayState::update(sf::Time dt) {
 
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
+    shootCooldownRemaining = std::max(0.f, shootCooldownRemaining - dt.asSeconds());
+    for (float& timer : ammoRechargeTimers) {
+        timer -= dt.asSeconds();
+    }
+    const auto expiredTimer = std::remove_if(
+        ammoRechargeTimers.begin(), ammoRechargeTimers.end(),
+        [this](float timer) {
+            if (timer > 0.f) {
+                return false;
+            }
+            availableBullets = std::min(kMaxBullets, availableBullets + 1);
+            return true;
+        });
+    if (expiredTimer != ammoRechargeTimers.end()) {
+        ammoRechargeTimers.erase(expiredTimer, ammoRechargeTimers.end());
+        hud.setAmmo(availableBullets, kMaxBullets);
+    }
 
     if (freeLook) {
         // The avatar is deliberately frozen: left it running it would walk off or
@@ -271,6 +298,7 @@ void PlayState::update(sf::Time dt) {
         tileMap.update(dt);
         return;
     }
+    updateBullets(dt);
     if (!updateWalkingEnemies(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -280,7 +308,6 @@ void PlayState::update(sf::Time dt) {
     updateCoinPops(dt);
     updateMushrooms(dt);
     updateFireFlowers(dt);
-    updateBullets(dt);
     updateExplosions(dt);
     if (invincibleTimer > 0.f) {
         invincibleTimer -= dt.asSeconds();
@@ -397,6 +424,10 @@ bool PlayState::loadLevel(int level) {
     mushrooms.clear();
     fireFlowers.clear();
     bullets.clear();
+    availableBullets = kMaxBullets;
+    shootCooldownRemaining = 0.f;
+    ammoRechargeTimers.clear();
+    hud.setAmmo(availableBullets, kMaxBullets);
     explosions.clear();
     walkingEnemies.clear();
     spawnWalkingEnemies();
@@ -675,61 +706,75 @@ void PlayState::drawFireFlowers(sf::RenderWindow& window) const {
 }
 
 void PlayState::spawnBullet() {
-    if (bullets.size() >= 2) return; // Max 2 bullets
+    if (shootCooldownRemaining > 0.f || availableBullets <= 0
+        || bullets.size() >= static_cast<std::size_t>(kMaxBullets)) {
+        return;
+    }
     
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
 
-    BulletEntity b;
     // Position bullet at character's upper body / gun height (about 1/3 from top)
-    float bulletX = facingRight ? avatarPos.x + avatar.getSize().x : avatarPos.x - 8.f;
+    float bulletX = facingRight ? avatarPos.x + avatar.getSize().x : avatarPos.x - entity::Bullet::kSize;
     float bulletY = avatarPos.y + avatar.getSize().y * 0.3f;
-    b.position = {bulletX, bulletY};
-    b.facingRight = facingRight;
-    b.velocity = {facingRight ? 500.f : -500.f, 0.f};
-    bullets.push_back(b);
+    bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
+                         sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
+                         kBulletLifetime);
+    --availableBullets;
+    ammoRechargeTimers.push_back(kBulletRechargeTime);
+    shootCooldownRemaining = kShootCooldown;
+    hud.setAmmo(availableBullets, kMaxBullets);
 }
 
 void PlayState::updateBullets(sf::Time dt) {
-    float seconds = dt.asSeconds();
-    constexpr float kBulletSize = 8.f;
-    sf::Vector2f size(kBulletSize, kBulletSize);
+    const float cameraLeft = camera.getCenter().x - Config::kViewWidth / 2.f;
+    const float cameraRight = camera.getCenter().x + Config::kViewWidth / 2.f;
 
-    for (auto it = bullets.begin(); it != bullets.end(); ) {
-        // Move straight horizontally (no gravity)
-        it->position.x += it->velocity.x * seconds;
-
-        sf::FloatRect bounds(it->position, size);
-
-        // Check wall collision
-        bool hitWall = false;
-        for (const auto& tile : tileMap.solidTilesOverlapping(bounds)) {
-            hitWall = true;
-            break;
-        }
-
-        // Destroy if hit wall or went off-screen
-        if (hitWall || it->position.x < camera.getCenter().x - Config::kViewWidth / 2.f ||
-            it->position.x > camera.getCenter().x + Config::kViewWidth / 2.f) {
-            spawnExplosion(it->position);
-            it = bullets.erase(it);
+    for (entity::Bullet& bullet : bullets) {
+        bullet.update(dt);
+        if (!bullet.isActive()) {
             continue;
         }
 
-        ++it;
+        const sf::FloatRect bulletBounds = bullet.bounds();
+        bool collided = tileMap.intersectsSolid(bulletBounds)
+                     || bullet.position().x + entity::Bullet::kSize < cameraLeft
+                     || bullet.position().x > cameraRight;
+
+        if (!collided) {
+            for (WalkingEnemy& enemy : walkingEnemies) {
+                if (!enemy.alive || !enemy.active) {
+                    continue;
+                }
+                const float enemyHeight = enemy.kind == EnemyKind::BlueKoopa
+                    ? tileMap.tileSize() * 1.5f : tileMap.tileSize();
+                const sf::FloatRect enemyBounds(
+                    enemy.position, {tileMap.tileSize(), enemyHeight});
+                if (!bulletBounds.findIntersection(enemyBounds).has_value()) {
+                    continue;
+                }
+                enemy.alive = false;
+                score += enemy.kind == EnemyKind::BlueKoopa ? 200 : 100;
+                hud.setScore(score);
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("StompSound"));
+                collided = true;
+                break;
+            }
+        }
+
+        if (collided) {
+            spawnExplosion(bullet.position());
+            bullet.deactivate();
+        }
     }
+
+    bullets.erase(std::remove_if(bullets.begin(), bullets.end(),
+        [](const entity::Bullet& bullet) { return !bullet.isActive(); }), bullets.end());
 }
 
 void PlayState::drawBullets(sf::RenderWindow& window) const {
-    sf::Sprite bulletSprite(assets.getTexture("Bullet"));
-    // Scale bullet to be small (~8px on screen)
-    sf::Vector2u texSize = bulletSprite.getTexture().getSize();
-    if (texSize.x > 0 && texSize.y > 0) {
-        bulletSprite.setScale({8.f / static_cast<float>(texSize.x), 8.f / static_cast<float>(texSize.y)});
-    }
-    
-    for (const BulletEntity& bullet : bullets) {
-        bulletSprite.setPosition(bullet.position);
-        window.draw(bulletSprite);
+    for (const entity::Bullet& bullet : bullets) {
+        bullet.draw(window);
     }
 }
 
@@ -907,27 +952,6 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
                 Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
             } else {
                 playerHit = true;
-                break;
-            }
-        }
-    }
-
-    // Check Bullet collisions with enemies
-    constexpr float kBulletSize = 8.f;
-    float ts = tileMap.tileSize();
-    for (auto& bullet : bullets) {
-        sf::FloatRect bulletBounds(bullet.position, sf::Vector2f(kBulletSize, kBulletSize));
-        for (auto& enemy : walkingEnemies) {
-            if (!enemy.alive || !enemy.active) continue;
-            float enemyH = (enemy.kind == EnemyKind::BlueKoopa) ? 24.f * Config::kZoom : ts;
-            sf::FloatRect enemyBounds(enemy.position, sf::Vector2f(ts, enemyH));
-            if (bulletBounds.findIntersection(enemyBounds)) {
-                enemy.alive = false;
-                score += 100;
-                hud.setScore(score);
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
-                spawnExplosion(bullet.position);
-                bullet.position.y = 9999.f; // Mark for deletion
                 break;
             }
         }

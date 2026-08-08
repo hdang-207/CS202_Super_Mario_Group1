@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/CharacterType.hpp"
+#include "Entities/Bullet.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -72,12 +73,10 @@ private:
     };
     std::vector<FireFlowerEntity> fireFlowers;
 
-    struct BulletEntity {
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        bool facingRight;
-    };
-    std::vector<BulletEntity> bullets;
+    std::vector<entity::Bullet> bullets;
+    int availableBullets{3};
+    float shootCooldownRemaining{0.f};
+    std::vector<float> ammoRechargeTimers;
 
     struct ExplosionEntity {
         sf::Vector2f position;
