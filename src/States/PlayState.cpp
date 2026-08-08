@@ -107,6 +107,7 @@ void PlayState::init() {
     hud.setCoins(this->coins);
     hud.setLives(this->lives);
     hud.setWorld(this->currentLevel);
+    hud.setAmmo(availableBullets, kMaxBullets);
 
     // Setup SoundController and Data event listeners
     auto& events = Core::EventSystem::getInstance();
@@ -190,7 +191,7 @@ void PlayState::init() {
     respawnAvatar();
     updateCamera();
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, Esc to pause.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, left click to shoot, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
                  "through the level with A/D (hold Shift to go faster).\n";
 }
@@ -212,6 +213,13 @@ void PlayState::handleInput(const sf::Event& event) {
         return;
     }
 
+    if (const auto* mousePressed = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mousePressed->button == sf::Mouse::Button::Left) {
+            spawnBullet();
+        }
+        return;
+    }
+
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // Holding a key makes the system repeat KeyPressed; the toggles below must
         // only fire on the first one, otherwise resting on F would flicker the mode.
@@ -226,8 +234,6 @@ void PlayState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
-        } else if (keyPressed->code == sf::Keyboard::Key::X) {
-            spawnBullet();
         } else if (keyPressed->code == sf::Keyboard::Key::F) {
             freeLook = !freeLook;
             // Pick the scrolling up exactly where the camera already is, so the
@@ -257,15 +263,21 @@ void PlayState::update(sf::Time dt) {
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
     shootCooldownRemaining = std::max(0.f, shootCooldownRemaining - dt.asSeconds());
-    if (availableBullets < kMaxBullets) {
-        bulletRechargeElapsed += dt.asSeconds();
-        while (bulletRechargeElapsed >= kBulletRechargeTime
-               && availableBullets < kMaxBullets) {
-            bulletRechargeElapsed -= kBulletRechargeTime;
-            ++availableBullets;
-        }
-    } else {
-        bulletRechargeElapsed = 0.f;
+    for (float& timer : ammoRechargeTimers) {
+        timer -= dt.asSeconds();
+    }
+    const auto expiredTimer = std::remove_if(
+        ammoRechargeTimers.begin(), ammoRechargeTimers.end(),
+        [this](float timer) {
+            if (timer > 0.f) {
+                return false;
+            }
+            availableBullets = std::min(kMaxBullets, availableBullets + 1);
+            return true;
+        });
+    if (expiredTimer != ammoRechargeTimers.end()) {
+        ammoRechargeTimers.erase(expiredTimer, ammoRechargeTimers.end());
+        hud.setAmmo(availableBullets, kMaxBullets);
     }
 
     if (freeLook) {
@@ -414,7 +426,8 @@ bool PlayState::loadLevel(int level) {
     bullets.clear();
     availableBullets = kMaxBullets;
     shootCooldownRemaining = 0.f;
-    bulletRechargeElapsed = 0.f;
+    ammoRechargeTimers.clear();
+    hud.setAmmo(availableBullets, kMaxBullets);
     explosions.clear();
     walkingEnemies.clear();
     spawnWalkingEnemies();
@@ -707,7 +720,9 @@ void PlayState::spawnBullet() {
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
     --availableBullets;
+    ammoRechargeTimers.push_back(kBulletRechargeTime);
     shootCooldownRemaining = kShootCooldown;
+    hud.setAmmo(availableBullets, kMaxBullets);
 }
 
 void PlayState::updateBullets(sf::Time dt) {

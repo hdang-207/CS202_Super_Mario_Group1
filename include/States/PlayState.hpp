@@ -76,7 +76,7 @@ private:
     std::vector<entity::Bullet> bullets;
     int availableBullets{3};
     float shootCooldownRemaining{0.f};
-    float bulletRechargeElapsed{0.f};
+    std::vector<float> ammoRechargeTimers;
 
     struct ExplosionEntity {
         sf::Vector2f position;
