@@ -220,6 +220,10 @@ void PlayState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
+        } else if (keyPressed->code == sf::Keyboard::Key::LShift || keyPressed->code == sf::Keyboard::Key::RShift) {
+            if (currentForm == AvatarForm::Fire) {
+                spawnBullet();
+            }
         } else if (keyPressed->code == sf::Keyboard::Key::F) {
             freeLook = !freeLook;
             // Pick the scrolling up exactly where the camera already is, so the
@@ -275,6 +279,12 @@ void PlayState::update(sf::Time dt) {
     updateCamera();
     updateCoinPops(dt);
     updateMushrooms(dt);
+    updateFireFlowers(dt);
+    updateBullets(dt);
+    updateExplosions(dt);
+    if (invincibleTimer > 0.f) {
+        invincibleTimer -= dt.asSeconds();
+    }
     tileMap.update(dt); // keeps the question blocks blinking
     hud.update(dt);     // updates the HUD (timer, etc.)
     if (hud.getTime() <= 0.f) {
@@ -385,6 +395,10 @@ bool PlayState::loadLevel(int level) {
     hud.setTime(400.f);
     coinPops.clear();
     mushrooms.clear();
+    fireFlowers.clear();
+    bullets.clear();
+    explosions.clear();
+    walkingEnemies.clear();
     spawnWalkingEnemies();
     prepareQuestionBlockRewards();
     std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
@@ -496,6 +510,13 @@ void PlayState::prepareQuestionBlockRewards() {
 
     std::size_t mushroomCount = static_cast<std::size_t>(std::count(
         blockRewards.begin(), blockRewards.end(), BlockReward::Mushroom));
+        
+    // Randomly convert some Mushrooms to FireFlowers (25% chance)
+    for (auto& reward : blockRewards) {
+        if (reward == BlockReward::Mushroom && rewardRandom() % 4 == 0) {
+            reward = BlockReward::FireFlower;
+        }
+    }
     std::cout << "[Core Engine] Question rewards: "
               << (blockRewards.size() - mushroomCount) << " coins, "
               << mushroomCount << " mushrooms";
@@ -595,6 +616,158 @@ void PlayState::drawMushrooms(sf::RenderWindow& window) const {
     for (const MushroomEntity& mushroom : mushrooms) {
         mushroomSprite.setPosition(mushroom.position);
         window.draw(mushroomSprite);
+    }
+}
+
+void PlayState::spawnFireFlower(sf::Vector2f blockPosition) {
+    fireFlowers.push_back({blockPosition, blockPosition, MushroomState::Emerging, 0.f});
+}
+
+void PlayState::updateFireFlowers(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    sf::FloatRect ab = avatarBounds();
+    float ts = tileMap.tileSize();
+    // Flower drawn size (fit within a tile)
+    float flowerSize = ts * 0.75f; // 75% of a tile
+
+    for (auto it = fireFlowers.begin(); it != fireFlowers.end(); ) {
+        if (it->state == MushroomState::Emerging) {
+            it->elapsed = std::min(it->elapsed + seconds, 0.6f); // 0.6s rise
+            float progress = it->elapsed / 0.6f;
+            // Start at bottom of the block above, rise up one tile
+            float centerX = it->blockPosition.x + (ts - flowerSize) / 2.f;
+            it->position = {centerX,
+                            it->blockPosition.y - flowerSize * progress};
+            
+            if (it->elapsed >= 0.6f) {
+                it->state = MushroomState::Moving; // stays still
+            }
+        }
+        
+        sf::FloatRect bounds(it->position, sf::Vector2f(flowerSize, flowerSize));
+        if (it->state == MushroomState::Moving && ab.findIntersection(bounds)) {
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("PowerUpSound"));
+            score += 1000;
+            hud.setScore(score);
+            currentForm = AvatarForm::Fire;
+            it = fireFlowers.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PlayState::drawFireFlowers(sf::RenderWindow& window) const {
+    sf::Sprite flowerSprite(assets.getTexture("FireFlower"));
+    // Scale flower to 75% of a tile size
+    float ts = tileMap.tileSize();
+    float flowerSize = ts * 0.75f;
+    sf::Vector2u texSize = flowerSprite.getTexture().getSize();
+    if (texSize.x > 0 && texSize.y > 0) {
+        flowerSprite.setScale({flowerSize / static_cast<float>(texSize.x),
+                               flowerSize / static_cast<float>(texSize.y)});
+    }
+
+    for (const FireFlowerEntity& flower : fireFlowers) {
+        flowerSprite.setPosition(flower.position);
+        window.draw(flowerSprite);
+    }
+}
+
+void PlayState::spawnBullet() {
+    if (bullets.size() >= 2) return; // Max 2 bullets
+    
+    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
+
+    BulletEntity b;
+    // Position bullet at character's upper body / gun height (about 1/3 from top)
+    float bulletX = facingRight ? avatarPos.x + avatar.getSize().x : avatarPos.x - 8.f;
+    float bulletY = avatarPos.y + avatar.getSize().y * 0.3f;
+    b.position = {bulletX, bulletY};
+    b.facingRight = facingRight;
+    b.velocity = {facingRight ? 500.f : -500.f, 0.f};
+    bullets.push_back(b);
+}
+
+void PlayState::updateBullets(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    constexpr float kBulletSize = 8.f;
+    sf::Vector2f size(kBulletSize, kBulletSize);
+
+    for (auto it = bullets.begin(); it != bullets.end(); ) {
+        // Move straight horizontally (no gravity)
+        it->position.x += it->velocity.x * seconds;
+
+        sf::FloatRect bounds(it->position, size);
+
+        // Check wall collision
+        bool hitWall = false;
+        for (const auto& tile : tileMap.solidTilesOverlapping(bounds)) {
+            hitWall = true;
+            break;
+        }
+
+        // Destroy if hit wall or went off-screen
+        if (hitWall || it->position.x < camera.getCenter().x - Config::kViewWidth / 2.f ||
+            it->position.x > camera.getCenter().x + Config::kViewWidth / 2.f) {
+            spawnExplosion(it->position);
+            it = bullets.erase(it);
+            continue;
+        }
+
+        ++it;
+    }
+}
+
+void PlayState::drawBullets(sf::RenderWindow& window) const {
+    sf::Sprite bulletSprite(assets.getTexture("Bullet"));
+    // Scale bullet to be small (~8px on screen)
+    sf::Vector2u texSize = bulletSprite.getTexture().getSize();
+    if (texSize.x > 0 && texSize.y > 0) {
+        bulletSprite.setScale({8.f / static_cast<float>(texSize.x), 8.f / static_cast<float>(texSize.y)});
+    }
+    
+    for (const BulletEntity& bullet : bullets) {
+        bulletSprite.setPosition(bullet.position);
+        window.draw(bulletSprite);
+    }
+}
+
+void PlayState::spawnExplosion(sf::Vector2f position) {
+    explosions.push_back({position, 0.f, 0});
+    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("ExplodeSound"));
+}
+
+void PlayState::updateExplosions(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    for (auto it = explosions.begin(); it != explosions.end(); ) {
+        it->elapsed += seconds;
+        if (it->elapsed >= 0.05f) { // 50ms per frame
+            it->elapsed = 0.f;
+            it->currentFrame++;
+        }
+        
+        if (it->currentFrame >= 6) {
+            it = explosions.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PlayState::drawExplosions(sf::RenderWindow& window) const {
+    sf::Sprite expSprite(assets.getTexture("Explosion"));
+    // Explosion is 567x440 -> 3 cols, 2 rows -> 189x220 per frame
+    // We scale it down to match a tile size or so (e.g. 48x48)
+    expSprite.setScale({32.f / 189.f, 32.f / 220.f}); // fit roughly 32x32
+
+    for (const ExplosionEntity& exp : explosions) {
+        int col = exp.currentFrame % 3;
+        int row = exp.currentFrame / 3;
+        expSprite.setTextureRect(sf::IntRect({col * 189, row * 220}, {189, 220}));
+        
+        expSprite.setPosition({exp.position.x - 8.f, exp.position.y - 8.f}); // center slightly
+        window.draw(expSprite);
     }
 }
 
@@ -723,8 +896,40 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             damageProtectionRemaining = kDamageProtectionDuration;
             break;
         } else {
-            playerHit = true;
-            break;
+            if (invincibleTimer > 0.f) {
+                // Still invincible from recent downgrade, ignore hit
+                continue;
+            }
+            if (currentForm == AvatarForm::Fire) {
+                currentForm = AvatarForm::Normal;
+                invincibleTimer = 1.5f; // 1.5 seconds of invincibility
+                avatarVelocity.y = -300.f; // Knockback upward
+                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
+            } else {
+                playerHit = true;
+                break;
+            }
+        }
+    }
+
+    // Check Bullet collisions with enemies
+    constexpr float kBulletSize = 8.f;
+    float ts = tileMap.tileSize();
+    for (auto& bullet : bullets) {
+        sf::FloatRect bulletBounds(bullet.position, sf::Vector2f(kBulletSize, kBulletSize));
+        for (auto& enemy : walkingEnemies) {
+            if (!enemy.alive || !enemy.active) continue;
+            float enemyH = (enemy.kind == EnemyKind::BlueKoopa) ? 24.f * Config::kZoom : ts;
+            sf::FloatRect enemyBounds(enemy.position, sf::Vector2f(ts, enemyH));
+            if (bulletBounds.findIntersection(enemyBounds)) {
+                enemy.alive = false;
+                score += 100;
+                hud.setScore(score);
+                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
+                spawnExplosion(bullet.position);
+                bullet.position.y = 9999.f; // Mark for deletion
+                break;
+            }
         }
     }
 
@@ -857,8 +1062,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             if (tileMap.activateQuestionBlock(col, row)) {
-                if (takeNextQuestionBlockReward() == BlockReward::Mushroom) {
+                BlockReward reward = takeNextQuestionBlockReward();
+                if (reward == BlockReward::Mushroom) {
                     spawnMushroom(tile.position);
+                } else if (reward == BlockReward::FireFlower) {
+                    spawnFireFlower(tile.position);
                 } else {
                     spawnCoinPop(tile.position);
                     Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
@@ -889,7 +1097,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
         facingRight = false;
     }
 
-    std::string prefix = (selectedCharacter == CharacterType::Mario) ? "Mario" : "Luigi";
+    std::string prefix = (currentForm == AvatarForm::Fire ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
 
     if (!onGround) {
         // Jumping state
@@ -1008,8 +1216,11 @@ void PlayState::render(sf::RenderWindow& window) {
     window.draw(tileMap);
     drawCoinPops(window);
     drawMushrooms(window);
+    drawFireFlowers(window);
+    drawBullets(window);
     drawWalkingEnemies(window);
     window.draw(avatarSprite);
+    drawExplosions(window);
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
