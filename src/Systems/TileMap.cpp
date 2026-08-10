@@ -24,6 +24,7 @@ namespace {
         { '#', TileType::Ground        },
         { 'C', TileType::Ground        },
         { 'B', TileType::Brick         },
+        { 'C', TileType::CoinBrick     },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
@@ -293,11 +294,51 @@ bool TileMap::activateItemBlock(int col, int row) {
     }
 
     std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    const char oldSymbol = symbols[index];
     types[index] = TileType::UsedBlock;
     symbols[index] = 'U';
-    rebuildTileBatch('?');
+    rebuildTileBatch(oldSymbol);
     rebuildTileBatch('U');
     return true;
+}
+
+bool TileMap::breakBrick(int col, int row) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return false;
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    if (types[index] == TileType::Brick || types[index] == TileType::CoinBrick) {
+        char oldSymbol = symbols[index];
+        types[index] = TileType::Empty;
+        symbols[index] = '.';
+        rebuildTileBatch(oldSymbol);
+        return true;
+    }
+    return false;
+}
+
+char TileMap::hideBrick(int col, int row) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return '\0';
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    if (types[index] == TileType::Brick || types[index] == TileType::CoinBrick || types[index] == TileType::QuestionBlock || types[index] == TileType::UsedBlock) {
+        char oldSymbol = symbols[index];
+        symbols[index] = '.'; // visually empty
+        // type remains unchanged (still solid)
+        rebuildTileBatch(oldSymbol);
+        return oldSymbol;
+    }
+    return '\0';
+}
+
+void TileMap::restoreBrick(int col, int row, char symbol) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return;
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    symbols[index] = symbol;
+    rebuildTileBatch(symbol);
+}
+
+void TileMap::changeType(int col, int row, TileType newType) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return;
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    types[index] = newType;
 }
 
 TileType TileMap::typeAt(int col, int row) const {

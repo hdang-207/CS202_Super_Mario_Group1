@@ -1,0 +1,168 @@
+#include "States/PauseState.hpp"
+#include "States/PlayState.hpp"
+#include "States/IntroMenuState.hpp"
+#include "States/GameStateManager.hpp"
+#include "Systems/SaveManager.hpp"
+#include "Systems/SoundController.hpp"
+#include "Core/Config.hpp"
+#include <iostream>
+#include <cmath>
+
+PauseState::PauseState(GameStateManager& gsm, Systems::AssetManager& assets, PlayState& playStateRef)
+    : State(gsm, assets), playState(playStateRef), titleText(assets.getFont("MarioFont")),
+      promptHintText(assets.getFont("MarioFont")) {}
+
+void PauseState::init() {
+    std::cout << "[Core Engine] PauseState Initialized.\n";
+
+    bgOverlay.setSize({Config::kViewWidth, Config::kViewHeight});
+    bgOverlay.setFillColor(sf::Color(0, 0, 0, 180)); // Translucent black overlay
+
+    titleText.setString("PAUSED");
+    titleText.setCharacterSize(44);
+    titleText.setFillColor(sf::Color::Yellow);
+    titleText.setOutlineColor(sf::Color::Black);
+    titleText.setOutlineThickness(3.f);
+    sf::FloatRect tBounds = titleText.getLocalBounds();
+    titleText.setOrigin({tBounds.position.x + tBounds.size.x / 2.f, tBounds.position.y + tBounds.size.y / 2.f});
+    titleText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.15f});
+
+    promptHintText.setString("UP/DOWN: SELECT | LEFT/RIGHT: ADJUST | ENTER: CONFIRM | ESC: RESUME");
+    promptHintText.setCharacterSize(14);
+    promptHintText.setFillColor(sf::Color::White);
+    promptHintText.setOutlineColor(sf::Color::Black);
+    promptHintText.setOutlineThickness(1.5f);
+    sf::FloatRect hBounds = promptHintText.getLocalBounds();
+    promptHintText.setOrigin({hBounds.position.x + hBounds.size.x / 2.f, hBounds.position.y + hBounds.size.y / 2.f});
+    promptHintText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.90f});
+
+    menuLabels = {
+        "RESUME GAME",
+        "BGM VOLUME",
+        "SFX VOLUME",
+        "SAVE PROGRESS",
+        "LOAD PROGRESS",
+        "EXIT TO MAIN MENU"
+    };
+
+    menuTexts.clear();
+    for (size_t i = 0; i < menuLabels.size(); ++i) {
+        sf::Text text(assets.getFont("MarioFont"), "", 22);
+        text.setOutlineColor(sf::Color::Black);
+        text.setOutlineThickness(2.f);
+        menuTexts.push_back(text);
+    }
+
+    updateMenuLabels();
+}
+
+void PauseState::updateMenuLabels() {
+    float bgmVol = Systems::SoundController::getInstance().getMusicVolume();
+    float sfxVol = Systems::SoundController::getInstance().getSoundVolume();
+
+    for (size_t i = 0; i < menuLabels.size(); ++i) {
+        std::string displayText = menuLabels[i];
+        if (i == 1) { // BGM Volume
+            displayText += ": < " + std::to_string(static_cast<int>(std::round(bgmVol))) + "% >";
+        } else if (i == 2) { // SFX Volume
+            displayText += ": < " + std::to_string(static_cast<int>(std::round(sfxVol))) + "% >";
+        }
+
+        menuTexts[i].setString(displayText);
+        if (static_cast<int>(i) == selectedIndex) {
+            menuTexts[i].setFillColor(sf::Color::Yellow);
+            menuTexts[i].setString("> " + displayText + " <");
+        } else {
+            menuTexts[i].setFillColor(sf::Color::White);
+        }
+
+        sf::FloatRect bounds = menuTexts[i].getLocalBounds();
+        menuTexts[i].setOrigin({bounds.position.x + bounds.size.x / 2.f, bounds.position.y + bounds.size.y / 2.f});
+        menuTexts[i].setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.30f + i * 45.f});
+    }
+}
+
+void PauseState::handleInput(const sf::Event& event) {
+    const auto* keyPressed = event.getIf<sf::Event::KeyPressed>();
+    if (!keyPressed) {
+        return;
+    }
+
+    sf::Keyboard::Key key = keyPressed->code;
+
+    if (key == sf::Keyboard::Key::Escape || key == sf::Keyboard::Key::P) {
+        gsm.popState();
+        return;
+    }
+
+    if (key == sf::Keyboard::Key::Up || key == sf::Keyboard::Key::W) {
+        selectedIndex = (selectedIndex - 1 + static_cast<int>(menuLabels.size())) % static_cast<int>(menuLabels.size());
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+        updateMenuLabels();
+    } else if (key == sf::Keyboard::Key::Down || key == sf::Keyboard::Key::S) {
+        selectedIndex = (selectedIndex + 1) % static_cast<int>(menuLabels.size());
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+        updateMenuLabels();
+    } else if (key == sf::Keyboard::Key::Left || key == sf::Keyboard::Key::A) {
+        if (selectedIndex == 1) { // BGM Volume
+            float vol = std::max(0.f, Systems::SoundController::getInstance().getMusicVolume() - 10.f);
+            Systems::SoundController::getInstance().setMusicVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        } else if (selectedIndex == 2) { // SFX Volume
+            float vol = std::max(0.f, Systems::SoundController::getInstance().getSoundVolume() - 10.f);
+            Systems::SoundController::getInstance().setSoundVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        }
+    } else if (key == sf::Keyboard::Key::Right || key == sf::Keyboard::Key::D) {
+        if (selectedIndex == 1) { // BGM Volume
+            float vol = std::min(100.f, Systems::SoundController::getInstance().getMusicVolume() + 10.f);
+            Systems::SoundController::getInstance().setMusicVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        } else if (selectedIndex == 2) { // SFX Volume
+            float vol = std::min(100.f, Systems::SoundController::getInstance().getSoundVolume() + 10.f);
+            Systems::SoundController::getInstance().setSoundVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        }
+    } else if (key == sf::Keyboard::Key::Enter) {
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+        switch (selectedIndex) {
+            case 0: // RESUME GAME
+                gsm.popState();
+                break;
+            case 1: // BGM Volume (toggle/increase)
+            case 2: // SFX Volume
+                break;
+            case 3: // SAVE PROGRESS
+                if (SaveManager::saveProgress("savegame.txt", playState.getSaveData())) {
+                    std::cout << "[PauseState] Game progress saved successfully.\n";
+                }
+                break;
+            case 4: // LOAD PROGRESS
+                if (playState.quickLoad()) {
+                    std::cout << "[PauseState] Game progress loaded successfully.\n";
+                    gsm.popState();
+                }
+                break;
+            case 5: // EXIT TO MAIN MENU
+                gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+                break;
+        }
+    }
+}
+
+void PauseState::update(sf::Time dt) {
+}
+
+void PauseState::render(sf::RenderWindow& window) {
+    window.draw(bgOverlay);
+    window.draw(titleText);
+    window.draw(promptHintText);
+
+    for (const auto& text : menuTexts) {
+        window.draw(text);
+    }
+}

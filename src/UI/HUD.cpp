@@ -1,5 +1,6 @@
 #include "UI/HUD.hpp"
 #include "Core/Config.hpp"
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -39,8 +40,18 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     coinsText->setFillColor(sf::Color::White);
     coinsText->setPosition({330.f, topMargin + 24.f});
     setCoins(0);
+
+    // 3. Ammo (between Coins and World, inside the existing HUD row)
+    ammoLabelText.emplace(font, "BULLET", fontSize);
+    ammoLabelText->setFillColor(sf::Color::White);
+    ammoLabelText->setPosition({430.f, topMargin});
+
+    ammoText.emplace(font, "", fontSize);
+    ammoText->setFillColor(sf::Color::White);
+    ammoText->setPosition({465.f, topMargin + 24.f});
+    setAmmo(3, 3);
     
-    // 3. World (Center-Right)
+    // 4. World (Center-Right)
     worldLabelText.emplace(font, "WORLD", fontSize);
     worldLabelText->setFillColor(sf::Color::White);
     worldLabelText->setPosition({600.f, topMargin});
@@ -49,7 +60,7 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     worldText->setFillColor(sf::Color::White);
     worldText->setPosition({625.f, topMargin + 24.f});
     
-    // 4. Time (Center-Right to Right)
+    // 5. Time (Center-Right to Right)
     timeLabelText.emplace(font, "TIME", fontSize);
     timeLabelText->setFillColor(sf::Color::White);
     timeLabelText->setPosition({850.f, topMargin});
@@ -59,7 +70,7 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     timeText->setPosition({865.f, topMargin + 24.f});
     setTime(400.f);
     
-    // 5. Lives (Far Right)
+    // 6. Lives (Far Right)
     livesLabelText.emplace(font, "LIVES", fontSize);
     livesLabelText->setFillColor(sf::Color::White);
     livesLabelText->setPosition({1050.f, topMargin});
@@ -134,6 +145,15 @@ void HUD::addLives(int amount) {
     setLives(currentLives + amount);
 }
 
+void HUD::setAmmo(int ammo, int maximum) {
+    maximumAmmo = std::max(0, maximum);
+    currentAmmo = std::clamp(ammo, 0, maximumAmmo);
+    if (ammoText) {
+        ammoText->setString(std::to_string(currentAmmo) + "/"
+                            + std::to_string(maximumAmmo));
+    }
+}
+
 void HUD::update(sf::Time dt) {
     if (timeRemaining > 0.f) {
         timeRemaining -= dt.asSeconds() * 2.5f; // Fast mario time
@@ -147,6 +167,9 @@ void HUD::render(sf::RenderWindow& window) const {
     
     if (coinSprite) window.draw(*coinSprite);
     if (coinsText) window.draw(*coinsText);
+
+    if (ammoLabelText) window.draw(*ammoLabelText);
+    if (ammoText) window.draw(*ammoText);
     
     if (worldLabelText) window.draw(*worldLabelText);
     if (worldText) window.draw(*worldText);

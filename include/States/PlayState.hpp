@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/CharacterType.hpp"
+#include "Entities/Bullet.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -41,6 +42,11 @@ private:
     sf::Vector2f avatarVelocity;
     bool onGround{false};
     bool jumpHeld{false};
+    float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
+
+    enum class PlayerForm { Small, Super };
+    PlayerForm playerForm{PlayerForm::Small};
+    float damageProtectionRemaining{0.f};
 
     struct CoinPop {
         sf::Vector2f position;
@@ -58,6 +64,29 @@ private:
         float elapsed;
     };
     std::vector<MushroomEntity> mushrooms;
+
+    struct FireFlowerEntity {
+        sf::Vector2f blockPosition;
+        sf::Vector2f position;
+        MushroomState state; // Can reuse Emerging and Moving(stay still)
+        float elapsed;
+    };
+    std::vector<FireFlowerEntity> fireFlowers;
+
+    std::vector<entity::Bullet> bullets;
+    int availableBullets{3};
+    float shootCooldownRemaining{0.f};
+    std::vector<float> ammoRechargeTimers;
+
+    struct ExplosionEntity {
+        sf::Vector2f position;
+        float elapsed;
+        int currentFrame;
+    };
+    std::vector<ExplosionEntity> explosions;
+
+    enum class AvatarForm { Normal, Fire };
+    AvatarForm currentForm{AvatarForm::Normal};
 
     enum class EnemyKind {
         Goomba,
@@ -83,13 +112,41 @@ private:
     };
     std::vector<MovingPlatform> movingPlatforms;
 
+    struct DeadEnemy {
+        EnemyKind kind;
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        float elapsed;
+    };
+    std::vector<DeadEnemy> deadEnemies;
+
     enum class BlockReward {
         Coin,
-        Mushroom
+        Mushroom,
+        FireFlower
     };
     std::vector<BlockReward> blockRewards;
     std::size_t nextBlockReward{0};
     std::mt19937 rewardRandom{std::random_device{}()};
+    
+    struct BouncingBlock {
+        int col, row;
+        char originalSymbol;
+        sf::Vector2f position;
+        float startY;
+        float velocityY;
+        bool active{true};
+    };
+    std::vector<BouncingBlock> bouncingBlocks;
+
+    struct BrickDebris {
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        float elapsed;
+        int frame;
+    };
+    std::vector<BrickDebris> brickDebris;
+
     // =======================================================================
 
     // Free-look: F detaches the camera from the avatar so the level can be
@@ -143,6 +200,12 @@ private:
      */
     sf::FloatRect avatarBounds() const;
 
+    /// @brief Changes a Small avatar to Super while keeping its feet fixed.
+    void becomeSuper();
+
+    /// @brief Changes a Super avatar back to Small while keeping its feet fixed.
+    void becomeSmall();
+
     /// @brief Applies one life loss and either restarts the level or opens Game Over.
     void handlePlayerDeath();
 
@@ -190,6 +253,24 @@ private:
 
     /// @brief Draws all emerged mushrooms in world space.
     void drawMushrooms(sf::RenderWindow& window) const;
+
+    void spawnFireFlower(sf::Vector2f blockPosition);
+    void updateFireFlowers(sf::Time dt);
+    void drawFireFlowers(sf::RenderWindow& window) const;
+
+    void spawnBullet();
+    void updateBullets(sf::Time dt);
+    void drawBullets(sf::RenderWindow& window) const;
+
+    void spawnExplosion(sf::Vector2f position);
+    void updateExplosions(sf::Time dt);
+    void drawExplosions(sf::RenderWindow& window) const;
+
+    void updateDeadEnemies(sf::Time dt);
+    void drawDeadEnemies(sf::RenderWindow& window) const;
+
+    void updateBlocks(sf::Time dt);
+    void drawBlocks(sf::RenderWindow& window) const;
 
     /// @brief Creates Goombas and Blue Koopas from their map markers.
     void spawnWalkingEnemies();
@@ -276,4 +357,14 @@ public:
      * @param window The target render window.
      */
     void render(sf::RenderWindow& window) override;
+
+    /**
+     * @brief Gets current SaveData progress snapshot.
+     */
+    SaveData getSaveData() const;
+
+    /**
+     * @brief Performs quick load from savegame.txt.
+     */
+    bool quickLoad();
 };

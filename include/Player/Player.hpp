@@ -16,10 +16,14 @@ class Player : public Character {
 public:
     virtual ~Player() override = default;
 
-    // Nhận input của frame hiện tại.
+    /**
+     * @brief Set input parameters for the current frame.
+     */
     void setInput(const PlayerInput& input) noexcept;
 
-    // Chuyển input thành velocity.
+    /**
+     * @brief Update player state and convert input to velocity.
+     */
     void update(float deltaTime) override;
 
     [[nodiscard]]
