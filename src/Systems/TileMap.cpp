@@ -13,17 +13,19 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   # ground   B brick   ? question block   U used block   S staircase
-     *   [] pipe top       {} pipe body          H hidden block  o coin
+     *   # ground   C cloud block   B brick   b coin brick   ? question block
+     *   U used block      S staircase          [] pipe top    {} pipe body
+     *   H hidden block    o coin
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
-     * and . empty sky.
-     * Scenery characters (M m V v l c F X W) carry no entry here - they are
+     * L horizontal lift, and . empty sky.
+     * Scenery characters (M m V v l c F X W I) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
         { '#', TileType::Ground        },
+        { 'C', TileType::Ground        },
         { 'B', TileType::Brick         },
-        { 'C', TileType::CoinBrick     },
+        { 'b', TileType::CoinBrick     },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
@@ -33,6 +35,10 @@ namespace {
         { '{', TileType::Pipe          },
         { '}', TileType::Pipe          },
         { 'o', TileType::Coin          },
+        { '(', TileType::Ground        },
+        { '-', TileType::Ground        },
+        { ')', TileType::Ground        },
+        { '|', TileType::Decoration    },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -158,6 +164,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
     symbols.assign(static_cast<std::size_t>(columns) * rows, '.');
     enemies.clear();
     blueKoopas.clear();
+    movingPlatforms.clear();
     spawn = {0.f, 0.f};
     levelExitAvailable = false;
     levelExitTrigger = sf::FloatRect();
@@ -194,13 +201,29 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 blueKoopas.push_back(worldPos);
                 continue;
             }
+            if (symbol == 'L') {
+                movingPlatforms.push_back(worldPos);
+                continue;
+            }
 
             // Scenery is placed by a single character but covers whatever area its
             // picture needs, so it is handled before the one-cell tiles below.
             if (TileBatch* decor = decorationFor(symbol)) {
                 sf::Vector2f artSize(decor->texture->getSize());
                 sf::Vector2f drawSize = artSize * scale;
-                if (symbol == 'W') {
+                if (symbol == 'I') {
+                    // The supplied island is a complete multi-cell sprite. Only
+                    // its grassy top is solid; Mario and enemies may pass beside
+                    // the hanging trunks exactly like the floating islands in 1-3.
+                    const int solidCells = std::max(
+                        1, static_cast<int>(std::ceil(artSize.x / kSourceTileSize)));
+                    for (int offset = 0; offset < solidCells && col + offset < columns;
+                         ++offset) {
+                        const std::size_t topIndex =
+                            static_cast<std::size_t>(row) * columns + col + offset;
+                        types[topIndex] = TileType::Ground;
+                    }
+                } else if (symbol == 'W') {
                     levelExitAvailable = true;
                     levelExitTrigger = sf::FloatRect(worldPos, drawSize);
                 } else if (symbol == 'F') {
@@ -265,17 +288,19 @@ void TileMap::update(sf::Time dt) {
     }
 }
 
-bool TileMap::activateQuestionBlock(int col, int row) {
-    if (col < 0 || col >= columns || row < 0 || row >= rows) return false;
-    std::size_t index = static_cast<std::size_t>(row) * columns + col;
-    if (types[index] == TileType::QuestionBlock) {
-        types[index] = TileType::UsedBlock;
-        symbols[index] = 'U';
-        rebuildTileBatch('?');
-        rebuildTileBatch('U');
-        return true;
+bool TileMap::activateItemBlock(int col, int row) {
+    const TileType type = typeAt(col, row);
+    if (type != TileType::QuestionBlock && type != TileType::HiddenBlock) {
+        return false;
     }
-    return false;
+
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    const char oldSymbol = symbols[index];
+    types[index] = TileType::UsedBlock;
+    symbols[index] = 'U';
+    rebuildTileBatch(oldSymbol);
+    rebuildTileBatch('U');
+    return true;
 }
 
 bool TileMap::breakBrick(int col, int row) {

@@ -120,7 +120,8 @@ void HUD::addCoins(int amount) {
 
 void HUD::setWorld(int level) {
     if (worldText) {
-        worldText->setString(level == 2 ? "1-2" : "1-1");
+        worldText->setString(std::to_string(Config::worldNumber(level)) + "-"
+                           + std::to_string(Config::stageNumber(level)));
     }
 }
 

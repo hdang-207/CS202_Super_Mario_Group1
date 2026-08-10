@@ -21,7 +21,11 @@ void LevelCompleteState::init() {
     bgShape.setFillColor(sf::Color(20, 40, 100)); // Dark royal blue background
 
     const bool finalLevel = progress.currentLevel >= Config::kFinalLevel;
-    std::string title = finalLevel ? "YOU WIN THE GAME!" : "WORLD 1-" + std::to_string(progress.currentLevel) + " CLEAR!";
+    std::string title = finalLevel
+        ? "YOU WIN THE GAME!"
+        : "WORLD " + std::to_string(Config::worldNumber(progress.currentLevel))
+            + "-" + std::to_string(Config::stageNumber(progress.currentLevel))
+            + " CLEAR!";
     titleText.setString(title);
     titleText.setCharacterSize(44);
     titleText.setFillColor(sf::Color::Yellow);
@@ -70,6 +74,9 @@ void LevelCompleteState::handleInput(const sf::Event& event) {
             if (SaveManager::saveProgress("savegame.txt", progress)) {
                 std::cout << "[Core Engine] Progress saved. Returning to Main Menu.\n";
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+            } else {
+                --progress.currentLevel;
+                std::cerr << "[Core Engine] Save failed; staying on Level Complete screen.\n";
             }
         }
     }

@@ -116,8 +116,9 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         else if (keyPressed->code == sf::Keyboard::Key::L) {
             SaveData data;
             if (SaveManager::loadFromFile("savegame.txt", data)) {
-                std::cout << "[Core Engine] Loading saved game at level "
-                          << data.currentLevel << "...\n";
+                std::cout << "[Core Engine] Loading saved game at World "
+                          << Config::worldNumber(data.currentLevel) << "-"
+                          << Config::stageNumber(data.currentLevel) << "...\n";
                 gsm.changeState(std::make_unique<PlayState>(gsm, assets, data));
             }
         }

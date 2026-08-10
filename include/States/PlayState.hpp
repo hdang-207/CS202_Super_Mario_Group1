@@ -104,6 +104,14 @@ private:
     };
     std::vector<WalkingEnemy> walkingEnemies;
 
+    struct MovingPlatform {
+        sf::Vector2f position;
+        sf::Vector2f previousPosition;
+        float originX;
+        float velocityX;
+    };
+    std::vector<MovingPlatform> movingPlatforms;
+
     struct DeadEnemy {
         EnemyKind kind;
         sf::Vector2f position;
@@ -211,7 +219,7 @@ private:
 
     /**
      * @brief Loads and builds one numbered map file.
-     * @param level Internal level index: 1 loads level1.txt and 2 loads level1-2.txt.
+     * @param level Linear campaign index converted to level<world>-<stage>.txt.
      * @return True when the map was loaded and built successfully.
      */
     bool loadLevel(int level);
@@ -231,11 +239,11 @@ private:
     /// @brief Draws all temporary coins in world space.
     void drawCoinPops(sf::RenderWindow& window) const;
 
-    /// @brief Builds a random reward bag with at least two coins and two mushrooms.
-    void prepareQuestionBlockRewards();
+    /// @brief Builds a random reward bag for question and hidden item blocks.
+    void prepareItemBlockRewards();
 
-    /// @brief Returns the reward assigned to the next activated question block.
-    BlockReward takeNextQuestionBlockReward();
+    /// @brief Returns the reward assigned to the next activated item block.
+    BlockReward takeNextItemBlockReward();
 
     /// @brief Starts a mushroom emerging from an activated question block.
     void spawnMushroom(sf::Vector2f blockPosition);
@@ -272,6 +280,15 @@ private:
 
     /// @brief Draws all animated walking enemies.
     void drawWalkingEnemies(sf::RenderWindow& window) const;
+
+    /// @brief Creates horizontal lifts from every 'L' marker in the map.
+    void spawnMovingPlatforms();
+
+    /// @brief Moves lifts between their horizontal endpoints and carries Mario.
+    void updateMovingPlatforms(sf::Time dt);
+
+    /// @brief Draws the three-tile moving lifts used by World 1-3.
+    void drawMovingPlatforms(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.

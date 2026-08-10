@@ -45,13 +45,16 @@ namespace {
     constexpr float kBulletRechargeTime = 10.f;
     constexpr int kMaxBullets = 3;
 
+    constexpr float kMovingPlatformSpeed = 90.f;
+    constexpr float kMovingPlatformRangeTiles = 3.f;
+    constexpr float kMovingPlatformWidthTiles = 3.f;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
 
-    /// World 1-2's original underground grid is 158 columns wide. The adapted
-    /// outdoor goal area begins immediately after it.
-    constexpr int kLevel2UndergroundColumns = 158;
+    /// Every underground map reserves its final columns for an outdoor goal area.
+    constexpr int kOutdoorGoalColumns = 41;
 
 }
 
@@ -154,8 +157,9 @@ void PlayState::init() {
     // Artwork for every character the map file uses. 'H' is left out on purpose:
     // the hidden block has to stay invisible until it is struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
+    tileMap.setTileTexture('C', assets.getTexture("CloudBlock"));
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
-    tileMap.setTileTexture('C', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('b', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
     tileMap.setTileTexture(']', assets.getTexture("PipeTopRight"));
@@ -164,6 +168,10 @@ void PlayState::init() {
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
     tileMap.setTileTexture('U', assets.getTexture("EmptyBlock"));
     tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
+    tileMap.setTileTexture('(', assets.getTexture("IslandTopLeft"));
+    tileMap.setTileTexture('-', assets.getTexture("IslandTopMiddle"));
+    tileMap.setTileTexture(')', assets.getTexture("IslandTopRight"));
+    tileMap.setTileTexture('|', assets.getTexture("IslandTrunk"));
 
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
@@ -174,6 +182,8 @@ void PlayState::init() {
     tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
     tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
+    tileMap.setDecorationTexture('I', assets.getTexture("Island"));
+    tileMap.setDecorationTexture('Y', assets.getTexture("CastleWorld1_3"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
@@ -246,11 +256,15 @@ void PlayState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
         } else if (keyPressed->code == sf::Keyboard::Key::F5) {
             if (SaveManager::saveProgress("savegame.txt", getSaveData())) {
-                std::cout << "[Core Engine] Quick Save successful (Level " << currentLevel << ").\n";
+                std::cout << "[Core Engine] Quick Save successful (World "
+                          << Config::worldNumber(currentLevel) << "-"
+                          << Config::stageNumber(currentLevel) << ").\n";
             }
         } else if (keyPressed->code == sf::Keyboard::Key::F9) {
             if (quickLoad()) {
-                std::cout << "[Core Engine] Quick Load successful.\n";
+                std::cout << "[Core Engine] Quick Load successful (World "
+                          << Config::worldNumber(currentLevel) << "-"
+                          << Config::stageNumber(currentLevel) << ").\n";
             }
         }
     }
@@ -290,6 +304,7 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    updateMovingPlatforms(dt);
     if (!moveAvatar(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -373,7 +388,7 @@ void PlayState::becomeSmall() {
 }
 
 void PlayState::playLevelMusic() {
-    const std::string theme = currentLevel == 2
+    const std::string theme = Config::stageNumber(currentLevel) == 2
         ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
     Systems::SoundController::getInstance().playMusic(Systems::resourcePath(theme));
 }
@@ -381,9 +396,11 @@ void PlayState::playLevelMusic() {
 void PlayState::handlePlayerDeath() {
     Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
 
-    lives--;
     SaveData data = getSaveData();
-    std::cout << "[Core Engine] Player died. Transitioning to RespawnState. Lives remaining: " << lives << "\n";
+    std::cout << "[Core Engine] Player died in World "
+              << Config::worldNumber(currentLevel) << "-"
+              << Config::stageNumber(currentLevel)
+              << ". Transitioning to RespawnState. Lives remaining: " << lives << "\n";
     transitionPending = true;
     gsm.changeState(std::make_unique<RespawnState>(gsm, assets, data));
 }
@@ -394,37 +411,38 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
-    const std::string mapName = level == 2
-        ? "assets/maps/level1-2.txt"
-        : "assets/maps/level" + std::to_string(level) + ".txt";
+    const int world = Config::worldNumber(level);
+    const int stage = Config::stageNumber(level);
+    const std::string mapName = "assets/maps/level" + std::to_string(world)
+        + "-" + std::to_string(stage) + ".txt";
     if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
         std::cerr << "[Core Engine] Warning: Failed to load " << mapName << " map!\n";
         return false;
     }
 
-    // Level 1-2 uses its own cyan underground artwork. Switching the registered
-    // batches here keeps every outdoor tile in level 1 unchanged.
+    // The middle stage of each world uses the cyan underground artwork.
+    const bool underground = stage == 2;
     tileMap.setTileTexture('#', assets.getTexture(
-        level == 2 ? "GroundUndergroundTile" : "GroundTile"));
+        underground ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
-        level == 2 ? "BrickUndergroundTile" : "BrickTile"));
-    tileMap.setTileTexture('C', assets.getTexture(
-        level == 2 ? "BrickUndergroundTile" : "BrickTile"));
+        underground ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('b', assets.getTexture(
+        underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
-        level == 2 ? "HardBlockUndergroundTile" : "HardBlockTile"));
+        underground ? "HardBlockUndergroundTile" : "HardBlockTile"));
     tileMap.setTileTexture('?', assets.getTexture(
-        level == 2 ? "QuestionBlockUnderground" : "QuestionBlock"),
-        level == 2 ? 6 : 4, sf::seconds(0.15f));
+        underground ? "QuestionBlockUnderground" : "QuestionBlock"),
+        underground ? 6 : 4, sf::seconds(0.15f));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
-        std::cerr << "[Core Engine] Warning: Level " << level
+        std::cerr << "[Core Engine] Warning: World " << world << "-" << stage
                   << " map is empty, nothing to play!\n";
         return false;
     }
 
     currentLevel = level;
     hud.setWorld(currentLevel);
-    hud.setTime(400.f);
+    hud.setTime(world == 1 && stage == 3 ? 300.f : 400.f);
     coinPops.clear();
     mushrooms.clear();
     fireFlowers.clear();
@@ -436,11 +454,13 @@ bool PlayState::loadLevel(int level) {
     explosions.clear();
     walkingEnemies.clear();
     spawnWalkingEnemies();
-    prepareQuestionBlockRewards();
-    std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
+    spawnMovingPlatforms();
+    prepareItemBlockRewards();
+    std::cout << "[Core Engine] World " << world << "-" << stage << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
               << tileMap.enemySpawns().size() << " Goombas, "
-              << tileMap.blueKoopaSpawns().size() << " Blue Koopas\n";
+              << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
+              << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
     return true;
 }
 
@@ -449,11 +469,11 @@ bool PlayState::tryEnterNextLevel() {
     const bool reachedLevelExit = currentLevel < Config::kFinalLevel
         && tileMap.hasLevelExit()
         && player.findIntersection(tileMap.levelExitBounds()).has_value();
-    const bool reachedFinalGoal = currentLevel == Config::kFinalLevel
+    const bool reachedStageGoal = Config::stageNumber(currentLevel) == 3
         && tileMap.hasGoal()
         && player.findIntersection(tileMap.goalBounds()).has_value();
 
-    if (!reachedLevelExit && !reachedFinalGoal) {
+    if (!reachedLevelExit && !reachedStageGoal) {
         return false;
     }
 
@@ -499,25 +519,26 @@ void PlayState::drawCoinPops(sf::RenderWindow& window) const {
     }
 }
 
-void PlayState::prepareQuestionBlockRewards() {
-    std::size_t questionBlockCount = 0;
+void PlayState::prepareItemBlockRewards() {
+    std::size_t itemBlockCount = 0;
     for (const auto& row : mapParser.getGrid()) {
-        questionBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), '?'));
+        itemBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), '?'));
+        itemBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), 'H'));
     }
 
     blockRewards.clear();
     nextBlockReward = 0;
 
     if (currentLevel == 1) {
-        // Level 1 contains exactly two mushroom rewards. Their positions in the
-        // reward sequence are randomized; every other question block gives a coin.
-        const std::size_t mushroomTarget = std::min<std::size_t>(2, questionBlockCount);
+        // World 1-1 contains exactly two mushroom rewards. Their positions in the
+        // reward sequence are randomized; every other item block gives a coin.
+        const std::size_t mushroomTarget = std::min<std::size_t>(2, itemBlockCount);
         blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
         blockRewards.insert(blockRewards.end(),
-                            questionBlockCount - mushroomTarget,
+                            itemBlockCount - mushroomTarget,
                             BlockReward::Coin);
         std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
-    } else if (questionBlockCount >= 4) {
+    } else if (itemBlockCount >= 4) {
         // Keep the original guarantee: the first four hits contain two of each.
         const BlockReward guaranteed[] = {
             BlockReward::Coin, BlockReward::Coin,
@@ -528,43 +549,46 @@ void PlayState::prepareQuestionBlockRewards() {
 
         // Across the whole level, mushrooms make up about 25% of the rewards.
         const std::size_t mushroomTarget = std::max<std::size_t>(
-            2, questionBlockCount / kMushroomRewardDivisor);
+            2, itemBlockCount / kMushroomRewardDivisor);
         blockRewards.insert(blockRewards.end(), mushroomTarget - 2, BlockReward::Mushroom);
         blockRewards.insert(blockRewards.end(),
-                            questionBlockCount - mushroomTarget - 2,
+                            itemBlockCount - mushroomTarget - 2,
                             BlockReward::Coin);
         std::shuffle(blockRewards.begin() + 4, blockRewards.end(), rewardRandom);
     } else {
         // Small custom levels cannot guarantee two of each; still favor coins.
-        const std::size_t mushroomTarget = questionBlockCount / kMushroomRewardDivisor;
+        const std::size_t mushroomTarget = itemBlockCount / kMushroomRewardDivisor;
         blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
         blockRewards.insert(blockRewards.end(),
-                            questionBlockCount - mushroomTarget,
+                            itemBlockCount - mushroomTarget,
                             BlockReward::Coin);
         std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
     }
 
-    std::size_t mushroomCount = static_cast<std::size_t>(std::count(
-        blockRewards.begin(), blockRewards.end(), BlockReward::Mushroom));
-        
     // Randomly convert some Mushrooms to FireFlowers (25% chance)
     for (auto& reward : blockRewards) {
         if (reward == BlockReward::Mushroom && rewardRandom() % 4 == 0) {
             reward = BlockReward::FireFlower;
         }
     }
-    std::cout << "[Core Engine] Question rewards: "
-              << (blockRewards.size() - mushroomCount) << " coins, "
-              << mushroomCount << " mushrooms";
+
+    std::size_t mushroomCount = static_cast<std::size_t>(std::count(
+        blockRewards.begin(), blockRewards.end(), BlockReward::Mushroom));
+    std::size_t fireFlowerCount = static_cast<std::size_t>(std::count(
+        blockRewards.begin(), blockRewards.end(), BlockReward::FireFlower));
+    std::cout << "[Core Engine] Item-block rewards: "
+              << (blockRewards.size() - mushroomCount - fireFlowerCount) << " coins, "
+              << mushroomCount << " mushrooms, "
+              << fireFlowerCount << " fire flowers";
     if (currentLevel == 1) {
-        std::cout << "; Level 1 has exactly two randomized mushrooms\n";
+        std::cout << "; World 1-1 has exactly two randomized mushrooms\n";
     } else {
         std::cout << "; mushroom rate is about 25% and the first four "
                      "guarantee two of each\n";
     }
 }
 
-PlayState::BlockReward PlayState::takeNextQuestionBlockReward() {
+PlayState::BlockReward PlayState::takeNextItemBlockReward() {
     if (nextBlockReward >= blockRewards.size()) {
         return BlockReward::Coin;
     }
@@ -841,6 +865,66 @@ void PlayState::spawnWalkingEnemies() {
     }
 }
 
+void PlayState::spawnMovingPlatforms() {
+    movingPlatforms.clear();
+    movingPlatforms.reserve(tileMap.movingPlatformSpawns().size());
+
+    bool moveRight = true;
+    for (const sf::Vector2f spawn : tileMap.movingPlatformSpawns()) {
+        const float speed = moveRight ? kMovingPlatformSpeed : -kMovingPlatformSpeed;
+        movingPlatforms.push_back({spawn, spawn, spawn.x, speed});
+        moveRight = !moveRight;
+    }
+}
+
+void PlayState::updateMovingPlatforms(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float tileSize = tileMap.tileSize();
+    const sf::Vector2f platformSize(
+        tileSize * kMovingPlatformWidthTiles, tileSize * 0.5f);
+    const float travel = tileSize * kMovingPlatformRangeTiles;
+
+    for (MovingPlatform& platform : movingPlatforms) {
+        platform.previousPosition = platform.position;
+
+        const sf::FloatRect oldBounds(platform.previousPosition, platformSize);
+        const sf::FloatRect player = avatarBounds();
+        const float playerBottom = player.position.y + player.size.y;
+        const float oldTop = oldBounds.position.y;
+        const bool horizontallyOverlapping =
+            player.position.x + player.size.x > oldBounds.position.x + 2.f
+            && player.position.x < oldBounds.position.x + oldBounds.size.x - 2.f;
+        const bool standingOnPlatform = horizontallyOverlapping
+            && std::abs(playerBottom - oldTop) <= 4.f
+            && avatarVelocity.y >= 0.f;
+
+        platform.position.x += platform.velocityX * seconds;
+        const float leftEnd = platform.originX - travel;
+        const float rightEnd = platform.originX + travel;
+        if (platform.position.x < leftEnd) {
+            platform.position.x = leftEnd;
+            platform.velocityX = std::abs(platform.velocityX);
+        } else if (platform.position.x > rightEnd) {
+            platform.position.x = rightEnd;
+            platform.velocityX = -std::abs(platform.velocityX);
+        }
+
+        if (standingOnPlatform) {
+            avatarPos.x += platform.position.x - platform.previousPosition.x;
+            avatar.setPosition(avatarPos);
+        }
+    }
+}
+
+void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
+    sf::Sprite platformSprite(assets.getTexture("MovingPlatform"));
+    platformSprite.setScale({Config::kZoom, Config::kZoom});
+    for (const MovingPlatform& platform : movingPlatforms) {
+        platformSprite.setPosition(platform.position);
+        window.draw(platformSprite);
+    }
+}
+
 bool PlayState::updateWalkingEnemies(sf::Time dt) {
     const float seconds = dt.asSeconds();
     const float tileSize = tileMap.tileSize();
@@ -975,7 +1059,7 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
 }
 
 void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
-    const std::string goombaTextureKey = currentLevel == 2
+    const std::string goombaTextureKey = Config::stageNumber(currentLevel) == 2
         ? "GoombaUnderground" : "Goomba";
     sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
     sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
@@ -1074,6 +1158,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
     avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
 
     onGround = false;
+    const float previousBottom = avatarPos.y + size.y;
     avatarPos.y += avatarVelocity.y * seconds;
     
     // Virtual Y-axis hitbox: slightly narrow width to prevent snagging on wall tiles
@@ -1090,8 +1175,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
             avatarPos.y = tile.position.y + tile.size.y;
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
-            if (tileMap.activateQuestionBlock(col, row)) {
-                BlockReward reward = takeNextQuestionBlockReward();
+            if (tileMap.activateItemBlock(col, row)) {
+                BlockReward reward = takeNextItemBlockReward();
                 if (reward == BlockReward::Mushroom) {
                     spawnMushroom(tile.position);
                 } else if (reward == BlockReward::FireFlower) {
@@ -1173,6 +1258,29 @@ bool PlayState::moveAvatar(sf::Time dt) {
                 }
             }
             avatarVelocity.y = 0.f;
+        }
+    }
+
+    // World 1-3 lifts are one-way platforms: Mario may jump through them from
+    // below, then lands when his feet cross their top surface while falling.
+    if (!onGround && avatarVelocity.y >= 0.f) {
+        const float currentBottom = avatarPos.y + size.y;
+        const sf::FloatRect player = avatarBounds();
+        for (const MovingPlatform& platform : movingPlatforms) {
+            const float platformTop = platform.position.y;
+            const float platformRight = platform.position.x
+                + tileMap.tileSize() * kMovingPlatformWidthTiles;
+            const bool horizontallyOverlapping =
+                player.position.x + player.size.x > platform.position.x + 2.f
+                && player.position.x < platformRight - 2.f;
+            if (horizontallyOverlapping
+                && previousBottom <= platformTop + 2.f
+                && currentBottom >= platformTop) {
+                avatarPos.y = platformTop - size.y;
+                avatarVelocity.y = 0.f;
+                onGround = true;
+                break;
+            }
         }
     }
 
@@ -1281,7 +1389,8 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
         // can be matched against its map file straight away.
         float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
         int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
-        label = "MAP VIEW L" + std::to_string(currentLevel)
+        label = "MAP VIEW " + std::to_string(Config::worldNumber(currentLevel))
+              + "-" + std::to_string(Config::stageNumber(currentLevel))
               + "   COL " + std::to_string(firstColumn) + "-"
               + std::to_string(firstColumn + Config::kViewTilesX - 1)
               + "   A/D SCROLL   SHIFT FASTER   F EXIT";
@@ -1304,16 +1413,19 @@ void PlayState::render(sf::RenderWindow& window) {
     const sf::View screenView = window.getView();
     camera.setViewport(screenView.getViewport());
 
-    // World 1-2 stays dark while underground, then returns to the outdoor sky
-    // for the adapted pipe, staircase, flag and castle goal area.
+    // Each middle stage stays dark underground, then returns to the outdoor sky
+    // for its adapted pipe, staircase, flag and castle goal area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    bool underground = currentLevel == 2
-                    && avatarPos.x < kLevel2UndergroundColumns * Config::kTileSize;
+    const int outdoorStartColumn = std::max(
+        0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
+    bool underground = Config::stageNumber(currentLevel) == 2
+                    && avatarPos.x < outdoorStartColumn * Config::kTileSize;
     sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
     window.setView(camera);
     window.draw(tileMap);
+    drawMovingPlatforms(window);
     drawCoinPops(window);
     drawMushrooms(window);
     drawFireFlowers(window);
@@ -1373,20 +1485,22 @@ void PlayState::updateBlocks(sf::Time dt) {
 }
 
 void PlayState::drawBlocks(sf::RenderWindow& window) const {
+    const bool underground = Config::stageNumber(currentLevel) == 2;
+
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
         char drawSymbol = block.originalSymbol;
-        if (drawSymbol == 'C') {
+        if (drawSymbol == 'b') {
             drawSymbol = 'U';
         }
-        
+
         const sf::Texture* tex = nullptr;
         sf::IntRect rect;
-        
-        if (drawSymbol == 'B' || drawSymbol == 'C') {
-            tex = &assets.getTexture(currentLevel == 2 ? "BrickUndergroundTile" : "BrickTile");
+
+        if (drawSymbol == 'B') {
+            tex = &assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile");
         } else if (drawSymbol == '?') {
-            tex = &assets.getTexture(currentLevel == 2 ? "QuestionBlockUnderground" : "QuestionBlock");
+            tex = &assets.getTexture(underground ? "QuestionBlockUnderground" : "QuestionBlock");
             rect = sf::IntRect({0, 0}, {16, 16});
         } else if (drawSymbol == 'U') {
             tex = &assets.getTexture("EmptyBlock");
@@ -1406,7 +1520,7 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
     
     // Draw Brick Debris
     if (!brickDebris.empty()) {
-        sf::Sprite debrisSprite(assets.getTexture(currentLevel == 2 ? "BrickUndergroundTile" : "BrickTile"));
+        sf::Sprite debrisSprite(assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile"));
         float scale = (tileMap.tileSize() / 16.f) * 0.5f; // half size
         debrisSprite.setScale({scale, scale});
         debrisSprite.setOrigin({8.f, 8.f}); // center of 16x16 texture
@@ -1473,7 +1587,7 @@ void PlayState::updateDeadEnemies(sf::Time dt) {
 }
 
 void PlayState::drawDeadEnemies(sf::RenderWindow& window) const {
-    const std::string goombaTextureKey = currentLevel == 2
+    const std::string goombaTextureKey = Config::stageNumber(currentLevel) == 2
         ? "GoombaUnderground" : "Goomba";
     sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
     sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));

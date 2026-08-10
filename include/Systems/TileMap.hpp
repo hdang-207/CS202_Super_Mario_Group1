@@ -44,7 +44,7 @@ public:
 
     /**
      * @brief Sets the artwork one map character is drawn with.
-     * @param symbol Character as it appears in the map file, e.g. '#' or '?'.
+     * @param symbol Character as it appears in the map file, e.g. '#', 'b' or '?'.
      * @param texture Image for that character. It is stretched over one whole
      *        tile, so a 16x16 png lines up one-to-one with the level grid.
      * @param frameCount Number of animation frames laid out left to right inside
@@ -82,10 +82,10 @@ public:
     void update(sf::Time dt);
 
     /**
-     * @brief Replaces one question block with a used block.
-     * @return True only on the first activation of a question block at this cell.
+     * @brief Replaces one question or hidden item block with a used block.
+     * @return True only on the first activation of an item block at this cell.
      */
-    bool activateQuestionBlock(int col, int row);
+    bool activateItemBlock(int col, int row);
 
     /**
      * @brief Breaks a brick at the specified location, turning it into empty space.
@@ -134,6 +134,9 @@ public:
 
     /// @brief Bottom-aligned map cells containing Blue Koopa spawn markers ('K').
     const std::vector<sf::Vector2f>& blueKoopaSpawns() const { return blueKoopas; }
+
+    /// @brief Top-left world positions of horizontal moving-platform markers ('L').
+    const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
 
     /// @brief True when the map contains a level-exit decoration marker ('W').
     bool hasLevelExit() const { return levelExitAvailable; }
@@ -185,6 +188,7 @@ private:
     sf::Vector2f spawn{0.f, 0.f};
     std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
+    std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
     bool goalAvailable{false};
