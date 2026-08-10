@@ -39,9 +39,8 @@ namespace {
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
 
-    /// World 1-2's original underground grid is 158 columns wide. The adapted
-    /// outdoor goal area begins immediately after it.
-    constexpr int kLevel2UndergroundColumns = 158;
+    /// Every underground map reserves its final columns for an outdoor goal area.
+    constexpr int kOutdoorGoalColumns = 41;
 
 }
 
@@ -255,13 +254,16 @@ void PlayState::handleInput(const sf::Event& event) {
             data.selectedCharacter = this->selectedCharacter;
             
             if (SaveManager::saveToFile("savegame.txt", data)) {
-                std::cout << "[Core Engine] Quick Save successful (Level " << currentLevel << ").\n";
+                std::cout << "[Core Engine] Quick Save successful (World "
+                          << Config::worldNumber(currentLevel) << "-"
+                          << Config::stageNumber(currentLevel) << ").\n";
             }
         } else if (keyPressed->code == sf::Keyboard::Key::F9) {
             SaveData data;
             if (SaveManager::loadFromFile("savegame.txt", data)) {
-                std::cout << "[Core Engine] Quick Load successful. Loading Level "
-                          << data.currentLevel << "...\n";
+                std::cout << "[Core Engine] Quick Load successful. Loading World "
+                          << Config::worldNumber(data.currentLevel) << "-"
+                          << Config::stageNumber(data.currentLevel) << "...\n";
                 if (loadLevel(data.currentLevel)) {
                     score = data.score;
                     coins = data.coins;
@@ -331,7 +333,7 @@ sf::FloatRect PlayState::avatarBounds() const {
 }
 
 void PlayState::playLevelMusic() {
-    const std::string theme = currentLevel == 2
+    const std::string theme = Config::stageNumber(currentLevel) == 2
         ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
     Systems::SoundController::getInstance().playMusic(Systems::resourcePath(theme));
 }
@@ -346,7 +348,9 @@ void PlayState::handlePlayerDeath() {
         return;
     }
 
-    std::cout << "[Core Engine] Restarting level " << currentLevel
+    std::cout << "[Core Engine] Restarting World "
+              << Config::worldNumber(currentLevel) << "-"
+              << Config::stageNumber(currentLevel)
               << ". Lives remaining: " << lives << "\n";
     if (!loadLevel(currentLevel)) {
         std::cerr << "[Core Engine] Could not restart the current level. Returning to menu.\n";
@@ -369,28 +373,29 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
-    const std::string mapName = level == 2
-        ? "assets/maps/level1-2.txt"
-        : "assets/maps/level" + std::to_string(level) + ".txt";
+    const int world = Config::worldNumber(level);
+    const int stage = Config::stageNumber(level);
+    const std::string mapName = "assets/maps/level" + std::to_string(world)
+        + "-" + std::to_string(stage) + ".txt";
     if (!mapParser.loadFromFile(Systems::resourcePath(mapName))) {
         std::cerr << "[Core Engine] Warning: Failed to load " << mapName << " map!\n";
         return false;
     }
 
-    // Level 1-2 uses its own cyan underground artwork. Switching the registered
-    // batches here keeps every outdoor tile in level 1 unchanged.
+    // The middle stage of each world uses the cyan underground artwork.
+    const bool underground = stage == 2;
     tileMap.setTileTexture('#', assets.getTexture(
-        level == 2 ? "GroundUndergroundTile" : "GroundTile"));
+        underground ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
-        level == 2 ? "BrickUndergroundTile" : "BrickTile"));
+        underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
-        level == 2 ? "HardBlockUndergroundTile" : "HardBlockTile"));
+        underground ? "HardBlockUndergroundTile" : "HardBlockTile"));
     tileMap.setTileTexture('?', assets.getTexture(
-        level == 2 ? "QuestionBlockUnderground" : "QuestionBlock"),
-        level == 2 ? 6 : 4, sf::seconds(0.15f));
+        underground ? "QuestionBlockUnderground" : "QuestionBlock"),
+        underground ? 6 : 4, sf::seconds(0.15f));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
-        std::cerr << "[Core Engine] Warning: Level " << level
+        std::cerr << "[Core Engine] Warning: World " << world << "-" << stage
                   << " map is empty, nothing to play!\n";
         return false;
     }
@@ -401,8 +406,8 @@ bool PlayState::loadLevel(int level) {
     coinPops.clear();
     mushrooms.clear();
     spawnWalkingEnemies();
-    prepareQuestionBlockRewards();
-    std::cout << "[Core Engine] Level " << currentLevel << " loaded: "
+    prepareItemBlockRewards();
+    std::cout << "[Core Engine] World " << world << "-" << stage << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
               << tileMap.enemySpawns().size() << " Goombas, "
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas\n";
@@ -469,25 +474,26 @@ void PlayState::drawCoinPops(sf::RenderWindow& window) const {
     }
 }
 
-void PlayState::prepareQuestionBlockRewards() {
-    std::size_t questionBlockCount = 0;
+void PlayState::prepareItemBlockRewards() {
+    std::size_t itemBlockCount = 0;
     for (const auto& row : mapParser.getGrid()) {
-        questionBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), '?'));
+        itemBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), '?'));
+        itemBlockCount += static_cast<std::size_t>(std::count(row.begin(), row.end(), 'H'));
     }
 
     blockRewards.clear();
     nextBlockReward = 0;
 
     if (currentLevel == 1) {
-        // Level 1 contains exactly two mushroom rewards. Their positions in the
-        // reward sequence are randomized; every other question block gives a coin.
-        const std::size_t mushroomTarget = std::min<std::size_t>(2, questionBlockCount);
+        // World 1-1 contains exactly two mushroom rewards. Their positions in the
+        // reward sequence are randomized; every other item block gives a coin.
+        const std::size_t mushroomTarget = std::min<std::size_t>(2, itemBlockCount);
         blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
         blockRewards.insert(blockRewards.end(),
-                            questionBlockCount - mushroomTarget,
+                            itemBlockCount - mushroomTarget,
                             BlockReward::Coin);
         std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
-    } else if (questionBlockCount >= 4) {
+    } else if (itemBlockCount >= 4) {
         // Keep the original guarantee: the first four hits contain two of each.
         const BlockReward guaranteed[] = {
             BlockReward::Coin, BlockReward::Coin,
@@ -498,36 +504,36 @@ void PlayState::prepareQuestionBlockRewards() {
 
         // Across the whole level, mushrooms make up about 25% of the rewards.
         const std::size_t mushroomTarget = std::max<std::size_t>(
-            2, questionBlockCount / kMushroomRewardDivisor);
+            2, itemBlockCount / kMushroomRewardDivisor);
         blockRewards.insert(blockRewards.end(), mushroomTarget - 2, BlockReward::Mushroom);
         blockRewards.insert(blockRewards.end(),
-                            questionBlockCount - mushroomTarget - 2,
+                            itemBlockCount - mushroomTarget - 2,
                             BlockReward::Coin);
         std::shuffle(blockRewards.begin() + 4, blockRewards.end(), rewardRandom);
     } else {
         // Small custom levels cannot guarantee two of each; still favor coins.
-        const std::size_t mushroomTarget = questionBlockCount / kMushroomRewardDivisor;
+        const std::size_t mushroomTarget = itemBlockCount / kMushroomRewardDivisor;
         blockRewards.insert(blockRewards.end(), mushroomTarget, BlockReward::Mushroom);
         blockRewards.insert(blockRewards.end(),
-                            questionBlockCount - mushroomTarget,
+                            itemBlockCount - mushroomTarget,
                             BlockReward::Coin);
         std::shuffle(blockRewards.begin(), blockRewards.end(), rewardRandom);
     }
 
     std::size_t mushroomCount = static_cast<std::size_t>(std::count(
         blockRewards.begin(), blockRewards.end(), BlockReward::Mushroom));
-    std::cout << "[Core Engine] Question rewards: "
+    std::cout << "[Core Engine] Item-block rewards: "
               << (blockRewards.size() - mushroomCount) << " coins, "
               << mushroomCount << " mushrooms";
     if (currentLevel == 1) {
-        std::cout << "; Level 1 has exactly two randomized mushrooms\n";
+        std::cout << "; World 1-1 has exactly two randomized mushrooms\n";
     } else {
         std::cout << "; mushroom rate is about 25% and the first four "
                      "guarantee two of each\n";
     }
 }
 
-PlayState::BlockReward PlayState::takeNextQuestionBlockReward() {
+PlayState::BlockReward PlayState::takeNextItemBlockReward() {
     if (nextBlockReward >= blockRewards.size()) {
         return BlockReward::Coin;
     }
@@ -753,7 +759,7 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
 }
 
 void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
-    const std::string goombaTextureKey = currentLevel == 2
+    const std::string goombaTextureKey = Config::stageNumber(currentLevel) == 2
         ? "GoombaUnderground" : "Goomba";
     sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
     sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
@@ -868,8 +874,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
             avatarPos.y = tile.position.y + tile.size.y;
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
-            if (tileMap.activateQuestionBlock(col, row)) {
-                if (takeNextQuestionBlockReward() == BlockReward::Mushroom) {
+            if (tileMap.activateItemBlock(col, row)) {
+                if (takeNextItemBlockReward() == BlockReward::Mushroom) {
                     spawnMushroom(tile.position);
                 } else {
                     spawnCoinPop(tile.position);
@@ -980,7 +986,8 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
         // can be matched against its map file straight away.
         float leftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
         int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
-        label = "MAP VIEW L" + std::to_string(currentLevel)
+        label = "MAP VIEW " + std::to_string(Config::worldNumber(currentLevel))
+              + "-" + std::to_string(Config::stageNumber(currentLevel))
               + "   COL " + std::to_string(firstColumn) + "-"
               + std::to_string(firstColumn + Config::kViewTilesX - 1)
               + "   A/D SCROLL   SHIFT FASTER   F EXIT";
@@ -1003,11 +1010,13 @@ void PlayState::render(sf::RenderWindow& window) {
     const sf::View screenView = window.getView();
     camera.setViewport(screenView.getViewport());
 
-    // World 1-2 stays dark while underground, then returns to the outdoor sky
-    // for the adapted pipe, staircase, flag and castle goal area.
+    // Each middle stage stays dark underground, then returns to the outdoor sky
+    // for its adapted pipe, staircase, flag and castle goal area.
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
-    bool underground = currentLevel == 2
-                    && avatarPos.x < kLevel2UndergroundColumns * Config::kTileSize;
+    const int outdoorStartColumn = std::max(
+        0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
+    bool underground = Config::stageNumber(currentLevel) == 2
+                    && avatarPos.x < outdoorStartColumn * Config::kTileSize;
     sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 

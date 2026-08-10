@@ -148,7 +148,7 @@ private:
 
     /**
      * @brief Loads and builds one numbered map file.
-     * @param level Internal level index: 1 loads level1.txt and 2 loads level1-2.txt.
+     * @param level Linear campaign index converted to level<world>-<stage>.txt.
      * @return True when the map was loaded and built successfully.
      */
     bool loadLevel(int level);
@@ -168,11 +168,11 @@ private:
     /// @brief Draws all temporary coins in world space.
     void drawCoinPops(sf::RenderWindow& window) const;
 
-    /// @brief Builds a random reward bag with at least two coins and two mushrooms.
-    void prepareQuestionBlockRewards();
+    /// @brief Builds a random reward bag for question and hidden item blocks.
+    void prepareItemBlockRewards();
 
-    /// @brief Returns the reward assigned to the next activated question block.
-    BlockReward takeNextQuestionBlockReward();
+    /// @brief Returns the reward assigned to the next activated item block.
+    BlockReward takeNextItemBlockReward();
 
     /// @brief Starts a mushroom emerging from an activated question block.
     void spawnMushroom(sf::Vector2f blockPosition);

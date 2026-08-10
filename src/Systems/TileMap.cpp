@@ -264,8 +264,9 @@ void TileMap::update(sf::Time dt) {
     }
 }
 
-bool TileMap::activateQuestionBlock(int col, int row) {
-    if (typeAt(col, row) != TileType::QuestionBlock) {
+bool TileMap::activateItemBlock(int col, int row) {
+    const TileType type = typeAt(col, row);
+    if (type != TileType::QuestionBlock && type != TileType::HiddenBlock) {
         return false;
     }
 

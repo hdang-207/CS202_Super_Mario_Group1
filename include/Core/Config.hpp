@@ -21,8 +21,20 @@
  * sky fills the top, the same framing as the original Super Mario Bros.
  */
 namespace Config {
-    /// This project currently ships World 1-1 and World 1-2 only.
-    inline constexpr int kFinalLevel = 2;
+    /// The campaign contains three worlds with three stages in each world.
+    inline constexpr int kWorldCount = 3;
+    inline constexpr int kStagesPerWorld = 3;
+    inline constexpr int kFinalLevel = kWorldCount * kStagesPerWorld;
+
+    /// Converts the one-based linear save/progress index to its displayed world number.
+    inline constexpr int worldNumber(int level) {
+        return (level - 1) / kStagesPerWorld + 1;
+    }
+
+    /// Converts the one-based linear save/progress index to its displayed stage number.
+    inline constexpr int stageNumber(int level) {
+        return (level - 1) % kStagesPerWorld + 1;
+    }
 
     /// Size of one tile in the atlas artwork, in pixels.
     inline constexpr float kSourceTileSize = 16.f;

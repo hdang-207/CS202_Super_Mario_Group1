@@ -81,10 +81,10 @@ public:
     void update(sf::Time dt);
 
     /**
-     * @brief Replaces one question block with a used block.
-     * @return True only on the first activation of a question block at this cell.
+     * @brief Replaces one question or hidden item block with a used block.
+     * @return True only on the first activation of an item block at this cell.
      */
-    bool activateQuestionBlock(int col, int row);
+    bool activateItemBlock(int col, int row);
 
     /// @brief True if the tile at this grid cell blocks movement (out of bounds is not solid).
     bool isSolid(int col, int row) const;

@@ -24,7 +24,8 @@ void VictoryState::init() {
     const bool gameComplete = progress.currentLevel >= Config::kFinalLevel;
     std::string title = gameComplete
         ? "YOU WIN THE GAME!"
-        : "LEVEL " + std::to_string(progress.currentLevel) + " CLEAR!";
+        : "WORLD " + std::to_string(Config::worldNumber(progress.currentLevel))
+            + "-" + std::to_string(Config::stageNumber(progress.currentLevel)) + " CLEAR!";
     victoryText.setString(title);
     victoryText.setCharacterSize(48);
     victoryText.setFillColor(sf::Color::White);
