@@ -13,7 +13,7 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   # ground   B brick   ? question block   U used block   S staircase
+     *   # ground   C cloud block   B brick   ? question block   U used block   S staircase
      *   [] pipe top       {} pipe body          H hidden block  o coin
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * L horizontal lift, and . empty sky.
@@ -22,6 +22,7 @@ namespace {
      */
     constexpr TileDef kTileDefs[] = {
         { '#', TileType::Ground        },
+        { 'C', TileType::Ground        },
         { 'B', TileType::Brick         },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },

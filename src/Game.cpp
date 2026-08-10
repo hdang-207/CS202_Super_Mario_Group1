@@ -54,6 +54,7 @@ Game::Game()
 
     // Level artwork: one image per map character, no tile atlas involved.
     assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
+    assets.loadTexture("CloudBlock", Systems::resourcePath("assets/textures/cloud_block.png"));
     assets.loadTexture("GroundUndergroundTile",
                        Systems::resourcePath("assets/textures/ground_underground.png"));
     assets.loadTexture("BrickTile", Systems::resourcePath("assets/textures/brick.png"));

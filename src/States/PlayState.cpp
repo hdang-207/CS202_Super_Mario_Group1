@@ -146,6 +146,7 @@ void PlayState::init() {
     // Artwork for every character the map file uses. 'H' is left out on purpose:
     // the hidden block has to stay invisible until it is struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
+    tileMap.setTileTexture('C', assets.getTexture("CloudBlock"));
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
