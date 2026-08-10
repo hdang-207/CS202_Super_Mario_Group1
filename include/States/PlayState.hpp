@@ -104,6 +104,14 @@ private:
     };
     std::vector<WalkingEnemy> walkingEnemies;
 
+    struct DeadEnemy {
+        EnemyKind kind;
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        float elapsed;
+    };
+    std::vector<DeadEnemy> deadEnemies;
+
     enum class BlockReward {
         Coin,
         Mushroom,
@@ -112,6 +120,25 @@ private:
     std::vector<BlockReward> blockRewards;
     std::size_t nextBlockReward{0};
     std::mt19937 rewardRandom{std::random_device{}()};
+    
+    struct BouncingBlock {
+        int col, row;
+        char originalSymbol;
+        sf::Vector2f position;
+        float startY;
+        float velocityY;
+        bool active{true};
+    };
+    std::vector<BouncingBlock> bouncingBlocks;
+
+    struct BrickDebris {
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        float elapsed;
+        int frame;
+    };
+    std::vector<BrickDebris> brickDebris;
+
     // =======================================================================
 
     // Free-look: F detaches the camera from the avatar so the level can be
@@ -230,6 +257,12 @@ private:
     void spawnExplosion(sf::Vector2f position);
     void updateExplosions(sf::Time dt);
     void drawExplosions(sf::RenderWindow& window) const;
+
+    void updateDeadEnemies(sf::Time dt);
+    void drawDeadEnemies(sf::RenderWindow& window) const;
+
+    void updateBlocks(sf::Time dt);
+    void drawBlocks(sf::RenderWindow& window) const;
 
     /// @brief Creates Goombas and Blue Koopas from their map markers.
     void spawnWalkingEnemies();

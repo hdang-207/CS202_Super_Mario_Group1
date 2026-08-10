@@ -13,6 +13,7 @@ enum class TileType {
     Coin,          ///< Pickup: drawn and animated, but never blocks movement.
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
+    CoinBrick,     ///< Brick that contains coins (solid).
     QuestionBlock, ///< Item block (solid).
     UsedBlock,     ///< Question block after its item has been released (solid).
     StairBlock,    ///< Solid staircase block.
@@ -85,6 +86,26 @@ public:
      * @return True only on the first activation of a question block at this cell.
      */
     bool activateQuestionBlock(int col, int row);
+
+    /**
+     * @brief Breaks a brick at the specified location, turning it into empty space.
+     * @return True if a brick or coin brick was successfully broken.
+     */
+    bool breakBrick(int col, int row);
+
+    /**
+     * @brief Hides a brick visually for bouncing animation, keeping it solid.
+     * @return The original symbol of the brick, or \0 if not a brick.
+     */
+    char hideBrick(int col, int row);
+
+    /**
+     * @brief Restores a previously hidden brick back to the map.
+     */
+    void restoreBrick(int col, int row, char symbol);
+
+    /// @brief Changes the TileType of the map cell at (col, row).
+    void changeType(int col, int row, TileType newType);
 
     /// @brief True if the tile at this grid cell blocks movement (out of bounds is not solid).
     bool isSolid(int col, int row) const;

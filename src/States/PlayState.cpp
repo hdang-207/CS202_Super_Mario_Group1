@@ -155,6 +155,7 @@ void PlayState::init() {
     // the hidden block has to stay invisible until it is struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('C', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
     tileMap.setTileTexture(']', assets.getTexture("PipeTopRight"));
@@ -309,6 +310,8 @@ void PlayState::update(sf::Time dt) {
     updateMushrooms(dt);
     updateFireFlowers(dt);
     updateExplosions(dt);
+    updateDeadEnemies(dt);
+    updateBlocks(dt);
     if (invincibleTimer > 0.f) {
         invincibleTimer -= dt.asSeconds();
     }
@@ -404,6 +407,8 @@ bool PlayState::loadLevel(int level) {
     tileMap.setTileTexture('#', assets.getTexture(
         level == 2 ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
+        level == 2 ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('C', assets.getTexture(
         level == 2 ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
         level == 2 ? "HardBlockUndergroundTile" : "HardBlockTile"));
@@ -620,7 +625,7 @@ void PlayState::updateMushrooms(sf::Time dt) {
                 if (it->velocity.y > 0.f) {
                     it->position.y = tile.position.y - size.y;
                 } else if (it->velocity.y < 0.f) {
-                    it->position.y = tile.position.y + tile.size.y;
+                    it->position.y = tile.position.y + size.y;
                 }
                 it->velocity.y = 0.f;
             }
@@ -1095,6 +1100,77 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     spawnCoinPop(tile.position);
                     Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
                 }
+                char symbol = tileMap.hideBrick(col, row);
+                if (symbol != '\0') {
+                    bouncingBlocks.push_back({col, row, symbol, tile.position, tile.position.y, -150.f, true});
+                }
+            } else {
+                TileType type = tileMap.typeAt(col, row);
+                if (type == TileType::Brick || type == TileType::CoinBrick || type == TileType::UsedBlock) {
+                    // Break normal bricks if Fire Mario or Super Mario
+                    if (type == TileType::Brick && (currentForm == AvatarForm::Fire || playerForm == PlayerForm::Super)) {
+                        if (tileMap.breakBrick(col, row)) {
+                            // Spawn debris
+                            float tx = tile.position.x;
+                            float ty = tile.position.y;
+                            brickDebris.push_back({{tx, ty}, {-60.f, -200.f}, 0.f, 0});
+                            brickDebris.push_back({{tx + 8.f, ty}, {60.f, -200.f}, 0.f, 0});
+                            brickDebris.push_back({{tx, ty + 8.f}, {-40.f, -100.f}, 0.f, 0});
+                            brickDebris.push_back({{tx + 8.f, ty + 8.f}, {40.f, -100.f}, 0.f, 0});
+                            
+                            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("BrickBreak"));
+                            
+                            // Kill enemies above
+                            for (auto& enemy : walkingEnemies) {
+                                if (enemy.alive) {
+                                    float ew = tileMap.tileSize();
+                                    float eh = tileMap.tileSize();
+                                    float ex = enemy.position.x;
+                                    float ey = enemy.position.y;
+                                    
+                                    // Check if enemy is standing on the block
+                                    if (ey + eh >= ty - 2.0f && ey + eh <= ty + 2.0f && ex + ew > tx && ex < tx + tileMap.tileSize()) {
+                                        enemy.alive = false;
+                                        deadEnemies.push_back({enemy.kind, enemy.position, {0.f, -250.f}, 0.f});
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Bounce brick
+                        char symbol = tileMap.hideBrick(col, row);
+                        if (symbol != '\0') {
+                            if (type == TileType::CoinBrick) {
+                                spawnCoinPop(tile.position);
+                                Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
+                                symbol = 'U';
+                                tileMap.changeType(col, row, TileType::UsedBlock);
+                            } else {
+                                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("BrickCollision"));
+                            }
+                            
+                            // Kill enemies above
+                            float tx = tile.position.x;
+                            float ty = tile.position.y;
+                            for (auto& enemy : walkingEnemies) {
+                                if (enemy.alive) {
+                                    float ew = tileMap.tileSize();
+                                    float eh = tileMap.tileSize();
+                                    float ex = enemy.position.x;
+                                    float ey = enemy.position.y;
+                                    
+                                    // Check if enemy is standing on the block
+                                    if (ey + eh >= ty - 2.0f && ey + eh <= ty + 2.0f && ex + ew > tx && ex < tx + tileMap.tileSize()) {
+                                        enemy.alive = false;
+                                        deadEnemies.push_back({enemy.kind, enemy.position, {0.f, -250.f}, 0.f});
+                                    }
+                                }
+                            }
+                            
+                            bouncingBlocks.push_back({col, row, symbol, tile.position, tile.position.y, -150.f, true});
+                        }
+                    }
+                }
             }
             avatarVelocity.y = 0.f;
         }
@@ -1243,12 +1319,104 @@ void PlayState::render(sf::RenderWindow& window) {
     drawFireFlowers(window);
     drawBullets(window);
     drawWalkingEnemies(window);
+    drawDeadEnemies(window);
+    drawBlocks(window);
     window.draw(avatarSprite);
     drawExplosions(window);
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
     hud.render(window);
+}
+
+void PlayState::updateBlocks(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    
+    // Update Bouncing Blocks
+    for (auto& block : bouncingBlocks) {
+        if (!block.active) continue;
+        
+        block.velocityY += kGravity * seconds;
+        block.position.y += block.velocityY * seconds;
+        
+        // Check if it returned to original position
+        if (block.position.y >= block.startY) {
+            block.position.y = block.startY;
+            block.active = false;
+            tileMap.restoreBrick(block.col, block.row, block.originalSymbol);
+        }
+    }
+    
+    // Remove inactive blocks
+    bouncingBlocks.erase(std::remove_if(bouncingBlocks.begin(), bouncingBlocks.end(),
+        [](const BouncingBlock& b) { return !b.active; }), bouncingBlocks.end());
+        
+    // Update Brick Debris
+    for (auto it = brickDebris.begin(); it != brickDebris.end(); ) {
+        it->velocity.y += kGravity * seconds;
+        it->position += it->velocity * seconds;
+        it->elapsed += seconds;
+        
+        // Spin animation (change frame every 0.1s)
+        if (it->elapsed > 0.1f) {
+            it->elapsed = 0.f;
+            it->frame = (it->frame + 1) % 4;
+        }
+        
+        // Remove if fallen below screen
+        if (it->position.y > tileMap.pixelHeight() + 50.f) {
+            it = brickDebris.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PlayState::drawBlocks(sf::RenderWindow& window) const {
+    // Draw Bouncing Blocks
+    for (const auto& block : bouncingBlocks) {
+        char drawSymbol = block.originalSymbol;
+        if (drawSymbol == 'C') {
+            drawSymbol = 'U';
+        }
+        
+        const sf::Texture* tex = nullptr;
+        sf::IntRect rect;
+        
+        if (drawSymbol == 'B' || drawSymbol == 'C') {
+            tex = &assets.getTexture(currentLevel == 2 ? "BrickUndergroundTile" : "BrickTile");
+        } else if (drawSymbol == '?') {
+            tex = &assets.getTexture(currentLevel == 2 ? "QuestionBlockUnderground" : "QuestionBlock");
+            rect = sf::IntRect({0, 0}, {16, 16});
+        } else if (drawSymbol == 'U') {
+            tex = &assets.getTexture("EmptyBlock");
+        }
+        
+        if (tex) {
+            sf::Sprite sprite(*tex);
+            if (drawSymbol == '?') {
+                sprite.setTextureRect(rect);
+            }
+            float scale = tileMap.tileSize() / 16.f;
+            sprite.setScale({scale, scale});
+            sprite.setPosition(block.position);
+            window.draw(sprite);
+        }
+    }
+    
+    // Draw Brick Debris
+    if (!brickDebris.empty()) {
+        sf::Sprite debrisSprite(assets.getTexture(currentLevel == 2 ? "BrickUndergroundTile" : "BrickTile"));
+        float scale = (tileMap.tileSize() / 16.f) * 0.5f; // half size
+        debrisSprite.setScale({scale, scale});
+        debrisSprite.setOrigin({8.f, 8.f}); // center of 16x16 texture
+        
+        for (const auto& debris : brickDebris) {
+            debrisSprite.setPosition({debris.position.x + 8.f * scale, debris.position.y + 8.f * scale});
+            debrisSprite.setRotation(sf::degrees(debris.frame * 90.f)); // Spin 90 degrees per frame
+            window.draw(debrisSprite);
+        }
+    }
 }
 
 SaveData PlayState::getSaveData() const {
@@ -1287,4 +1455,43 @@ bool PlayState::quickLoad() {
         }
     }
     return false;
+}
+
+void PlayState::updateDeadEnemies(sf::Time dt) {
+    float seconds = dt.asSeconds();
+    for (auto it = deadEnemies.begin(); it != deadEnemies.end(); ) {
+        it->elapsed += seconds;
+        it->velocity.y += kGravity * seconds;
+        it->position += it->velocity * seconds;
+        
+        if (it->position.y > tileMap.pixelHeight() + 100.f) {
+            it = deadEnemies.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PlayState::drawDeadEnemies(sf::RenderWindow& window) const {
+    const std::string goombaTextureKey = currentLevel == 2
+        ? "GoombaUnderground" : "Goomba";
+    sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
+    sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
+
+    for (const DeadEnemy& enemy : deadEnemies) {
+        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
+        sf::Sprite& sprite = isKoopa ? koopaSprite : goombaSprite;
+        const int sourceHeight = isKoopa ? 24 : TileMap::kSourceTileSize;
+
+        sprite.setTextureRect(sf::IntRect(
+            {0, 0},
+            {TileMap::kSourceTileSize, sourceHeight}));
+        
+        // Upside down
+        sprite.setScale({Config::kZoom, -Config::kZoom});
+        float scaledHeight = sourceHeight * Config::kZoom;
+        sprite.setPosition({enemy.position.x, enemy.position.y + scaledHeight});
+        
+        window.draw(sprite);
+    }
 }

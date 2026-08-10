@@ -42,7 +42,9 @@ Game::Game()
     assets.loadSoundBuffer("FireSound", Systems::resourcePath("assets/audio/sound/Fire.wav"));
     assets.loadSoundBuffer("ExplodeSound", Systems::resourcePath("assets/audio/sound/Explode.wav"));
     assets.loadSoundBuffer("DowngradeSound", Systems::resourcePath("assets/audio/sound/downgrade.wav"));
-
+    assets.loadSoundBuffer("BrickBreak", Systems::resourcePath("assets/audio/sound/brick_break.wav"));
+    assets.loadSoundBuffer("BrickCollision", Systems::resourcePath("assets/audio/sound/brick_collision.wav"));
+    
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));
 
