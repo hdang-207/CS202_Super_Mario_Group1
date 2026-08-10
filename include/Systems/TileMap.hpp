@@ -44,7 +44,7 @@ public:
 
     /**
      * @brief Sets the artwork one map character is drawn with.
-     * @param symbol Character as it appears in the map file, e.g. '#', 'C' or '?'.
+     * @param symbol Character as it appears in the map file, e.g. '#', 'b' or '?'.
      * @param texture Image for that character. It is stretched over one whole
      *        tile, so a 16x16 png lines up one-to-one with the level grid.
      * @param frameCount Number of animation frames laid out left to right inside

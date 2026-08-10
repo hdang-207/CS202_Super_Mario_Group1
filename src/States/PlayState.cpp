@@ -159,7 +159,7 @@ void PlayState::init() {
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
     tileMap.setTileTexture('C', assets.getTexture("CloudBlock"));
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
-    tileMap.setTileTexture('C', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('b', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
     tileMap.setTileTexture(']', assets.getTexture("PipeTopRight"));
@@ -396,7 +396,6 @@ void PlayState::playLevelMusic() {
 void PlayState::handlePlayerDeath() {
     Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
 
-    lives--;
     SaveData data = getSaveData();
     std::cout << "[Core Engine] Player died in World "
               << Config::worldNumber(currentLevel) << "-"
@@ -427,7 +426,7 @@ bool PlayState::loadLevel(int level) {
         underground ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
-    tileMap.setTileTexture('C', assets.getTexture(
+    tileMap.setTileTexture('b', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
         underground ? "HardBlockUndergroundTile" : "HardBlockTile"));
@@ -1486,20 +1485,22 @@ void PlayState::updateBlocks(sf::Time dt) {
 }
 
 void PlayState::drawBlocks(sf::RenderWindow& window) const {
+    const bool underground = Config::stageNumber(currentLevel) == 2;
+
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
         char drawSymbol = block.originalSymbol;
-        if (drawSymbol == 'C') {
+        if (drawSymbol == 'b') {
             drawSymbol = 'U';
         }
-        
+
         const sf::Texture* tex = nullptr;
         sf::IntRect rect;
-        
-        if (drawSymbol == 'B' || drawSymbol == 'C') {
-            tex = &assets.getTexture(currentLevel == 2 ? "BrickUndergroundTile" : "BrickTile");
+
+        if (drawSymbol == 'B') {
+            tex = &assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile");
         } else if (drawSymbol == '?') {
-            tex = &assets.getTexture(currentLevel == 2 ? "QuestionBlockUnderground" : "QuestionBlock");
+            tex = &assets.getTexture(underground ? "QuestionBlockUnderground" : "QuestionBlock");
             rect = sf::IntRect({0, 0}, {16, 16});
         } else if (drawSymbol == 'U') {
             tex = &assets.getTexture("EmptyBlock");
@@ -1519,7 +1520,7 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
     
     // Draw Brick Debris
     if (!brickDebris.empty()) {
-        sf::Sprite debrisSprite(assets.getTexture(currentLevel == 2 ? "BrickUndergroundTile" : "BrickTile"));
+        sf::Sprite debrisSprite(assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile"));
         float scale = (tileMap.tileSize() / 16.f) * 0.5f; // half size
         debrisSprite.setScale({scale, scale});
         debrisSprite.setOrigin({8.f, 8.f}); // center of 16x16 texture
@@ -1586,7 +1587,7 @@ void PlayState::updateDeadEnemies(sf::Time dt) {
 }
 
 void PlayState::drawDeadEnemies(sf::RenderWindow& window) const {
-    const std::string goombaTextureKey = currentLevel == 2
+    const std::string goombaTextureKey = Config::stageNumber(currentLevel) == 2
         ? "GoombaUnderground" : "Goomba";
     sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
     sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));

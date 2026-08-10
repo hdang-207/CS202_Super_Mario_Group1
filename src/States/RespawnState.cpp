@@ -20,7 +20,9 @@ void RespawnState::init() {
     bgShape.setSize({Config::kViewWidth, Config::kViewHeight});
     bgShape.setFillColor(sf::Color::Black);
 
-    std::string worldStr = "WORLD 1-" + std::to_string(progress.currentLevel);
+    std::string worldStr = "WORLD "
+        + std::to_string(Config::worldNumber(progress.currentLevel)) + "-"
+        + std::to_string(Config::stageNumber(progress.currentLevel));
     worldText.setString(worldStr);
     worldText.setCharacterSize(36);
     worldText.setFillColor(sf::Color::White);

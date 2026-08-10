@@ -13,8 +13,9 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   # ground   C cloud block   B brick   ? question block   U used block   S staircase
-     *   [] pipe top       {} pipe body          H hidden block  o coin
+     *   # ground   C cloud block   B brick   b coin brick   ? question block
+     *   U used block      S staircase          [] pipe top    {} pipe body
+     *   H hidden block    o coin
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * L horizontal lift, and . empty sky.
      * Scenery characters (M m V v l c F X W I) carry no entry here - they are
@@ -24,7 +25,7 @@ namespace {
         { '#', TileType::Ground        },
         { 'C', TileType::Ground        },
         { 'B', TileType::Brick         },
-        { 'C', TileType::CoinBrick     },
+        { 'b', TileType::CoinBrick     },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
