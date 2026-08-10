@@ -851,8 +851,8 @@ void PlayState::spawnWalkingEnemies() {
                            + tileMap.blueKoopaSpawns().size());
 
     for (sf::Vector2f spawn : tileMap.enemySpawns()) {
-        walkingEnemies.push_back(
-            {EnemyKind::Goomba, spawn, {-kGoombaSpeed, 0.f}});
+        auto data = entity::EntityFactory::createEnemyData(entity::EnemyType::Goomba, spawn, kGoombaSpeed);
+        walkingEnemies.push_back({EnemyKind::Goomba, data.position, data.velocity});
     }
 
     // A Koopa sprite is 24px tall while one map cell is 16px. Markers remain
@@ -860,8 +860,8 @@ void PlayState::spawnWalkingEnemies() {
     const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        walkingEnemies.push_back(
-            {EnemyKind::BlueKoopa, spawn, {-kBlueKoopaSpeed, 0.f}});
+        auto data = entity::EntityFactory::createEnemyData(entity::EnemyType::BlueKoopa, spawn, kBlueKoopaSpeed);
+        walkingEnemies.push_back({EnemyKind::BlueKoopa, data.position, data.velocity});
     }
 }
 

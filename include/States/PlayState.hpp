@@ -1,6 +1,8 @@
 #pragma once
 #include "Core/CharacterType.hpp"
 #include "Entities/Bullet.hpp"
+#include "Entities/Entity.hpp"
+#include "Entities/EntityFactory.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
