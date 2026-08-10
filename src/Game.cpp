@@ -87,6 +87,13 @@ Game::Game()
     assets.loadTexture("BushSmall", Systems::resourcePath("assets/textures/bush_small.png"));
     assets.loadTexture("CloudBig", Systems::resourcePath("assets/textures/cloud_big.png"));
     assets.loadTexture("CloudSmall", Systems::resourcePath("assets/textures/cloud_small.png"));
+    assets.loadTexture("Island", Systems::resourcePath("assets/textures/island.png"));
+    assets.loadTexture("IslandTopLeft", Systems::resourcePath("assets/textures/island_top_left.png"));
+    assets.loadTexture("IslandTopMiddle", Systems::resourcePath("assets/textures/island_top_middle.png"));
+    assets.loadTexture("IslandTopRight", Systems::resourcePath("assets/textures/island_top_right.png"));
+    assets.loadTexture("IslandTrunk", Systems::resourcePath("assets/textures/island_trunk.png"));
+    assets.loadTexture("MovingPlatform", Systems::resourcePath("assets/textures/moving_platform.png"));
+    assets.loadTexture("CastleWorld1_3", Systems::resourcePath("assets/textures/castle_world1-3.png"));
 
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));

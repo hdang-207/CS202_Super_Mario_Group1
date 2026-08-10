@@ -35,6 +35,10 @@ namespace {
     constexpr float kBlueKoopaFrameDuration = 0.2f;
     constexpr float kGoombaStompBounce = 550.f;
 
+    constexpr float kMovingPlatformSpeed = 90.f;
+    constexpr float kMovingPlatformRangeTiles = 3.f;
+    constexpr float kMovingPlatformWidthTiles = 3.f;
+
     /// How fast free-look scrolls the level, and the multiplier while Shift is held.
     constexpr float kFreeLookSpeed = 900.f;
     constexpr float kFreeLookBoost = 3.f;
@@ -151,6 +155,10 @@ void PlayState::init() {
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
     tileMap.setTileTexture('U', assets.getTexture("EmptyBlock"));
     tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
+    tileMap.setTileTexture('(', assets.getTexture("IslandTopLeft"));
+    tileMap.setTileTexture('-', assets.getTexture("IslandTopMiddle"));
+    tileMap.setTileTexture(')', assets.getTexture("IslandTopRight"));
+    tileMap.setTileTexture('|', assets.getTexture("IslandTrunk"));
 
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
@@ -161,6 +169,8 @@ void PlayState::init() {
     tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
     tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
+    tileMap.setDecorationTexture('I', assets.getTexture("Island"));
+    tileMap.setDecorationTexture('Y', assets.getTexture("CastleWorld1_3"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
@@ -302,6 +312,7 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    updateMovingPlatforms(dt);
     if (!moveAvatar(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -402,15 +413,17 @@ bool PlayState::loadLevel(int level) {
 
     currentLevel = level;
     hud.setWorld(currentLevel);
-    hud.setTime(400.f);
+    hud.setTime(world == 1 && stage == 3 ? 300.f : 400.f);
     coinPops.clear();
     mushrooms.clear();
     spawnWalkingEnemies();
+    spawnMovingPlatforms();
     prepareItemBlockRewards();
     std::cout << "[Core Engine] World " << world << "-" << stage << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
               << tileMap.enemySpawns().size() << " Goombas, "
-              << tileMap.blueKoopaSpawns().size() << " Blue Koopas\n";
+              << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
+              << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
     return true;
 }
 
@@ -419,11 +432,11 @@ bool PlayState::tryEnterNextLevel() {
     const bool reachedLevelExit = currentLevel < Config::kFinalLevel
         && tileMap.hasLevelExit()
         && player.findIntersection(tileMap.levelExitBounds()).has_value();
-    const bool reachedFinalGoal = currentLevel == Config::kFinalLevel
+    const bool reachedStageGoal = Config::stageNumber(currentLevel) == 3
         && tileMap.hasGoal()
         && player.findIntersection(tileMap.goalBounds()).has_value();
 
-    if (!reachedLevelExit && !reachedFinalGoal) {
+    if (!reachedLevelExit && !reachedStageGoal) {
         return false;
     }
 
@@ -643,6 +656,66 @@ void PlayState::spawnWalkingEnemies() {
     }
 }
 
+void PlayState::spawnMovingPlatforms() {
+    movingPlatforms.clear();
+    movingPlatforms.reserve(tileMap.movingPlatformSpawns().size());
+
+    bool moveRight = true;
+    for (const sf::Vector2f spawn : tileMap.movingPlatformSpawns()) {
+        const float speed = moveRight ? kMovingPlatformSpeed : -kMovingPlatformSpeed;
+        movingPlatforms.push_back({spawn, spawn, spawn.x, speed});
+        moveRight = !moveRight;
+    }
+}
+
+void PlayState::updateMovingPlatforms(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float tileSize = tileMap.tileSize();
+    const sf::Vector2f platformSize(
+        tileSize * kMovingPlatformWidthTiles, tileSize * 0.5f);
+    const float travel = tileSize * kMovingPlatformRangeTiles;
+
+    for (MovingPlatform& platform : movingPlatforms) {
+        platform.previousPosition = platform.position;
+
+        const sf::FloatRect oldBounds(platform.previousPosition, platformSize);
+        const sf::FloatRect player = avatarBounds();
+        const float playerBottom = player.position.y + player.size.y;
+        const float oldTop = oldBounds.position.y;
+        const bool horizontallyOverlapping =
+            player.position.x + player.size.x > oldBounds.position.x + 2.f
+            && player.position.x < oldBounds.position.x + oldBounds.size.x - 2.f;
+        const bool standingOnPlatform = horizontallyOverlapping
+            && std::abs(playerBottom - oldTop) <= 4.f
+            && avatarVelocity.y >= 0.f;
+
+        platform.position.x += platform.velocityX * seconds;
+        const float leftEnd = platform.originX - travel;
+        const float rightEnd = platform.originX + travel;
+        if (platform.position.x < leftEnd) {
+            platform.position.x = leftEnd;
+            platform.velocityX = std::abs(platform.velocityX);
+        } else if (platform.position.x > rightEnd) {
+            platform.position.x = rightEnd;
+            platform.velocityX = -std::abs(platform.velocityX);
+        }
+
+        if (standingOnPlatform) {
+            avatarPos.x += platform.position.x - platform.previousPosition.x;
+            avatar.setPosition(avatarPos);
+        }
+    }
+}
+
+void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
+    sf::Sprite platformSprite(assets.getTexture("MovingPlatform"));
+    platformSprite.setScale({Config::kZoom, Config::kZoom});
+    for (const MovingPlatform& platform : movingPlatforms) {
+        platformSprite.setPosition(platform.position);
+        window.draw(platformSprite);
+    }
+}
+
 bool PlayState::updateWalkingEnemies(sf::Time dt) {
     const float seconds = dt.asSeconds();
     const float tileSize = tileMap.tileSize();
@@ -858,6 +931,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
     avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
 
     onGround = false;
+    const float previousBottom = avatarPos.y + size.y;
     avatarPos.y += avatarVelocity.y * seconds;
     
     // TẠO HITBOX ẢO CHO TRỤC Y: Bóp hẹp chiều rộng để không quẹt tường
@@ -883,6 +957,29 @@ bool PlayState::moveAvatar(sf::Time dt) {
                 }
             }
             avatarVelocity.y = 0.f;
+        }
+    }
+
+    // World 1-3 lifts are one-way platforms: Mario may jump through them from
+    // below, then lands when his feet cross their top surface while falling.
+    if (!onGround && avatarVelocity.y >= 0.f) {
+        const float currentBottom = avatarPos.y + size.y;
+        const sf::FloatRect player = avatarBounds();
+        for (const MovingPlatform& platform : movingPlatforms) {
+            const float platformTop = platform.position.y;
+            const float platformRight = platform.position.x
+                + tileMap.tileSize() * kMovingPlatformWidthTiles;
+            const bool horizontallyOverlapping =
+                player.position.x + player.size.x > platform.position.x + 2.f
+                && player.position.x < platformRight - 2.f;
+            if (horizontallyOverlapping
+                && previousBottom <= platformTop + 2.f
+                && currentBottom >= platformTop) {
+                avatarPos.y = platformTop - size.y;
+                avatarVelocity.y = 0.f;
+                onGround = true;
+                break;
+            }
         }
     }
 
@@ -1022,6 +1119,7 @@ void PlayState::render(sf::RenderWindow& window) {
 
     window.setView(camera);
     window.draw(tileMap);
+    drawMovingPlatforms(window);
     drawCoinPops(window);
     drawMushrooms(window);
     drawWalkingEnemies(window);

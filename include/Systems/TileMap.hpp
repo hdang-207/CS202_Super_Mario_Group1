@@ -114,6 +114,9 @@ public:
     /// @brief Bottom-aligned map cells containing Blue Koopa spawn markers ('K').
     const std::vector<sf::Vector2f>& blueKoopaSpawns() const { return blueKoopas; }
 
+    /// @brief Top-left world positions of horizontal moving-platform markers ('L').
+    const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
+
     /// @brief True when the map contains a level-exit decoration marker ('W').
     bool hasLevelExit() const { return levelExitAvailable; }
 
@@ -164,6 +167,7 @@ private:
     sf::Vector2f spawn{0.f, 0.f};
     std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
+    std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
     bool goalAvailable{false};

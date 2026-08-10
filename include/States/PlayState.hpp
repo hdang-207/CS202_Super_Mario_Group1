@@ -75,6 +75,14 @@ private:
     };
     std::vector<WalkingEnemy> walkingEnemies;
 
+    struct MovingPlatform {
+        sf::Vector2f position;
+        sf::Vector2f previousPosition;
+        float originX;
+        float velocityX;
+    };
+    std::vector<MovingPlatform> movingPlatforms;
+
     enum class BlockReward {
         Coin,
         Mushroom
@@ -191,6 +199,15 @@ private:
 
     /// @brief Draws all animated walking enemies.
     void drawWalkingEnemies(sf::RenderWindow& window) const;
+
+    /// @brief Creates horizontal lifts from every 'L' marker in the map.
+    void spawnMovingPlatforms();
+
+    /// @brief Moves lifts between their horizontal endpoints and carries Mario.
+    void updateMovingPlatforms(sf::Time dt);
+
+    /// @brief Draws the three-tile moving lifts used by World 1-3.
+    void drawMovingPlatforms(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
