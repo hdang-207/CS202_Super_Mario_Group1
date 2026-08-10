@@ -8,14 +8,25 @@
 #include <cstddef>
 #include <random>
 #include "UI/HUD.hpp"
+#include "UI/ConsoleOverlay.hpp"
 #include <set>
 #include <vector>
+#include <memory>
+
+namespace Core { class CommandParser; }
 
 /**
  * @class PlayState
  * @brief Active gameplay state: loads the level, scrolls the camera, and handles avatar movement & gameplay loop.
  */
 class PlayState : public State {
+public:
+    enum class AvatarForm { Normal, Fire };
+    enum class EnemyKind {
+        Goomba,
+        BlueKoopa
+    };
+
 private:
     CharacterType selectedCharacter;
     MapParser mapParser;
@@ -85,13 +96,7 @@ private:
     };
     std::vector<ExplosionEntity> explosions;
 
-    enum class AvatarForm { Normal, Fire };
     AvatarForm currentForm{AvatarForm::Normal};
-
-    enum class EnemyKind {
-        Goomba,
-        BlueKoopa
-    };
 
     struct WalkingEnemy {
         EnemyKind kind;
@@ -146,6 +151,18 @@ private:
      * @return True if Right arrow or 'D' is held.
      */
     bool wantsRight() const;
+
+    /**
+     * @brief Checks if move up control keys are held.
+     * @return True if Up arrow or 'W' is held.
+     */
+    bool wantsUp() const;
+
+    /**
+     * @brief Checks if move down control keys are held.
+     * @return True if Down arrow or 'S' is held.
+     */
+    bool wantsDown() const;
 
     /**
      * @brief Checks if jump control keys are held.
@@ -269,7 +286,35 @@ private:
      */
     void drawFreeLookHint(sf::RenderWindow& window) const;
 
+    // Console system
+    UI::ConsoleOverlay console;
+    std::unique_ptr<Core::CommandParser> commandParser;
+
+    // Cheat flags
+    bool godMode{false};
+    bool noclipMode{false};
+    bool flyMode{false};
+    float speedMultiplier{1.f};
+    float giantScale{1.f};
+    float lastSpaceTime{0.f};
+
 public:
+    // Console command accessors
+    void setLives(int n) { lives = n; hud.setLives(lives); }
+    void setScore(int n) { score = n; hud.setScore(score); }
+    void setCoins(int n) { coins = n; hud.setCoins(coins); }
+    void setForm(AvatarForm form);
+    void teleport(float x, float y);
+    void warpToLevel(int level);
+    void spawnEnemyAtPlayer(EnemyKind kind);
+    void killAllEnemies();
+    void setSpeedMultiplier(float mult) { speedMultiplier = mult; }
+    void giveItem(const std::string& item);
+    void setTime(float seconds) { hud.setTime(seconds); }
+    void setGodMode(bool on) { godMode = on; }
+    void setNoclipMode(bool on) { noclipMode = on; }
+    void setFlyMode(bool on) { flyMode = on; }
+    void setGiantMode(bool on);
     PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character);
 
     /**

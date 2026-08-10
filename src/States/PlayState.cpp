@@ -10,6 +10,7 @@
 #include "Systems/ResourcePath.hpp"
 #include "Core/EventSystem.hpp"
 #include "Systems/SoundController.hpp"
+#include "Core/CommandParser.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -67,6 +68,14 @@ bool PlayState::wantsRight() const {
     return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
 }
 
+bool PlayState::wantsUp() const {
+    return holding(sf::Keyboard::Key::Up) || holding(sf::Keyboard::Key::W);
+}
+
+bool PlayState::wantsDown() const {
+    return holding(sf::Keyboard::Key::Down) || holding(sf::Keyboard::Key::S);
+}
+
 bool PlayState::wantsJump() const {
     return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
         || holding(sf::Keyboard::Key::W);
@@ -79,7 +88,9 @@ bool PlayState::wantsBoost() const {
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
-      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {}
+      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {
+    commandParser = std::make_unique<Core::CommandParser>(*this);
+}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
@@ -90,6 +101,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->score = data.score;
     this->coins = data.coins;
     this->lives = data.lives;
+    commandParser = std::make_unique<Core::CommandParser>(*this);
 }
 
 PlayState::~PlayState() {
@@ -208,25 +220,60 @@ void PlayState::handleInput(const sf::Event& event) {
         return;
     }
 
+    if (const auto* textEntered = event.getIf<sf::Event::TextEntered>()) {
+        console.handleTextInput(textEntered->unicode);
+        return; // Text events are only for the console
+    }
+
     if (const auto* keyReleased = event.getIf<sf::Event::KeyReleased>()) {
-        heldKeys.erase(keyReleased->code);
+        if (!console.isActive()) {
+            heldKeys.erase(keyReleased->code);
+        }
         return;
     }
 
     if (const auto* mousePressed = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mousePressed->button == sf::Mouse::Button::Left) {
+        if (!console.isActive() && mousePressed->button == sf::Mouse::Button::Left) {
             spawnBullet();
         }
         return;
     }
 
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        if (keyPressed->code == sf::Keyboard::Key::Slash) {
+            console.toggle();
+            if (console.isActive()) {
+                heldKeys.clear(); // Clear held keys so player stops moving
+            }
+            return;
+        }
+
+        if (console.isActive()) {
+            if (console.handleKeyPress(keyPressed->code)) {
+                std::string cmd = console.getAndClearInput();
+                Core::CommandResult result = commandParser->execute(cmd);
+                console.addOutput(result.message);
+            }
+            return; // Block other game inputs when console is active
+        }
+
         // Holding a key makes the system repeat KeyPressed; the toggles below must
         // only fire on the first one, otherwise resting on F would flicker the mode.
         bool repeat = holding(keyPressed->code);
         heldKeys.insert(keyPressed->code);
         if (repeat) {
             return;
+        }
+
+        if (keyPressed->code == sf::Keyboard::Key::Space && flyMode) {
+            float currentTime = hud.getTime(); // Use HUD time as a simple clock
+            if (lastSpaceTime > 0.f && (lastSpaceTime - currentTime) < 0.3f && (lastSpaceTime - currentTime) > 0.f) {
+                // Time counts down, so lastSpaceTime > currentTime
+                // Double tap space detected
+                // Start flying
+                avatarVelocity.y = -500.f; // Initial boost
+            }
+            lastSpaceTime = currentTime;
         }
 
         // Push interactive PauseState menu overlay on P or Escape
@@ -257,6 +304,11 @@ void PlayState::handleInput(const sf::Event& event) {
 
 void PlayState::update(sf::Time dt) {
     if (isPaused || transitionPending) {
+        return;
+    }
+
+    if (console.isActive()) {
+        // Only update the blinking cursor in the console overlay (handled in render)
         return;
     }
 
@@ -934,6 +986,12 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             score += isKoopa ? 200 : 100;
             hud.setScore(score);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
+        } else if (giantScale > 1.0f) {
+            // Auto kill enemies when giant
+            enemy.alive = false;
+            score += isKoopa ? 200 : 100;
+            hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
         } else if (damageProtectionRemaining > 0.f) {
             continue;
         } else if (playerForm == PlayerForm::Super) {
@@ -941,6 +999,10 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             damageProtectionRemaining = kDamageProtectionDuration;
             break;
         } else {
+            if (godMode) {
+                // Invincible from god mode, ignore hit
+                continue;
+            }
             if (invincibleTimer > 0.f) {
                 // Still invincible from recent downgrade, ignore hit
                 continue;
@@ -1030,73 +1092,89 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     // --- jumping -----------------------------------------------------------
     bool jumpPressed = wantsJump();
-    if (jumpPressed && !jumpHeld && onGround) {
-        avatarVelocity.y = -kJumpSpeed;
-        onGround = false;
-        Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
-    }
-    // Let go early and the jump is cut short - the classic variable jump height.
-    if (!jumpPressed && avatarVelocity.y < -kJumpSpeed * kJumpCutoff) {
-        avatarVelocity.y = -kJumpSpeed * kJumpCutoff;
+    if (flyMode) {
+        if (wantsUp() || jumpPressed) {
+            avatarVelocity.y = -kJumpSpeed * 0.5f;
+            onGround = false;
+        } else if (wantsDown()) {
+            avatarVelocity.y = kJumpSpeed * 0.5f;
+            onGround = false;
+        } else {
+            avatarVelocity.y = 0.f; // stand still in mid-air
+        }
+    } else {
+        if (jumpPressed && !jumpHeld && onGround) {
+            avatarVelocity.y = -kJumpSpeed;
+            onGround = false;
+            Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
+        }
+        // Let go early and the jump is cut short - the classic variable jump height.
+        if (!jumpPressed && avatarVelocity.y < -kJumpSpeed * kJumpCutoff) {
+            avatarVelocity.y = -kJumpSpeed * kJumpCutoff;
+        }
+        avatarVelocity.y = std::min(avatarVelocity.y + kGravity * seconds, kMaxFallSpeed);
     }
     jumpHeld = jumpPressed;
-
-    avatarVelocity.y = std::min(avatarVelocity.y + kGravity * seconds, kMaxFallSpeed);
 
     // --- move and resolve, one axis at a time ------------------------------
     sf::Vector2f size = avatar.getSize();
 
-    avatarPos.x += avatarVelocity.x * seconds;
+    avatarPos.x += (avatarVelocity.x * speedMultiplier) * seconds;
 
-    // Virtual X-axis hitbox: slightly narrow height to prevent snagging on floor/ceiling tiles
-    sf::FloatRect xBounds = avatarBounds();
-    xBounds.position.y += 1.0f;    // Shift top edge down by 1 pixel
-    xBounds.size.y -= 2.0f;        // Shift bottom edge up by 1 pixel
+    if (!noclipMode) {
+        // Virtual X-axis hitbox: slightly narrow height to prevent snagging on floor/ceiling tiles
+        sf::FloatRect xBounds = avatarBounds();
+        xBounds.position.y += 1.0f;    // Shift top edge down by 1 pixel
+        xBounds.size.y -= 2.0f;        // Shift bottom edge up by 1 pixel
 
-
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
-        if (avatarVelocity.x > 0.f) {
-            avatarPos.x = tile.position.x - size.x;
-            avatarVelocity.x = 0.f;
-        } else if (avatarVelocity.x < 0.f) {
-            avatarPos.x = tile.position.x + tile.size.x;
-            avatarVelocity.x = 0.f;
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
+            if (avatarVelocity.x > 0.f) {
+                avatarPos.x = tile.position.x - size.x;
+                avatarVelocity.x = 0.f;
+            } else if (avatarVelocity.x < 0.f) {
+                avatarPos.x = tile.position.x + tile.size.x;
+                avatarVelocity.x = 0.f;
+            }
         }
     }
 
     // SMB 1985 Camera Lock: Player cannot walk back past the left edge of the screen
-    float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
-    avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
+    if (!noclipMode) {
+        float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
+        avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
+    }
 
     onGround = false;
-    avatarPos.y += avatarVelocity.y * seconds;
+    avatarPos.y += (avatarVelocity.y * speedMultiplier) * seconds;
     
-    // Virtual Y-axis hitbox: slightly narrow width to prevent snagging on wall tiles
-    sf::FloatRect yBounds = avatarBounds();
-    yBounds.position.x += 1.0f;    // Shift left edge inward by 1 pixel
-    yBounds.size.x -= 2.0f;        // Shift right edge inward by 1 pixel
+    if (!noclipMode) {
+        // Virtual Y-axis hitbox: slightly narrow width to prevent snagging on wall tiles
+        sf::FloatRect yBounds = avatarBounds();
+        yBounds.position.x += 1.0f;    // Shift left edge inward by 1 pixel
+        yBounds.size.x -= 2.0f;        // Shift right edge inward by 1 pixel
 
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
-        if (avatarVelocity.y > 0.f) {
-            avatarPos.y = tile.position.y - size.y;
-            avatarVelocity.y = 0.f;
-            onGround = true;
-        } else if (avatarVelocity.y < 0.f) {
-            avatarPos.y = tile.position.y + tile.size.y;
-            int col = static_cast<int>(tile.position.x / tileMap.tileSize());
-            int row = static_cast<int>(tile.position.y / tileMap.tileSize());
-            if (tileMap.activateQuestionBlock(col, row)) {
-                BlockReward reward = takeNextQuestionBlockReward();
-                if (reward == BlockReward::Mushroom) {
-                    spawnMushroom(tile.position);
-                } else if (reward == BlockReward::FireFlower) {
-                    spawnFireFlower(tile.position);
-                } else {
-                    spawnCoinPop(tile.position);
-                    Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
+            if (avatarVelocity.y > 0.f) {
+                avatarPos.y = tile.position.y - size.y;
+                avatarVelocity.y = 0.f;
+                onGround = true;
+            } else if (avatarVelocity.y < 0.f) {
+                avatarPos.y = tile.position.y + tile.size.y;
+                int col = static_cast<int>(tile.position.x / tileMap.tileSize());
+                int row = static_cast<int>(tile.position.y / tileMap.tileSize());
+                if (tileMap.activateQuestionBlock(col, row)) {
+                    BlockReward reward = takeNextQuestionBlockReward();
+                    if (reward == BlockReward::Mushroom) {
+                        spawnMushroom(tile.position);
+                    } else if (reward == BlockReward::FireFlower) {
+                        spawnFireFlower(tile.position);
+                    } else {
+                        spawnCoinPop(tile.position);
+                        Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
+                    }
                 }
+                avatarVelocity.y = 0.f;
             }
-            avatarVelocity.y = 0.f;
         }
     }
 
@@ -1214,6 +1292,9 @@ void PlayState::drawFreeLookHint(sf::RenderWindow& window) const {
     }
 
     sf::Text hint(assets.getFont("MarioFont"), label, size);
+    if (!freeLook) {
+        position.x = Config::kViewWidth - hint.getLocalBounds().size.x - 16.f;
+    }
     hint.setPosition(position);
     hint.setFillColor(sf::Color::White);
     hint.setOutlineColor(sf::Color::Black);
@@ -1245,6 +1326,12 @@ void PlayState::render(sf::RenderWindow& window) {
     drawWalkingEnemies(window);
     window.draw(avatarSprite);
     drawExplosions(window);
+
+
+
+    if (console.isActive()) {
+        console.render(window, assets.getFont("MarioFont"), camera);
+    }
 
     window.setView(screenView);
     drawFreeLookHint(window); // always on: it doubles as proof the build is current
@@ -1287,4 +1374,62 @@ bool PlayState::quickLoad() {
         }
     }
     return false;
+}
+
+// Console command accessors implementation
+void PlayState::setForm(AvatarForm form) {
+    currentForm = form;
+    // Update sprite based on form
+    std::string prefix = (currentForm == AvatarForm::Fire ? "Fire" : "") +
+                         std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
+    avatarSprite.setTexture(assets.getTexture(prefix + "Idle"), true);
+}
+
+void PlayState::teleport(float x, float y) {
+    avatarPos = {x, y};
+    avatarVelocity = {0.f, 0.f};
+    onGround = false;
+}
+
+void PlayState::warpToLevel(int level) {
+    if (level >= 1 && level <= 3) {
+        currentLevel = level;
+        hud.setWorld(currentLevel);
+        loadLevel(currentLevel);
+        respawnAvatar();
+    }
+}
+
+void PlayState::spawnEnemyAtPlayer(EnemyKind kind) {
+    WalkingEnemy enemy;
+    enemy.kind = kind;
+    enemy.position = {avatarPos.x + 50.f, avatarPos.y}; // Spawn a bit ahead
+    enemy.velocity = {kind == EnemyKind::BlueKoopa ? -kBlueKoopaSpeed : -kGoombaSpeed, 0.f};
+    enemy.active = true;
+    walkingEnemies.push_back(enemy);
+}
+
+void PlayState::killAllEnemies() {
+    walkingEnemies.clear();
+}
+
+void PlayState::giveItem(const std::string& item) {
+    if (item == "flower") {
+        spawnFireFlower(avatarPos); // spawn at player pos
+    } else if (item == "mushroom") {
+        spawnMushroom(avatarPos); // spawn at player pos
+    }
+}
+
+void PlayState::setGiantMode(bool on) {
+    if (on) {
+        giantScale = 2.5f;
+        avatarSprite.setScale({giantScale, giantScale});
+        avatar.setSize({avatar.getSize().x * giantScale, avatar.getSize().y * giantScale});
+    } else {
+        // Revert size
+        avatarSprite.setScale({1.f, 1.f});
+        avatar.setSize({TileMap::kSourceTileSize, TileMap::kSourceTileSize}); // Roughly the default size
+        giantScale = 1.0f;
+    }
 }
