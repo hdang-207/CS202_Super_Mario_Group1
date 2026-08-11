@@ -36,6 +36,16 @@ namespace Config {
         return (level - 1) % kStagesPerWorld + 1;
     }
 
+    /// Converts a one-based world choice to the linear index of its first stage.
+    inline constexpr int firstLevelOfWorld(int world) {
+        return (world - 1) * kStagesPerWorld + 1;
+    }
+
+    /// True when a linear level is the third and final stage of its current world.
+    inline constexpr bool isLastStageOfWorld(int level) {
+        return stageNumber(level) == kStagesPerWorld;
+    }
+
     /// Size of one tile in the atlas artwork, in pixels.
     inline constexpr float kSourceTileSize = 16.f;
 

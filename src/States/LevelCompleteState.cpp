@@ -20,9 +20,10 @@ void LevelCompleteState::init() {
     bgShape.setSize({Config::kViewWidth, Config::kViewHeight});
     bgShape.setFillColor(sf::Color(20, 40, 100)); // Dark royal blue background
 
-    const bool finalLevel = progress.currentLevel >= Config::kFinalLevel;
-    std::string title = finalLevel
-        ? "YOU WIN THE GAME!"
+    const bool worldComplete = Config::isLastStageOfWorld(progress.currentLevel);
+    std::string title = worldComplete
+        ? "WORLD " + std::to_string(Config::worldNumber(progress.currentLevel))
+            + " COMPLETE!"
         : "WORLD " + std::to_string(Config::worldNumber(progress.currentLevel))
             + "-" + std::to_string(Config::stageNumber(progress.currentLevel))
             + " CLEAR!";
@@ -47,7 +48,7 @@ void LevelCompleteState::init() {
     statsText.setOrigin({sBounds.position.x + sBounds.size.x / 2.f, sBounds.position.y + sBounds.size.y / 2.f});
     statsText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.52f});
 
-    std::string prompt = finalLevel
+    std::string prompt = worldComplete
         ? "PRESS ENTER TO RETURN TO MAIN MENU"
         : "PRESS ENTER TO NEXT LEVEL  |  PRESS S TO SAVE & MENU";
     promptText.setString(prompt);
@@ -63,13 +64,14 @@ void LevelCompleteState::init() {
 void LevelCompleteState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         if (keyPressed->code == sf::Keyboard::Key::Enter) {
-            if (progress.currentLevel >= Config::kFinalLevel) {
+            if (Config::isLastStageOfWorld(progress.currentLevel)) {
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
             } else {
                 progress.currentLevel++;
                 gsm.changeState(std::make_unique<RespawnState>(gsm, assets, progress));
             }
-        } else if (keyPressed->code == sf::Keyboard::Key::S && progress.currentLevel < Config::kFinalLevel) {
+        } else if (keyPressed->code == sf::Keyboard::Key::S
+                   && !Config::isLastStageOfWorld(progress.currentLevel)) {
             progress.currentLevel++;
             if (SaveManager::saveProgress("savegame.txt", progress)) {
                 std::cout << "[Core Engine] Progress saved. Returning to Main Menu.\n";
