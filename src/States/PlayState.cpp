@@ -53,6 +53,7 @@ namespace {
     constexpr float kShootCooldown = 0.25f;
     constexpr float kBulletRechargeTime = 10.f;
     constexpr int kMaxBullets = 3;
+    constexpr float kBombExplosionRadius = 72.f;
 
     constexpr float kMovingPlatformSpeed = 90.f;
     constexpr float kMovingPlatformRangeTiles = 3.f;
@@ -200,7 +201,7 @@ void PlayState::init() {
     respawnAvatar();
     updateCamera();
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, left click to shoot, Esc to pause.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
                  "through the level with A/D (hold Shift to go faster).\n";
 }
@@ -223,13 +224,6 @@ void PlayState::handleInput(const sf::Event& event) {
         return;
     }
 
-    if (const auto* mousePressed = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mousePressed->button == sf::Mouse::Button::Left) {
-            spawnBullet();
-        }
-        return;
-    }
-
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // Holding a key makes the system repeat KeyPressed; the toggles below must
         // only fire on the first one, otherwise resting on F would flicker the mode.
@@ -240,7 +234,11 @@ void PlayState::handleInput(const sf::Event& event) {
         }
 
         // Push interactive PauseState menu overlay on P or Escape
-        if (keyPressed->code == sf::Keyboard::Key::P || keyPressed->code == sf::Keyboard::Key::Escape) {
+        if (keyPressed->code == sf::Keyboard::Key::X) {
+            spawnBullet();
+        } else if (keyPressed->code == sf::Keyboard::Key::C) {
+            spawnBomb();
+        } else if (keyPressed->code == sf::Keyboard::Key::P || keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
@@ -324,6 +322,7 @@ void PlayState::update(sf::Time dt) {
         return;
     }
     updateBullets(dt);
+    updateBomb(dt);
     if (!updateWalkingEnemies(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -450,6 +449,7 @@ bool PlayState::loadLevel(int level) {
     growingVines.clear();
     starPowerRemaining = 0.f;
     bullets.clear();
+    activeBomb.reset();
     availableBullets = kMaxBullets;
     shootCooldownRemaining = 0.f;
     ammoRechargeTimers.clear();
@@ -776,8 +776,10 @@ void PlayState::drawGrowingVines(sf::RenderWindow& window) const {
 }
 
 void PlayState::spawnBullet() {
-    if (shootCooldownRemaining > 0.f || availableBullets <= 0
-        || bullets.size() >= static_cast<std::size_t>(kMaxBullets)) {
+    const bool hasFirePower = m_player->hasFirePower();
+    if (!hasFirePower
+        && (shootCooldownRemaining > 0.f || availableBullets <= 0
+            || bullets.size() >= static_cast<std::size_t>(kMaxBullets))) {
         return;
     }
     
@@ -790,10 +792,12 @@ void PlayState::spawnBullet() {
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
-    --availableBullets;
-    ammoRechargeTimers.push_back(kBulletRechargeTime);
-    shootCooldownRemaining = kShootCooldown;
-    hud.setAmmo(availableBullets, kMaxBullets);
+    if (!hasFirePower) {
+        --availableBullets;
+        ammoRechargeTimers.push_back(kBulletRechargeTime);
+        shootCooldownRemaining = kShootCooldown;
+        hud.setAmmo(availableBullets, kMaxBullets);
+    }
 }
 
 void PlayState::updateBullets(sf::Time dt) {
@@ -1498,6 +1502,136 @@ void PlayState::respawnAvatar() {
     syncAvatarPowerVisuals();
 }
 
+void PlayState::spawnBomb() {
+    if (!m_player->hasFirePower() || activeBomb.has_value()) {
+        return;
+    }
+
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    const sf::Vector2f position{
+        facingRight ? player.right() : player.left() - combat::Bomb::kSize,
+        player.top() + player.size.y * 0.5f
+    };
+    activeBomb.emplace(position, facingRight);
+}
+
+void PlayState::updateBomb(sf::Time dt) {
+    if (!activeBomb) {
+        return;
+    }
+
+    activeBomb->update(dt.asSeconds());
+    const sf::FloatRect bounds = activeBomb->getBounds();
+    bool shouldExplode = activeBomb->fuseExpired()
+        || tileMap.intersectsSolid(bounds);
+
+    if (!shouldExplode) {
+        for (const WalkingEnemy& enemy : walkingEnemies) {
+            if (!enemy.alive || !enemy.active) {
+                continue;
+            }
+            const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+            const float height = enemy.state == EnemyState::Walking
+                ? (isKoopa ? tileMap.tileSize() * 1.5f : tileMap.tileSize())
+                : tileMap.tileSize() * 14.f / 16.f;
+            if (bounds.findIntersection(
+                    sf::FloatRect(enemy.position, {tileMap.tileSize(), height}))) {
+                shouldExplode = true;
+                break;
+            }
+        }
+    }
+
+    if (!shouldExplode) {
+        const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+        for (const PiranhaEntity& plant : piranhas) {
+            const sf::FloatRect plantBounds(
+                {plant.position.x + scale, plant.position.y + scale},
+                {16.f * scale, 23.f * scale});
+            if (plant.alive && plant.exposure >= 0.65f
+                && bounds.findIntersection(plantBounds)) {
+                shouldExplode = true;
+                break;
+            }
+        }
+    }
+
+    if (shouldExplode) {
+        explodeBomb(activeBomb->getPosition()
+                    + sf::Vector2f{combat::Bomb::kSize * 0.5f,
+                                   combat::Bomb::kSize * 0.5f});
+        activeBomb.reset();
+    }
+}
+
+void PlayState::explodeBomb(sf::Vector2f center) {
+    const sf::FloatRect blast(
+        center - sf::Vector2f{kBombExplosionRadius, kBombExplosionRadius},
+        {kBombExplosionRadius * 2.f, kBombExplosionRadius * 2.f});
+
+    for (WalkingEnemy& enemy : walkingEnemies) {
+        if (!enemy.alive || !enemy.active) {
+            continue;
+        }
+        const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+        const float height = enemy.state == EnemyState::Walking
+            ? (isKoopa ? tileMap.tileSize() * 1.5f : tileMap.tileSize())
+            : tileMap.tileSize() * 14.f / 16.f;
+        const sf::FloatRect enemyBounds(
+            enemy.position, {tileMap.tileSize(), height});
+        if (!blast.findIntersection(enemyBounds)) {
+            continue;
+        }
+
+        if (enemy.state == EnemyState::ShellIdle) {
+            const float shellCenter = enemy.position.x + tileMap.tileSize() * 0.5f;
+            enemy.state = EnemyState::ShellMoving;
+            enemy.velocity.x = shellCenter < center.x ? -kShellSpeed : kShellSpeed;
+            continue;
+        }
+
+        enemy.alive = false;
+        deadEnemies.push_back({enemy.kind, enemy.position, {0.f, -250.f}, 0.f});
+        score += isKoopa ? 200 : 100;
+    }
+
+    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+    for (PiranhaEntity& plant : piranhas) {
+        const sf::FloatRect plantBounds(
+            {plant.position.x + scale, plant.position.y + scale},
+            {16.f * scale, 23.f * scale});
+        if (plant.alive && plant.exposure >= 0.65f
+            && blast.findIntersection(plantBounds)) {
+            plant.alive = false;
+            score += 200;
+        }
+    }
+    hud.setScore(score);
+
+    const float tileSize = tileMap.tileSize();
+    const int firstCol = static_cast<int>(std::floor(blast.position.x / tileSize));
+    const int lastCol = static_cast<int>(std::floor(
+        (blast.position.x + blast.size.x) / tileSize));
+    const int firstRow = static_cast<int>(std::floor(blast.position.y / tileSize));
+    const int lastRow = static_cast<int>(std::floor(
+        (blast.position.y + blast.size.y) / tileSize));
+    for (int row = firstRow; row <= lastRow; ++row) {
+        for (int col = firstCol; col <= lastCol; ++col) {
+            if (tileMap.typeAt(col, row) == TileType::Brick) {
+                tileMap.breakBrick(col, row);
+            }
+        }
+    }
+
+    spawnExplosion(center);
+}
+
+void PlayState::drawBomb(sf::RenderWindow& window) const {
+    if (activeBomb) {
+        activeBomb->render(window);
+    }
+}
+
 bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
@@ -1835,6 +1969,7 @@ void PlayState::render(sf::RenderWindow& window) {
     drawFireFlowers(window);
     drawStars(window);
     drawBullets(window);
+    drawBomb(window);
     drawWalkingEnemies(window);
     drawDeadEnemies(window);
     drawBlocks(window);

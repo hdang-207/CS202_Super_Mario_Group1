@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/CharacterType.hpp"
+#include "Combat/Bomb.hpp"
 #include "Entities/Bullet.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
@@ -18,6 +19,7 @@
 #include "Player/Luigi.hpp"
 #include <cstddef>
 #include <random>
+#include <optional>
 #include "UI/HUD.hpp"
 #include <set>
 #include <vector>
@@ -89,6 +91,7 @@ private:
     int availableBullets{3};
     float shootCooldownRemaining{0.f};
     std::vector<float> ammoRechargeTimers;
+    std::optional<combat::Bomb> activeBomb;
 
     struct ExplosionEntity {
         sf::Vector2f position;
@@ -275,6 +278,11 @@ private:
     void spawnBullet();
     void updateBullets(sf::Time dt);
     void drawBullets(sf::RenderWindow& window) const;
+
+    void spawnBomb();
+    void updateBomb(sf::Time dt);
+    void explodeBomb(sf::Vector2f center);
+    void drawBomb(sf::RenderWindow& window) const;
 
     void spawnExplosion(sf::Vector2f position);
     void updateExplosions(sf::Time dt);
