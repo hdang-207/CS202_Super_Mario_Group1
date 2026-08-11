@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <SFML/System/Vector2.hpp>
 
 #include "Entities/Character.hpp"
 #include "Input/PlayerInput.hpp"
 #include "Player/PlayerState.hpp"
+#include "Player/PowerType.hpp"
 
 namespace entity {
 
@@ -58,15 +60,26 @@ public:
     [[nodiscard]]
     const PlayerMovementConfig& getMovementConfig() const noexcept;
 
+    void applyPower(PowerType power);
+    bool removeLatestPower();
+
+    [[nodiscard]] bool hasPower(PowerType power) const noexcept;
+    [[nodiscard]] bool isSuper() const noexcept;
+    [[nodiscard]] bool hasFirePower() const noexcept;
+
 protected:
     void processHorizontalMovement(float deltaTime);
     void processJump();
 
 private:
+    void setSuperCollider(bool super);
+
     PlayerInput m_input{};
     PlayerMovementConfig m_movementConfig{};
     std::unique_ptr<PlayerState> m_currentState;
     bool m_jumpWasHeldLastFrame{false};
+    sf::Vector2f m_smallColliderSize{};
+    std::vector<PowerType> m_powerStack;
 };
 
 } // namespace entity
