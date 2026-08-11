@@ -186,37 +186,6 @@ private:
      */
     std::set<sf::Keyboard::Key> heldKeys;
 
-    // /**
-    //  * @brief Checks if a specific key is currently held down.
-    //  * @param key Key code to check.
-    //  * @return True if key is held, false otherwise.
-    //  */
-    // bool holding(sf::Keyboard::Key key) const;
-
-    // /**
-    //  * @brief Checks if move left control keys are held.
-    //  * @return True if Left arrow or 'A' is held.
-    //  */
-    // bool wantsLeft() const;
-
-    // /**
-    //  * @brief Checks if move right control keys are held.
-    //  * @return True if Right arrow or 'D' is held.
-    //  */
-    // bool wantsRight() const;
-
-    // /**
-    //  * @brief Checks if jump control keys are held.
-    //  * @return True if Space, Up arrow, or 'W' is held.
-    //  */
-    // bool wantsJump() const;
-
-    // /**
-    //  * @brief Checks if boost/run control keys are held.
-    //  * @return True if Left Shift or Right Shift is held.
-    //  */
-    // bool wantsBoost() const;
-
     /**
      * @brief Returns current bounding rectangle of the test avatar.
      * @return FloatRect bounds of avatar.

@@ -58,27 +58,6 @@ namespace {
 
 }
 
-// bool PlayState::holding(sf::Keyboard::Key key) const {
-//     return heldKeys.count(key) > 0;
-// }
-
-// bool PlayState::wantsLeft() const {
-//     return holding(sf::Keyboard::Key::Left) || holding(sf::Keyboard::Key::A);
-// }
-
-// bool PlayState::wantsRight() const {
-//     return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
-// }
-
-// bool PlayState::wantsJump() const {
-//     return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
-//         || holding(sf::Keyboard::Key::W);
-// }
-
-// bool PlayState::wantsBoost() const {
-//     return holding(sf::Keyboard::Key::LShift) || holding(sf::Keyboard::Key::RShift);
-// }
-
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
