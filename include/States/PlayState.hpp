@@ -1,10 +1,18 @@
 #pragma once
 #include "Core/CharacterType.hpp"
 #include "Entities/Bullet.hpp"
+#include "Entities/Entity.hpp"
+#include "Entities/EntityFactory.hpp"
+#include "Input/InputHandler.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
 #include "Systems/SaveManager.hpp"
+#include "Physics/PhysicsSystem.hpp"
+#include "Physics/PhysicsBody.hpp"
+#include "Player/Player.hpp"
+#include "Player/Mario.hpp"
+#include "Player/Luigi.hpp"
 #include <cstddef>
 #include <random>
 #include "UI/HUD.hpp"
@@ -26,6 +34,21 @@ private:
     int coins{0};
     int lives{3};
     UI::HUD hud;
+
+    InputHandler inputHandler;
+
+    // === PHYSICS SYSTEM & ENTITY INTEGRATION (Phase 3 & 4) =================
+    physics::PhysicsSystem m_physicsSystem;
+    physics::PhysicsBody m_avatarPhysics;
+    
+    // Encapsulated Player entity (Mario / Luigi subclass instance)
+    std::unique_ptr<entity::Player> m_player;
+
+    /**
+     * @brief Helper to convert TileMap FloatRect overlaps to physics::AABB list.
+     */
+    std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
+    // =======================================================================
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -162,37 +185,6 @@ private:
      * Window events need no extra privileges on macOS.
      */
     std::set<sf::Keyboard::Key> heldKeys;
-
-    /**
-     * @brief Checks if a specific key is currently held down.
-     * @param key Key code to check.
-     * @return True if key is held, false otherwise.
-     */
-    bool holding(sf::Keyboard::Key key) const;
-
-    /**
-     * @brief Checks if move left control keys are held.
-     * @return True if Left arrow or 'A' is held.
-     */
-    bool wantsLeft() const;
-
-    /**
-     * @brief Checks if move right control keys are held.
-     * @return True if Right arrow or 'D' is held.
-     */
-    bool wantsRight() const;
-
-    /**
-     * @brief Checks if jump control keys are held.
-     * @return True if Space, Up arrow, or 'W' is held.
-     */
-    bool wantsJump() const;
-
-    /**
-     * @brief Checks if boost/run control keys are held.
-     * @return True if Left Shift or Right Shift is held.
-     */
-    bool wantsBoost() const;
 
     /**
      * @brief Returns current bounding rectangle of the test avatar.
