@@ -18,11 +18,9 @@ namespace {
     // Kinematics, in world pixels per second. Tuned against a 48px tile so the jump
     // clears roughly three and a half tiles, like Super Mario Bros.
     constexpr float kGravity = 2400.f;
-    constexpr float kWalkAcceleration = 1800.f;
     constexpr float kMaxWalkSpeed = 420.f;
     constexpr float kGroundFriction = 2000.f;
     constexpr float kJumpSpeed = 1000.f;
-    constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
 
     /// Coin released by a question block: rises, falls back, then vanishes.
@@ -358,17 +356,16 @@ void PlayState::update(sf::Time dt) {
 void PlayState::pause() {
     heldKeys.clear();
     inputHandler.reset();
-    jumpHeld = false;
 }
 
 void PlayState::resume() {
     heldKeys.clear();
     inputHandler.reset();
-    jumpHeld = false;
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
-    return sf::FloatRect(avatarPos, avatar.getSize());
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return sf::FloatRect(bounds.position, bounds.size);
 }
 
 void PlayState::becomeSuper() {
@@ -376,13 +373,17 @@ void PlayState::becomeSuper() {
         return;
     }
 
-    const float feetY = avatarPos.y + avatar.getSize().y;
+    auto& body = m_player->getPhysicsBody();
+    sf::Vector2f position = body.getPosition();
+    const float feetY = position.y + avatar.getSize().y;
     const sf::Vector2f superSize(avatar.getSize().x, tileMap.tileSize() * 1.9f);
 
     playerForm = PlayerForm::Super;
     avatar.setSize(superSize);
-    avatarPos.y = feetY - superSize.y;
-    avatar.setPosition(avatarPos);
+    position.y = feetY - superSize.y;
+    body.setPosition(position);
+    body.setCollider(superSize);
+    avatar.setPosition(position);
 
     // The available character art is shared between forms. Keep its existing
     // bottom-centred convention and scale it to the new collider immediately.
@@ -391,7 +392,7 @@ void PlayState::becomeSuper() {
         ? (superSize.y * 1.5f / spriteBounds.size.y)
         : 1.f;
     avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({avatarPos.x + superSize.x / 2.f, feetY});
+    avatarSprite.setPosition({position.x + superSize.x / 2.f, feetY});
 }
 
 void PlayState::becomeSmall() {
@@ -399,20 +400,24 @@ void PlayState::becomeSmall() {
         return;
     }
 
-    const float feetY = avatarPos.y + avatar.getSize().y;
+    auto& body = m_player->getPhysicsBody();
+    sf::Vector2f position = body.getPosition();
+    const float feetY = position.y + avatar.getSize().y;
     const sf::Vector2f smallSize(avatar.getSize().x, tileMap.tileSize() * 0.95f);
 
     playerForm = PlayerForm::Small;
     avatar.setSize(smallSize);
-    avatarPos.y = feetY - smallSize.y;
-    avatar.setPosition(avatarPos);
+    position.y = feetY - smallSize.y;
+    body.setPosition(position);
+    body.setCollider(smallSize);
+    avatar.setPosition(position);
 
     const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
     const float scale = spriteBounds.size.y > 0.f
         ? (smallSize.y * 1.5f / spriteBounds.size.y)
         : 1.f;
     avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({avatarPos.x + smallSize.x / 2.f, feetY});
+    avatarSprite.setPosition({position.x + smallSize.x / 2.f, feetY});
 }
 
 void PlayState::playLevelMusic() {
@@ -910,8 +915,9 @@ void PlayState::spawnBullet() {
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
 
     // Position bullet at character's upper body / gun height (about 1/3 from top)
-    float bulletX = facingRight ? avatarPos.x + avatar.getSize().x : avatarPos.x - entity::Bullet::kSize;
-    float bulletY = avatarPos.y + avatar.getSize().y * 0.3f;
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    float bulletX = facingRight ? player.right() : player.left() - entity::Bullet::kSize;
+    float bulletY = player.top() + player.size.y * 0.3f;
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
@@ -1141,7 +1147,9 @@ bool PlayState::updatePiranhas(sf::Time dt) {
         if (currentForm == AvatarForm::Fire) {
             currentForm = AvatarForm::Normal;
             invincibleTimer = 1.5f;
-            avatarVelocity.y = -300.f;
+            sf::Vector2f velocity = m_player->getPhysicsBody().getVelocity();
+            velocity.y = -300.f;
+            m_player->getPhysicsBody().setVelocity(velocity);
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("DowngradeSound"));
             return true;
@@ -1179,25 +1187,34 @@ void PlayState::updateTrampolines(sf::Time dt) {
     const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
     const float normalHeight = 31.f * scale;
     const float compressedHeight = 9.f * scale;
+    auto& body = m_player->getPhysicsBody();
 
     for (TrampolineEntity& trampoline : trampolines) {
         if (trampoline.state == TrampolineState::Compressed) {
             trampoline.elapsed += seconds;
             if (trampoline.carryingPlayer) {
-                avatarPos.y = trampoline.bottomY - compressedHeight
-                            - avatar.getSize().y;
-                avatarVelocity.y = 0.f;
-                avatar.setPosition(avatarPos);
+                sf::Vector2f position = body.getPosition();
+                position.y = trampoline.bottomY - compressedHeight
+                           - body.getColliderSize().y;
+                body.setPosition(position);
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = 0.f;
+                body.setVelocity(velocity);
+                avatar.setPosition(position);
             }
             if (trampoline.elapsed >= kTrampolineCompressDuration) {
                 trampoline.state = TrampolineState::Launch;
                 trampoline.elapsed = 0.f;
                 trampoline.carryingPlayer = false;
-                avatarPos.y = trampoline.bottomY - normalHeight
-                            - avatar.getSize().y;
-                avatarVelocity.y = -kTrampolineLaunchSpeed;
-                onGround = false;
-                avatar.setPosition(avatarPos);
+                sf::Vector2f position = body.getPosition();
+                position.y = trampoline.bottomY - normalHeight
+                           - body.getColliderSize().y;
+                body.setPosition(position);
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = -kTrampolineLaunchSpeed;
+                body.setVelocity(velocity);
+                body.setGrounded(false);
+                avatar.setPosition(position);
                 Systems::SoundController::getInstance().playSound(
                     assets.getSoundBuffer("JumpSound"));
             }
@@ -1220,15 +1237,19 @@ void PlayState::updateTrampolines(sf::Time dt) {
             && player.position.x < trampoline.x + tileMap.tileSize() - 2.f;
         const bool crossingTop = player.position.y < trampolineTop
             && player.position.y + player.size.y >= trampolineTop;
-        if (avatarVelocity.y >= 0.f && horizontallyOverlapping && crossingTop) {
+        if (body.getVelocity().y >= 0.f && horizontallyOverlapping && crossingTop) {
             trampoline.state = TrampolineState::Compressed;
             trampoline.elapsed = 0.f;
             trampoline.carryingPlayer = true;
-            avatarPos.y = trampoline.bottomY - compressedHeight
-                        - avatar.getSize().y;
-            avatarVelocity.y = 0.f;
-            onGround = true;
-            avatar.setPosition(avatarPos);
+            sf::Vector2f position = body.getPosition();
+            position.y = trampoline.bottomY - compressedHeight
+                       - body.getColliderSize().y;
+            body.setPosition(position);
+            sf::Vector2f velocity = body.getVelocity();
+            velocity.y = 0.f;
+            body.setVelocity(velocity);
+            body.setGrounded(true);
+            avatar.setPosition(position);
         }
     }
 }
@@ -1273,6 +1294,7 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
     const sf::Vector2f platformSize(
         tileSize * kMovingPlatformWidthTiles, tileSize * 0.5f);
     const float travel = tileSize * kMovingPlatformRangeTiles;
+    auto& body = m_player->getPhysicsBody();
 
     for (MovingPlatform& platform : movingPlatforms) {
         platform.previousPosition = platform.position;
@@ -1286,7 +1308,7 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
             && player.position.x < oldBounds.position.x + oldBounds.size.x - 2.f;
         const bool standingOnPlatform = horizontallyOverlapping
             && std::abs(playerBottom - oldTop) <= 4.f
-            && avatarVelocity.y >= 0.f;
+            && body.getVelocity().y >= 0.f;
 
         platform.position.x += platform.velocityX * seconds;
         const float leftEnd = platform.originX - travel;
@@ -1300,8 +1322,10 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
         }
 
         if (standingOnPlatform) {
-            avatarPos.x += platform.position.x - platform.previousPosition.x;
-            avatar.setPosition(avatarPos);
+            sf::Vector2f position = body.getPosition();
+            position.x += platform.position.x - platform.previousPosition.x;
+            body.setPosition(position);
+            avatar.setPosition(position);
         }
     }
 }
@@ -1447,12 +1471,15 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             continue;
         }
 
-        const float avatarBottom = avatarPos.y + avatar.getSize().y;
-        const bool stomped = avatarVelocity.y > 0.f
+        auto& body = m_player->getPhysicsBody();
+        const float avatarBottom = body.getAABB().bottom();
+        const bool stomped = body.getVelocity().y > 0.f
                           && avatarBottom <= enemy.position.y + size.y * 0.55f;
         if (stomped) {
-            avatarVelocity.y = -kGoombaStompBounce;
-            onGround = false;
+            sf::Vector2f velocity = body.getVelocity();
+            velocity.y = -kGoombaStompBounce;
+            body.setVelocity(velocity);
+            body.setGrounded(false);
             if (isParatroopa && enemy.state == EnemyState::Walking) {
                 enemy.kind = EnemyKind::GreenKoopa;
                 enemy.velocity.x = std::copysign(kGreenKoopaSpeed,
@@ -1479,7 +1506,8 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             hud.setScore(score);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
         } else if (enemy.state == EnemyState::ShellIdle) {
-            const float playerCentre = avatarPos.x + avatar.getSize().x / 2.f;
+            const physics::AABB playerBounds = body.getAABB();
+            const float playerCentre = playerBounds.left() + playerBounds.size.x / 2.f;
             const float shellCentre = enemy.position.x + size.x / 2.f;
             enemy.state = EnemyState::ShellMoving;
             enemy.velocity.x = playerCentre < shellCentre ? kShellSpeed : -kShellSpeed;
@@ -1498,7 +1526,9 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             if (currentForm == AvatarForm::Fire) {
                 currentForm = AvatarForm::Normal;
                 invincibleTimer = 1.5f; // 1.5 seconds of invincibility
-                avatarVelocity.y = -300.f; // Knockback upward
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = -300.f; // Knockback upward
+                body.setVelocity(velocity);
                 Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
             } else {
                 playerHit = true;
@@ -1584,68 +1614,32 @@ std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRe
 void PlayState::respawnAvatar() {
     sf::Vector2f spawn = tileMap.playerSpawn();
     // Sit the avatar on the bottom of its spawn tile rather than its top-left corner.
-    avatarPos = {spawn.x, spawn.y + tileMap.tileSize() - avatar.getSize().y};
-    avatarVelocity = {0.f, 0.f};
-    onGround = false;
-    maxCameraCenterX = avatarPos.x + avatar.getSize().x / 2.f;
-
-    m_avatarPhysics.setPosition(avatarPos);
-    m_avatarPhysics.setCollider(avatar.getSize());
-    m_avatarPhysics.setVelocity(avatarVelocity);
+    const sf::Vector2f position{
+        spawn.x, spawn.y + tileMap.tileSize() - avatar.getSize().y};
+    maxCameraCenterX = position.x + avatar.getSize().x / 2.f;
 
     if (selectedCharacter == CharacterType::Luigi) {
-        m_player = std::make_unique<entity::Luigi>(avatarPos, avatar.getSize());
+        m_player = std::make_unique<entity::Luigi>(position, avatar.getSize());
     } else {
-        m_player = std::make_unique<entity::Mario>(avatarPos, avatar.getSize());
+        m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
     }
+    avatar.setPosition(position);
 }
 
 bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
     const auto& playerInput = inputHandler.getPlayerInput();
-    if (m_player) {
-        m_player->setInput(playerInput);
-    }
-    const auto movementConfig = m_player ? m_player->getMovementConfig() : entity::PlayerMovementConfig{420.f, 1000.f, 2000.f};
+    auto& body = m_player->getPhysicsBody();
+    const bool wasGrounded = body.isGrounded();
+    m_player->setInput(playerInput);
+    m_player->update(seconds);
 
-    // --- horizontal intent -------------------------------------------------
-    float direction = playerInput.moveAxis;
-    if (direction != 0.f) {
-        avatarVelocity.x += direction * kWalkAcceleration * seconds;
-        avatarVelocity.x = std::clamp(avatarVelocity.x, -movementConfig.moveSpeed, movementConfig.moveSpeed);
-    } else {
-        // Friction logic: check if character is grounded
-        float friction = onGround ? movementConfig.groundFriction : (movementConfig.groundFriction * 0.02f);
-        float drop = friction * seconds;
-        if (std::abs(avatarVelocity.x) <= drop) {
-            avatarVelocity.x = 0.f;
-        } else {
-            avatarVelocity.x -= std::copysign(drop, avatarVelocity.x);
-        }
-    }
-
-    // --- jumping -----------------------------------------------------------
-    bool jumpPressed = playerInput.jumpHeld;
-    if (jumpPressed && !jumpHeld && onGround) {
-        avatarVelocity.y = -movementConfig.jumpSpeed;
-        onGround = false;
+    const sf::Vector2f size = body.getColliderSize();
+    const float previousBottom = body.getAABB().bottom();
+    if (wasGrounded && body.getVelocity().y < 0.f) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
-    // Let go early and the jump is cut short - the classic variable jump height.
-    if (!jumpPressed && avatarVelocity.y < -movementConfig.jumpSpeed * kJumpCutoff) {
-        avatarVelocity.y = -movementConfig.jumpSpeed * kJumpCutoff;
-    }
-    jumpHeld = jumpPressed;
-
-    // --- PHYSICS SYSTEM STEP (Phase 3 Integration) -------------------------
-    sf::Vector2f size = avatar.getSize();
-    const float previousBottom = avatarPos.y + size.y;
-
-    // Sync input state into PhysicsBody
-    m_avatarPhysics.setPosition(avatarPos);
-    m_avatarPhysics.setCollider(size);
-    m_avatarPhysics.setVelocity(avatarVelocity);
 
     // Collect solid tile colliders in broadphase area
     sf::FloatRect broadBounds = avatarBounds();
@@ -1656,20 +1650,18 @@ bool PlayState::moveAvatar(sf::Time dt) {
     std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
 
     // Delegate kinematics & collision resolution to PhysicsSystem
-    m_physicsSystem.update(m_avatarPhysics, solids, seconds);
-
-    // Extract results from PhysicsBody
-    avatarPos = m_avatarPhysics.getPosition();
-    avatarVelocity = m_avatarPhysics.getVelocity();
-    onGround = m_avatarPhysics.isGrounded();
+    m_physicsSystem.update(body, solids, seconds);
 
     // SMB 1985 Camera Lock: Player cannot walk back past the left edge of the screen
     float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
-    avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
-    m_avatarPhysics.setPosition(avatarPos);
+    sf::Vector2f position = body.getPosition();
+    position.x = std::clamp(
+        position.x, cameraLeftEdge,
+        std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
+    body.setPosition(position);
 
     // --- Block Collision Response (hitCeiling) ------------------------------
-    if (m_avatarPhysics.hitCeiling()) {
+    if (body.hitCeiling()) {
         sf::FloatRect headBounds = avatarBounds();
         headBounds.position.y -= 4.0f;
         headBounds.size.y = 8.0f;
@@ -1782,16 +1774,17 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     }
                 }
             }
-            avatarVelocity.y = 0.f;
-            m_avatarPhysics.setVelocity(avatarVelocity);
+            sf::Vector2f velocity = body.getVelocity();
+            velocity.y = 0.f;
+            body.setVelocity(velocity);
             break;
         }
     }
 
     // World 1-3 lifts are one-way platforms: Mario may jump through them from
     // below, then lands when his feet cross their top surface while falling.
-    if (!onGround && avatarVelocity.y >= 0.f) {
-        const float currentBottom = avatarPos.y + size.y;
+    if (!body.isGrounded() && body.getVelocity().y >= 0.f) {
+        const float currentBottom = body.getAABB().bottom();
         const sf::FloatRect player = avatarBounds();
         for (const MovingPlatform& platform : movingPlatforms) {
             const float platformTop = platform.position.y;
@@ -1803,9 +1796,13 @@ bool PlayState::moveAvatar(sf::Time dt) {
             if (horizontallyOverlapping
                 && previousBottom <= platformTop + 2.f
                 && currentBottom >= platformTop) {
-                avatarPos.y = platformTop - size.y;
-                avatarVelocity.y = 0.f;
-                onGround = true;
+                position = body.getPosition();
+                position.y = platformTop - size.y;
+                body.setPosition(position);
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = 0.f;
+                body.setVelocity(velocity);
+                body.setGrounded(true);
                 break;
             }
         }
@@ -1817,28 +1814,28 @@ bool PlayState::moveAvatar(sf::Time dt) {
     }
 
     // Fell down one of the level's pits: lose a life or game over.
-    if (avatarPos.y > tileMap.pixelHeight()) {
+    if (body.getPosition().y > tileMap.pixelHeight()) {
         std::cout << "[Core Engine] Avatar fell into a pit.\n";
         handlePlayerDeath();
         return false;
     }
 
-    avatar.setPosition(avatarPos);
+    avatar.setPosition(body.getPosition());
 
     // --- Update Avatar Movement Animation & Facing Direction ---
-    if (avatarVelocity.x > 10.f) {
+    if (body.getVelocity().x > 10.f) {
         facingRight = true;
-    } else if (avatarVelocity.x < -10.f) {
+    } else if (body.getVelocity().x < -10.f) {
         facingRight = false;
     }
 
     std::string prefix = (currentForm == AvatarForm::Fire ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
 
-    if (!onGround) {
+    if (!body.isGrounded()) {
         // Jumping state
         avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
     }
-    else if (std::abs(avatarVelocity.x) > 10.f) {
+    else if (std::abs(body.getVelocity().x) > 10.f) {
         // Running state (cycle Idle -> Run1 -> Run2 -> Run1)
         runAnimTimer += dt.asSeconds();
         if (runAnimTimer >= 0.08f) {
@@ -1873,7 +1870,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
     float scaleX = facingRight ? scaleY : -scaleY;
 
     avatarSprite.setScale({scaleX, scaleY});
-    avatarSprite.setPosition({avatarPos.x + avatar.getSize().x / 2.f, avatarPos.y + avatar.getSize().y});
+    position = body.getPosition();
+    avatarSprite.setPosition({position.x + size.x / 2.f, position.y + size.y});
     return true;
 }
 
@@ -1889,9 +1887,10 @@ void PlayState::centreCamera(sf::Vector2f target) {
 }
 
 void PlayState::updateCamera() {
-    float playerCenterX = avatarPos.x + avatar.getSize().x / 2.f;
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    float playerCenterX = player.left() + player.size.x / 2.f;
     maxCameraCenterX = std::max(maxCameraCenterX, playerCenterX);
-    centreCamera({maxCameraCenterX, avatarPos.y + avatar.getSize().y / 2.f});
+    centreCamera({maxCameraCenterX, player.top() + player.size.y / 2.f});
 }
 
 void PlayState::panCamera(sf::Time dt) {
@@ -1948,7 +1947,8 @@ void PlayState::render(sf::RenderWindow& window) {
     const int outdoorStartColumn = std::max(
         0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     bool underground = Config::stageNumber(currentLevel) == 2
-                    && avatarPos.x < outdoorStartColumn * Config::kTileSize;
+                    && m_player->getPhysicsBody().getPosition().x
+                        < outdoorStartColumn * Config::kTileSize;
     sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
     window.draw(sky);
 
@@ -2094,7 +2094,6 @@ bool PlayState::quickLoad() {
             freeLook = false;
             isPaused = false;
             heldKeys.clear();
-            jumpHeld = false;
             respawnAvatar();
             updateCamera();
             playLevelMusic();

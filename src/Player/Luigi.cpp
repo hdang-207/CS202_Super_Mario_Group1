@@ -14,7 +14,10 @@ Luigi::Luigi(
           PlayerMovementConfig{
               390.0f,  // moveSpeed (Slightly slower top speed)
               1150.0f, // jumpSpeed (Higher jump)
-              1300.0f  // groundFriction (Lower friction -> longer slide momentum)
+              1300.0f, // groundFriction (Lower friction -> longer slide momentum)
+              1800.0f, // walkAcceleration
+              0.02f,   // airFrictionMultiplier
+              0.45f    // jumpCutoff
           }
       ) {}
 

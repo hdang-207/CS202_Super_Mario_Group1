@@ -13,6 +13,9 @@ struct PlayerMovementConfig {
     float moveSpeed{420.0f};
     float jumpSpeed{1000.0f};
     float groundFriction{2000.0f};
+    float walkAcceleration{1800.0f};
+    float airFrictionMultiplier{0.02f};
+    float jumpCutoff{0.45f};
 };
 
 class Player : public Character {
@@ -56,13 +59,14 @@ public:
     const PlayerMovementConfig& getMovementConfig() const noexcept;
 
 protected:
-    void processHorizontalMovement();
+    void processHorizontalMovement(float deltaTime);
     void processJump();
 
 private:
     PlayerInput m_input{};
     PlayerMovementConfig m_movementConfig{};
     std::unique_ptr<PlayerState> m_currentState;
+    bool m_jumpWasHeldLastFrame{false};
 };
 
-} // namespace entity
+} // namespace entity
