@@ -776,10 +776,7 @@ void PlayState::drawGrowingVines(sf::RenderWindow& window) const {
 }
 
 void PlayState::spawnBullet() {
-    const bool hasFirePower = m_player->hasFirePower();
-    if (!hasFirePower
-        && (shootCooldownRemaining > 0.f || availableBullets <= 0
-            || bullets.size() >= static_cast<std::size_t>(kMaxBullets))) {
+    if (!m_player || !m_player->hasFirePower()) {
         return;
     }
     
@@ -792,12 +789,6 @@ void PlayState::spawnBullet() {
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
-    if (!hasFirePower) {
-        --availableBullets;
-        ammoRechargeTimers.push_back(kBulletRechargeTime);
-        shootCooldownRemaining = kShootCooldown;
-        hud.setAmmo(availableBullets, kMaxBullets);
-    }
 }
 
 void PlayState::updateBullets(sf::Time dt) {
@@ -1503,7 +1494,7 @@ void PlayState::respawnAvatar() {
 }
 
 void PlayState::spawnBomb() {
-    if (!m_player->hasFirePower() || activeBomb.has_value()) {
+    if (!m_player || !m_player->hasFirePower() || activeBomb.has_value()) {
         return;
     }
 
