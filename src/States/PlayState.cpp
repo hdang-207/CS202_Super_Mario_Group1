@@ -219,6 +219,7 @@ void PlayState::handleInput(const sf::Event& event) {
     // stay down forever and the level would scroll on its own.
     if (event.is<sf::Event::FocusLost>()) {
         heldKeys.clear();
+        inputHandler.reset();
         return;
     }
 
@@ -279,7 +280,7 @@ void PlayState::update(sf::Time dt) {
     }
 
     // Update the Input pressing from Command Pattern
-    inputHandler.update();
+    inputHandler.update(heldKeys);
 
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
@@ -352,6 +353,18 @@ void PlayState::update(sf::Time dt) {
         handlePlayerDeath();
     }
     Systems::SoundController::getInstance().update(); // Clean up finished sounds
+}
+
+void PlayState::pause() {
+    heldKeys.clear();
+    inputHandler.reset();
+    jumpHeld = false;
+}
+
+void PlayState::resume() {
+    heldKeys.clear();
+    inputHandler.reset();
+    jumpHeld = false;
 }
 
 sf::FloatRect PlayState::avatarBounds() const {

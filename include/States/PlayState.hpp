@@ -425,6 +425,12 @@ public:
      */
     void render(sf::RenderWindow& window) override;
 
+    /// @brief Clears event-held controls when a menu overlay takes focus.
+    void pause() override;
+
+    /// @brief Resumes with a neutral input state to prevent stuck movement keys.
+    void resume() override;
+
     /**
      * @brief Gets current SaveData progress snapshot.
      */
