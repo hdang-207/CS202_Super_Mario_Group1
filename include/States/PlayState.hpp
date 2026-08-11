@@ -8,6 +8,8 @@
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
 #include "Systems/SaveManager.hpp"
+#include "Physics/PhysicsSystem.hpp"
+#include "Physics/PhysicsBody.hpp"
 #include <cstddef>
 #include <random>
 #include "UI/HUD.hpp"
@@ -31,6 +33,22 @@ private:
     UI::HUD hud;
 
     InputHandler inputHandler;
+
+    // === PHYSICS SYSTEM INTEGRATION (Phase 3) ==============================
+    // physicsSystem handles kinematics (gravity, velocity) & AABB collisions.
+    physics::PhysicsSystem m_physicsSystem;
+    
+    // NOTE FOR TEAM / PHASE 4:
+    // m_avatarPhysics is placed here temporarily to bock avatarPos/avatarVelocity
+    // and test PhysicsSystem integration in Phase 3. In Phase 4 (God Class Refactor),
+    // PhysicsBody should be moved directly inside the Player entity class hierarchy.
+    physics::PhysicsBody m_avatarPhysics;
+
+    /**
+     * @brief Helper to convert TileMap FloatRect overlaps to physics::AABB list.
+     */
+    std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
+    // =======================================================================
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
