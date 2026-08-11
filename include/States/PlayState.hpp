@@ -3,6 +3,7 @@
 #include "Entities/Bullet.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
+#include "Input/InputHandler.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -28,6 +29,8 @@ private:
     int coins{0};
     int lives{3};
     UI::HUD hud;
+
+    InputHandler inputHandler;
 
     // === TEMPORARY test avatar =============================================
     // A plain rectangle with just enough kinematics to walk, jump and stand on
@@ -165,36 +168,36 @@ private:
      */
     std::set<sf::Keyboard::Key> heldKeys;
 
-    /**
-     * @brief Checks if a specific key is currently held down.
-     * @param key Key code to check.
-     * @return True if key is held, false otherwise.
-     */
-    bool holding(sf::Keyboard::Key key) const;
+    // /**
+    //  * @brief Checks if a specific key is currently held down.
+    //  * @param key Key code to check.
+    //  * @return True if key is held, false otherwise.
+    //  */
+    // bool holding(sf::Keyboard::Key key) const;
 
-    /**
-     * @brief Checks if move left control keys are held.
-     * @return True if Left arrow or 'A' is held.
-     */
-    bool wantsLeft() const;
+    // /**
+    //  * @brief Checks if move left control keys are held.
+    //  * @return True if Left arrow or 'A' is held.
+    //  */
+    // bool wantsLeft() const;
 
-    /**
-     * @brief Checks if move right control keys are held.
-     * @return True if Right arrow or 'D' is held.
-     */
-    bool wantsRight() const;
+    // /**
+    //  * @brief Checks if move right control keys are held.
+    //  * @return True if Right arrow or 'D' is held.
+    //  */
+    // bool wantsRight() const;
 
-    /**
-     * @brief Checks if jump control keys are held.
-     * @return True if Space, Up arrow, or 'W' is held.
-     */
-    bool wantsJump() const;
+    // /**
+    //  * @brief Checks if jump control keys are held.
+    //  * @return True if Space, Up arrow, or 'W' is held.
+    //  */
+    // bool wantsJump() const;
 
-    /**
-     * @brief Checks if boost/run control keys are held.
-     * @return True if Left Shift or Right Shift is held.
-     */
-    bool wantsBoost() const;
+    // /**
+    //  * @brief Checks if boost/run control keys are held.
+    //  * @return True if Left Shift or Right Shift is held.
+    //  */
+    // bool wantsBoost() const;
 
     /**
      * @brief Returns current bounding rectangle of the test avatar.

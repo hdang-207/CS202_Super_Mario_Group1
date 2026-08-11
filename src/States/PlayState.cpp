@@ -58,26 +58,26 @@ namespace {
 
 }
 
-bool PlayState::holding(sf::Keyboard::Key key) const {
-    return heldKeys.count(key) > 0;
-}
+// bool PlayState::holding(sf::Keyboard::Key key) const {
+//     return heldKeys.count(key) > 0;
+// }
 
-bool PlayState::wantsLeft() const {
-    return holding(sf::Keyboard::Key::Left) || holding(sf::Keyboard::Key::A);
-}
+// bool PlayState::wantsLeft() const {
+//     return holding(sf::Keyboard::Key::Left) || holding(sf::Keyboard::Key::A);
+// }
 
-bool PlayState::wantsRight() const {
-    return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
-}
+// bool PlayState::wantsRight() const {
+//     return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
+// }
 
-bool PlayState::wantsJump() const {
-    return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
-        || holding(sf::Keyboard::Key::W);
-}
+// bool PlayState::wantsJump() const {
+//     return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
+//         || holding(sf::Keyboard::Key::W);
+// }
 
-bool PlayState::wantsBoost() const {
-    return holding(sf::Keyboard::Key::LShift) || holding(sf::Keyboard::Key::RShift);
-}
+// bool PlayState::wantsBoost() const {
+//     return holding(sf::Keyboard::Key::LShift) || holding(sf::Keyboard::Key::RShift);
+// }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
@@ -234,7 +234,7 @@ void PlayState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // Holding a key makes the system repeat KeyPressed; the toggles below must
         // only fire on the first one, otherwise resting on F would flicker the mode.
-        bool repeat = holding(keyPressed->code);
+        bool repeat = heldKeys.count(keyPressed->code) > 0;
         heldKeys.insert(keyPressed->code);
         if (repeat) {
             return;
@@ -274,6 +274,9 @@ void PlayState::update(sf::Time dt) {
     if (isPaused || transitionPending) {
         return;
     }
+
+    // Update the Input pressing from Command Pattern
+    inputHandler.update();
 
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
@@ -1097,8 +1100,10 @@ void PlayState::respawnAvatar() {
 bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
+    const auto& playerInput = inputHandler.getPlayerInput();
+
     // --- horizontal intent -------------------------------------------------
-    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
+    float direction = playerInput.moveAxis;
     if (direction != 0.f) {
         avatarVelocity.x += direction * kWalkAcceleration * seconds;
         avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
@@ -1118,7 +1123,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
     }
 
     // --- jumping -----------------------------------------------------------
-    bool jumpPressed = wantsJump();
+    bool jumpPressed = playerInput.jumpHeld;
     if (jumpPressed && !jumpHeld && onGround) {
         avatarVelocity.y = -kJumpSpeed;
         onGround = false;
@@ -1368,8 +1373,10 @@ void PlayState::updateCamera() {
 }
 
 void PlayState::panCamera(sf::Time dt) {
-    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
-    float speed = kFreeLookSpeed * (wantsBoost() ? kFreeLookBoost : 1.f);
+    const auto& playerInput = inputHandler.getPlayerInput();
+    float direction = playerInput.moveAxis;
+    bool boost = heldKeys.count(sf::Keyboard::Key::LShift) > 0 || heldKeys.count(sf::Keyboard::Key::RShift) > 0;
+    float speed = kFreeLookSpeed * (boost ? kFreeLookBoost : 1.f);
 
     freeLookCentre.x += direction * speed * dt.asSeconds();
     centreCamera(freeLookCentre);

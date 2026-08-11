@@ -13,6 +13,11 @@ void InputHandler::update() {
     sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::D) ||
     sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Right);
 
+    const bool jump = 
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space) ||
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::W) ||
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Up);
+
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);
     }
@@ -21,10 +26,9 @@ void InputHandler::update() {
         m_moveRightCommand.execute(m_playerInput);
     }
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space)) {
+    if (jump) {
         m_jumpCommand.execute(m_playerInput);
     }
-
 }
 
 void InputHandler::reset() {

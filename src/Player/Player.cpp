@@ -15,18 +15,36 @@ Player::Player(
           colliderSize,
           colliderOffset
       ),
-      m_movementConfig(movementConfig) {}
+      m_movementConfig(movementConfig),
+      m_currentState(std::make_unique<StandingState>()) {}
 
 void Player::setInput(const PlayerInput& input) noexcept {
     m_input = input;
 }
 
 void Player::update(float deltaTime) {
-    // Current movement version sets velocity directly, deltaTime unreferenced for now
-    (void)deltaTime;
+    if (m_currentState) {
+        m_currentState->handleInput(*this);
+        m_currentState->update(*this, deltaTime);
+    }
 
     processHorizontalMovement();
     processJump();
+}
+
+void Player::render(sf::RenderTarget& target) const {
+    (void)target;
+    // Rendering logic for player sprite can be delegating or custom
+}
+
+void Player::changeState(std::unique_ptr<PlayerState> newState) {
+    if (newState) {
+        m_currentState = std::move(newState);
+    }
+}
+
+const PlayerState* Player::getCurrentState() const noexcept {
+    return m_currentState.get();
 }
 
 void Player::processHorizontalMovement() {
@@ -70,4 +88,4 @@ Player::getMovementConfig() const noexcept {
     return m_movementConfig;
 }
 
-} // namespace entity
+} // namespace entity
