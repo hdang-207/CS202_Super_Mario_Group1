@@ -66,8 +66,6 @@ private:
     float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
     float starPowerRemaining{0.f}; ///< Starman duration; touching enemies defeats them.
 
-    enum class PlayerForm { Small, Super };
-    PlayerForm playerForm{PlayerForm::Small};
     float damageProtectionRemaining{0.f};
 
     struct CoinPop {
@@ -98,9 +96,6 @@ private:
         int currentFrame;
     };
     std::vector<ExplosionEntity> explosions;
-
-    enum class AvatarForm { Normal, Fire };
-    AvatarForm currentForm{AvatarForm::Normal};
 
     enum class EnemyKind {
         Goomba,
@@ -211,11 +206,8 @@ private:
      */
     sf::FloatRect avatarBounds() const;
 
-    /// @brief Changes a Small avatar to Super while keeping its feet fixed.
-    void becomeSuper();
-
-    /// @brief Changes a Super avatar back to Small while keeping its feet fixed.
-    void becomeSmall();
+    /// @brief Syncs PlayState-owned visuals with Player-owned form and collider state.
+    void syncAvatarPowerVisuals();
 
     /// @brief Applies one life loss and either restarts the level or opens Game Over.
     void handlePlayerDeath();

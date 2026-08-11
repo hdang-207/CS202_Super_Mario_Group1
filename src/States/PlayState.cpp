@@ -365,56 +365,22 @@ sf::FloatRect PlayState::avatarBounds() const {
     return sf::FloatRect(bounds.position, bounds.size);
 }
 
-void PlayState::becomeSuper() {
-    if (playerForm == PlayerForm::Super) {
-        return;
-    }
-
+void PlayState::syncAvatarPowerVisuals() {
     auto& body = m_player->getPhysicsBody();
-    sf::Vector2f position = body.getPosition();
-    const float feetY = position.y + avatar.getSize().y;
-    const sf::Vector2f superSize(avatar.getSize().x, tileMap.tileSize() * 1.9f);
-
-    playerForm = PlayerForm::Super;
-    avatar.setSize(superSize);
-    position.y = feetY - superSize.y;
-    body.setPosition(position);
-    body.setCollider(superSize);
+    const sf::Vector2f position = body.getPosition();
+    const sf::Vector2f colliderSize = body.getColliderSize();
+    const float feetY = position.y + colliderSize.y;
+    avatar.setSize(colliderSize);
     avatar.setPosition(position);
 
     // The available character art is shared between forms. Keep its existing
     // bottom-centred convention and scale it to the new collider immediately.
     const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
     const float scale = spriteBounds.size.y > 0.f
-        ? (superSize.y * 1.5f / spriteBounds.size.y)
+        ? (colliderSize.y * 1.5f / spriteBounds.size.y)
         : 1.f;
     avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({position.x + superSize.x / 2.f, feetY});
-}
-
-void PlayState::becomeSmall() {
-    if (playerForm == PlayerForm::Small) {
-        return;
-    }
-
-    auto& body = m_player->getPhysicsBody();
-    sf::Vector2f position = body.getPosition();
-    const float feetY = position.y + avatar.getSize().y;
-    const sf::Vector2f smallSize(avatar.getSize().x, tileMap.tileSize() * 0.95f);
-
-    playerForm = PlayerForm::Small;
-    avatar.setSize(smallSize);
-    position.y = feetY - smallSize.y;
-    body.setPosition(position);
-    body.setCollider(smallSize);
-    avatar.setPosition(position);
-
-    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
-    const float scale = spriteBounds.size.y > 0.f
-        ? (smallSize.y * 1.5f / spriteBounds.size.y)
-        : 1.f;
-    avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({position.x + smallSize.x / 2.f, feetY});
+    avatarSprite.setPosition({position.x + colliderSize.x / 2.f, feetY});
 }
 
 void PlayState::playLevelMusic() {
@@ -671,7 +637,8 @@ void PlayState::updateMushrooms(sf::Time dt) {
             if (it->getKind() == items::MushroomKind::OneUp) {
                 Core::EventSystem::getInstance().broadcast({Core::EventType::OneMoreLife});
             } else {
-                becomeSuper();
+                m_player->applyPower(entity::PowerType::Super);
+                syncAvatarPowerVisuals();
                 Core::EventSystem::getInstance().broadcast({Core::EventType::MushroomCollected});
             }
             it = mushrooms.erase(it);
@@ -710,7 +677,7 @@ void PlayState::updateFireFlowers(sf::Time dt) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("PowerUpSound"));
             score += 1000;
             hud.setScore(score);
-            currentForm = AvatarForm::Fire;
+            m_player->applyPower(entity::PowerType::Fire);
             it = fireFlowers.erase(it);
         } else {
             ++it;
@@ -1041,19 +1008,18 @@ bool PlayState::updatePiranhas(sf::Time dt) {
         if (damageProtectionRemaining > 0.f || invincibleTimer > 0.f) {
             continue;
         }
-        if (playerForm == PlayerForm::Super) {
-            becomeSmall();
+        const bool hadFirePower = m_player->hasFirePower();
+        if (m_player->removeLatestPower()) {
+            syncAvatarPowerVisuals();
             damageProtectionRemaining = kDamageProtectionDuration;
-            return true;
-        }
-        if (currentForm == AvatarForm::Fire) {
-            currentForm = AvatarForm::Normal;
-            invincibleTimer = 1.5f;
-            sf::Vector2f velocity = m_player->getPhysicsBody().getVelocity();
-            velocity.y = -300.f;
-            m_player->getPhysicsBody().setVelocity(velocity);
-            Systems::SoundController::getInstance().playSound(
-                assets.getSoundBuffer("DowngradeSound"));
+            if (hadFirePower && !m_player->hasFirePower()) {
+                invincibleTimer = 1.5f;
+                sf::Vector2f velocity = m_player->getPhysicsBody().getVelocity();
+                velocity.y = -300.f;
+                m_player->getPhysicsBody().setVelocity(velocity);
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("DowngradeSound"));
+            }
             return true;
         }
 
@@ -1416,22 +1382,23 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             damageProtectionRemaining = 0.25f;
         } else if (damageProtectionRemaining > 0.f) {
             continue;
-        } else if (playerForm == PlayerForm::Super) {
-            becomeSmall();
-            damageProtectionRemaining = kDamageProtectionDuration;
-            break;
         } else {
             if (invincibleTimer > 0.f) {
                 // Still invincible from recent downgrade, ignore hit
                 continue;
             }
-            if (currentForm == AvatarForm::Fire) {
-                currentForm = AvatarForm::Normal;
-                invincibleTimer = 1.5f; // 1.5 seconds of invincibility
-                sf::Vector2f velocity = body.getVelocity();
-                velocity.y = -300.f; // Knockback upward
-                body.setVelocity(velocity);
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
+            const bool hadFirePower = m_player->hasFirePower();
+            if (m_player->removeLatestPower()) {
+                syncAvatarPowerVisuals();
+                damageProtectionRemaining = kDamageProtectionDuration;
+                if (hadFirePower && !m_player->hasFirePower()) {
+                    invincibleTimer = 1.5f; // 1.5 seconds of invincibility
+                    sf::Vector2f velocity = body.getVelocity();
+                    velocity.y = -300.f; // Knockback upward
+                    body.setVelocity(velocity);
+                    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
+                }
+                break;
             } else {
                 playerHit = true;
                 break;
@@ -1514,6 +1481,9 @@ std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRe
 }
 
 void PlayState::respawnAvatar() {
+    // A newly created Player always starts with an empty power stack and the
+    // original Small collider dimensions.
+    avatar.setSize({tileMap.tileSize() * 0.7f, tileMap.tileSize() * 0.95f});
     sf::Vector2f spawn = tileMap.playerSpawn();
     // Sit the avatar on the bottom of its spawn tile rather than its top-left corner.
     const sf::Vector2f position{
@@ -1525,7 +1495,7 @@ void PlayState::respawnAvatar() {
     } else {
         m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
     }
-    avatar.setPosition(position);
+    syncAvatarPowerVisuals();
 }
 
 bool PlayState::moveAvatar(sf::Time dt) {
@@ -1612,7 +1582,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
                 TileType type = tileMap.typeAt(col, row);
                 if (type == TileType::Brick || type == TileType::CoinBrick || type == TileType::UsedBlock) {
                     // Break normal bricks if Fire Mario or Super Mario
-                    if (type == TileType::Brick && (currentForm == AvatarForm::Fire || playerForm == PlayerForm::Super)) {
+                    if (type == TileType::Brick && (m_player->hasFirePower() || m_player->isSuper())) {
                         if (tileMap.breakBrick(col, row)) {
                             // Spawn debris
                             float tx = tile.position.x;
@@ -1731,7 +1701,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
         facingRight = false;
     }
 
-    std::string prefix = (currentForm == AvatarForm::Fire ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
+    std::string prefix = (m_player->hasFirePower() ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
 
     if (!body.isGrounded()) {
         // Jumping state

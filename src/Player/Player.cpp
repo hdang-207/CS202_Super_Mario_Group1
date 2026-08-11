@@ -17,7 +17,8 @@ Player::Player(
           colliderOffset
       ),
       m_movementConfig(movementConfig),
-      m_currentState(std::make_unique<StandingState>()) {}
+      m_currentState(std::make_unique<StandingState>()),
+      m_smallColliderSize(colliderSize) {}
 
 void Player::setInput(const PlayerInput& input) noexcept {
     m_input = input;
@@ -107,6 +108,59 @@ const PlayerInput& Player::getInput() const noexcept {
 const PlayerMovementConfig&
 Player::getMovementConfig() const noexcept {
     return m_movementConfig;
+}
+
+void Player::applyPower(PowerType power) {
+    const bool wasSuper = isSuper();
+    const auto existing = std::find(m_powerStack.begin(), m_powerStack.end(), power);
+    if (existing != m_powerStack.end()) {
+        m_powerStack.erase(existing);
+    }
+    m_powerStack.push_back(power);
+
+    if (!wasSuper && power == PowerType::Super) {
+        setSuperCollider(true);
+    }
+}
+
+bool Player::removeLatestPower() {
+    if (m_powerStack.empty()) {
+        return false;
+    }
+
+    const PowerType removed = m_powerStack.back();
+    m_powerStack.pop_back();
+    if (removed == PowerType::Super) {
+        setSuperCollider(false);
+    }
+    return true;
+}
+
+bool Player::hasPower(PowerType power) const noexcept {
+    return std::find(m_powerStack.begin(), m_powerStack.end(), power)
+        != m_powerStack.end();
+}
+
+bool Player::isSuper() const noexcept {
+    return hasPower(PowerType::Super);
+}
+
+bool Player::hasFirePower() const noexcept {
+    return hasPower(PowerType::Fire);
+}
+
+void Player::setSuperCollider(bool super) {
+    const sf::Vector2f oldSize = m_physicsBody.getColliderSize();
+    sf::Vector2f newSize = m_smallColliderSize;
+    if (super) {
+        newSize.y *= 2.0f;
+    }
+
+    sf::Vector2f position = m_physicsBody.getPosition();
+    const float feetY = position.y + oldSize.y;
+    position.y = feetY - newSize.y;
+    m_physicsBody.setPosition(position);
+    m_physicsBody.setCollider(newSize);
 }
 
 } // namespace entity
