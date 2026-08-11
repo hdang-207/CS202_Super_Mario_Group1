@@ -10,6 +10,9 @@
 #include "Systems/SaveManager.hpp"
 #include "Physics/PhysicsSystem.hpp"
 #include "Physics/PhysicsBody.hpp"
+#include "Player/Player.hpp"
+#include "Player/Mario.hpp"
+#include "Player/Luigi.hpp"
 #include <cstddef>
 #include <random>
 #include "UI/HUD.hpp"
@@ -34,15 +37,12 @@ private:
 
     InputHandler inputHandler;
 
-    // === PHYSICS SYSTEM INTEGRATION (Phase 3) ==============================
-    // physicsSystem handles kinematics (gravity, velocity) & AABB collisions.
+    // === PHYSICS SYSTEM & ENTITY INTEGRATION (Phase 3 & 4) =================
     physics::PhysicsSystem m_physicsSystem;
-    
-    // NOTE FOR TEAM / PHASE 4:
-    // m_avatarPhysics is placed here temporarily to bock avatarPos/avatarVelocity
-    // and test PhysicsSystem integration in Phase 3. In Phase 4 (God Class Refactor),
-    // PhysicsBody should be moved directly inside the Player entity class hierarchy.
     physics::PhysicsBody m_avatarPhysics;
+    
+    // Encapsulated Player entity (Mario / Luigi subclass instance)
+    std::unique_ptr<entity::Player> m_player;
 
     /**
      * @brief Helper to convert TileMap FloatRect overlaps to physics::AABB list.

@@ -1079,25 +1079,31 @@ void PlayState::respawnAvatar() {
     m_avatarPhysics.setPosition(avatarPos);
     m_avatarPhysics.setCollider(avatar.getSize());
     m_avatarPhysics.setVelocity(avatarVelocity);
+
+    if (selectedCharacter == CharacterType::Luigi) {
+        m_player = std::make_unique<entity::Luigi>(avatarPos, avatar.getSize());
+    } else {
+        m_player = std::make_unique<entity::Mario>(avatarPos, avatar.getSize());
+    }
 }
 
 bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
     const auto& playerInput = inputHandler.getPlayerInput();
+    if (m_player) {
+        m_player->setInput(playerInput);
+    }
+    const auto movementConfig = m_player ? m_player->getMovementConfig() : entity::PlayerMovementConfig{420.f, 1000.f, 2000.f};
 
     // --- horizontal intent -------------------------------------------------
     float direction = playerInput.moveAxis;
     if (direction != 0.f) {
         avatarVelocity.x += direction * kWalkAcceleration * seconds;
-        avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
+        avatarVelocity.x = std::clamp(avatarVelocity.x, -movementConfig.moveSpeed, movementConfig.moveSpeed);
     } else {
-
         // Friction logic: check if character is grounded
-        // If grounded -> apply full ground friction
-        // If airborne -> apply reduced air resistance to retain forward momentum
-        float friction = onGround ? kGroundFriction : (kGroundFriction * 0.02f);
-        // Coast to a stop instead of snapping, so movement keeps some inertia.
+        float friction = onGround ? movementConfig.groundFriction : (movementConfig.groundFriction * 0.02f);
         float drop = friction * seconds;
         if (std::abs(avatarVelocity.x) <= drop) {
             avatarVelocity.x = 0.f;
@@ -1109,13 +1115,13 @@ bool PlayState::moveAvatar(sf::Time dt) {
     // --- jumping -----------------------------------------------------------
     bool jumpPressed = playerInput.jumpHeld;
     if (jumpPressed && !jumpHeld && onGround) {
-        avatarVelocity.y = -kJumpSpeed;
+        avatarVelocity.y = -movementConfig.jumpSpeed;
         onGround = false;
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
     // Let go early and the jump is cut short - the classic variable jump height.
-    if (!jumpPressed && avatarVelocity.y < -kJumpSpeed * kJumpCutoff) {
-        avatarVelocity.y = -kJumpSpeed * kJumpCutoff;
+    if (!jumpPressed && avatarVelocity.y < -movementConfig.jumpSpeed * kJumpCutoff) {
+        avatarVelocity.y = -movementConfig.jumpSpeed * kJumpCutoff;
     }
     jumpHeld = jumpPressed;
 

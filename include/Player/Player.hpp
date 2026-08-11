@@ -10,8 +10,9 @@
 namespace entity {
 
 struct PlayerMovementConfig {
-    float moveSpeed{200.0f};
-    float jumpSpeed{450.0f};
+    float moveSpeed{420.0f};
+    float jumpSpeed{1000.0f};
+    float groundFriction{2000.0f};
 };
 
 class Player : public Character {
