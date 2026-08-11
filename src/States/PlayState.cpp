@@ -27,11 +27,8 @@ namespace {
     constexpr float kCoinPopSpeed = -480.f;
     constexpr float kCoinPopGravity = 1400.f;
     constexpr float kCoinPopLifetime = 0.7f;
-    constexpr float kMushroomRiseDuration = 0.45f;
     constexpr float kVineGrowDuration = 2.25f;
     constexpr std::size_t kMushroomRewardDivisor = 4; ///< About 25% mushroom rewards.
-    constexpr float kStarSpeed = 150.f;
-    constexpr float kStarBounceSpeed = 650.f;
     constexpr float kStarPowerDuration = 10.f;
 
     /// Goombas wake up when their spawn enters the camera, then walk until defeated.
@@ -646,60 +643,39 @@ PlayState::BlockReward PlayState::takeNextItemBlockReward() {
     return blockRewards[nextBlockReward++];
 }
 
-void PlayState::spawnMushroom(sf::Vector2f blockPosition, MushroomKind kind) {
-    mushrooms.push_back({blockPosition, blockPosition, {0.f, 0.f},
-                         MushroomState::Emerging, 0.f, kind});
+void PlayState::spawnMushroom(sf::Vector2f blockPosition,
+                              items::MushroomKind kind) {
+    mushrooms.emplace_back(blockPosition, kind);
 }
 
 void PlayState::updateMushrooms(sf::Time dt) {
-    constexpr float kMushroomSpeed = 120.f;
-    constexpr float kGravity = 2400.f;
-    constexpr float kMaxFallSpeed = 600.f;
-    float seconds = dt.asSeconds();
-    
-    sf::FloatRect ab = avatarBounds();
+    const float seconds = dt.asSeconds();
+    const sf::FloatRect player = avatarBounds();
+    const float tileSize = tileMap.tileSize();
 
     for (auto it = mushrooms.begin(); it != mushrooms.end(); ) {
-        if (it->state == MushroomState::Emerging) {
-            it->elapsed = std::min(it->elapsed + seconds, kMushroomRiseDuration);
-            float progress = it->elapsed / kMushroomRiseDuration;
-            it->position = {it->blockPosition.x,
-                            it->blockPosition.y - tileMap.tileSize() * progress};
-            
-            if (it->elapsed >= kMushroomRiseDuration) {
-                it->state = MushroomState::Moving;
-                it->velocity.x = kMushroomSpeed;
-            }
-        } else if (it->state == MushroomState::Moving) {
-            sf::Vector2f size(tileMap.tileSize(), tileMap.tileSize());
-            physics::PhysicsBody mushroomBody(it->position, size);
-            mushroomBody.setVelocity(it->velocity);
-
-            sf::FloatRect broadBounds({it->position.x - 16.f, it->position.y - 16.f}, {size.x + 32.f, size.y + 32.f});
-            std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
-
-            m_physicsSystem.update(mushroomBody, solids, seconds);
-
-            it->position = mushroomBody.getPosition();
-            it->velocity = mushroomBody.getVelocity();
-
-            if (mushroomBody.hitWallLeft()) {
-                it->velocity.x = kMushroomSpeed;
-            } else if (mushroomBody.hitWallRight()) {
-                it->velocity.x = -kMushroomSpeed;
-            }
+        std::vector<physics::AABB> solids;
+        if (it->isCollectible()) {
+            sf::FloatRect broadBounds = it->getBounds();
+            broadBounds.position.x -= 16.f;
+            broadBounds.position.y -= 16.f;
+            broadBounds.size.x += 32.f;
+            broadBounds.size.y += 32.f;
+            solids = getSolidAABBsOverlapping(broadBounds);
         }
-        
-        sf::FloatRect mushroomBounds(it->position, sf::Vector2f(tileMap.tileSize(), tileMap.tileSize()));
-        if (it->state == MushroomState::Moving && ab.findIntersection(mushroomBounds)) {
-            if (it->kind == MushroomKind::OneUp) {
+
+        it->update(seconds, tileSize, m_physicsSystem, solids);
+
+        if (it->isCollectible()
+            && player.findIntersection(it->getBounds()).has_value()) {
+            if (it->getKind() == items::MushroomKind::OneUp) {
                 Core::EventSystem::getInstance().broadcast({Core::EventType::OneMoreLife});
             } else {
                 becomeSuper();
                 Core::EventSystem::getInstance().broadcast({Core::EventType::MushroomCollected});
             }
             it = mushrooms.erase(it);
-        } else if (it->position.y > tileMap.pixelHeight()) {
+        } else if (it->hasFallenOut(tileMap.pixelHeight())) {
             // fell into a pit
             it = mushrooms.erase(it);
         } else {
@@ -709,44 +685,28 @@ void PlayState::updateMushrooms(sf::Time dt) {
 }
 
 void PlayState::drawMushrooms(sf::RenderWindow& window) const {
-    for (const MushroomEntity& mushroom : mushrooms) {
-        const char* textureKey = mushroom.kind == MushroomKind::OneUp
+    for (const items::Mushroom& mushroom : mushrooms) {
+        const char* textureKey = mushroom.getKind() == items::MushroomKind::OneUp
             ? "OneUpMushroom"
             : "SuperMushroom";
-        sf::Sprite mushroomSprite(assets.getTexture(textureKey));
-        mushroomSprite.setScale({Config::kZoom, Config::kZoom});
-        mushroomSprite.setPosition(mushroom.position);
-        window.draw(mushroomSprite);
+        mushroom.render(window, assets.getTexture(textureKey), Config::kZoom);
     }
 }
 
 void PlayState::spawnFireFlower(sf::Vector2f blockPosition) {
-    fireFlowers.push_back({blockPosition, blockPosition, MushroomState::Emerging, 0.f});
+    fireFlowers.emplace_back(blockPosition);
 }
 
 void PlayState::updateFireFlowers(sf::Time dt) {
-    float seconds = dt.asSeconds();
-    sf::FloatRect ab = avatarBounds();
-    float ts = tileMap.tileSize();
-    // Flower drawn size (fit within a tile)
-    float flowerSize = ts * 0.75f; // 75% of a tile
+    const float seconds = dt.asSeconds();
+    const sf::FloatRect player = avatarBounds();
+    const float tileSize = tileMap.tileSize();
 
     for (auto it = fireFlowers.begin(); it != fireFlowers.end(); ) {
-        if (it->state == MushroomState::Emerging) {
-            it->elapsed = std::min(it->elapsed + seconds, 0.6f); // 0.6s rise
-            float progress = it->elapsed / 0.6f;
-            // Start at bottom of the block above, rise up one tile
-            float centerX = it->blockPosition.x + (ts - flowerSize) / 2.f;
-            it->position = {centerX,
-                            it->blockPosition.y - flowerSize * progress};
-            
-            if (it->elapsed >= 0.6f) {
-                it->state = MushroomState::Moving; // stays still
-            }
-        }
-        
-        sf::FloatRect bounds(it->position, sf::Vector2f(flowerSize, flowerSize));
-        if (it->state == MushroomState::Moving && ab.findIntersection(bounds)) {
+        it->update(seconds, tileSize);
+
+        if (it->isCollectible()
+            && player.findIntersection(it->getBounds()).has_value()) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("PowerUpSound"));
             score += 1000;
             hud.setScore(score);
@@ -759,86 +719,31 @@ void PlayState::updateFireFlowers(sf::Time dt) {
 }
 
 void PlayState::drawFireFlowers(sf::RenderWindow& window) const {
-    sf::Sprite flowerSprite(assets.getTexture("FireFlower"));
-    // Scale flower to 75% of a tile size
-    float ts = tileMap.tileSize();
-    float flowerSize = ts * 0.75f;
-    sf::Vector2u texSize = flowerSprite.getTexture().getSize();
-    if (texSize.x > 0 && texSize.y > 0) {
-        flowerSprite.setScale({flowerSize / static_cast<float>(texSize.x),
-                               flowerSize / static_cast<float>(texSize.y)});
-    }
-
-    for (const FireFlowerEntity& flower : fireFlowers) {
-        flowerSprite.setPosition(flower.position);
-        window.draw(flowerSprite);
+    for (const items::FireFlower& flower : fireFlowers) {
+        flower.render(window, assets.getTexture("FireFlower"), tileMap.tileSize());
     }
 }
 
 void PlayState::spawnStar(sf::Vector2f blockPosition) {
-    stars.push_back({blockPosition, blockPosition, {0.f, 0.f},
-                     MushroomState::Emerging, 0.f});
+    stars.emplace_back(blockPosition);
 }
 
 void PlayState::updateStars(sf::Time dt) {
     const float seconds = dt.asSeconds();
-    const float size = tileMap.tileSize();
     const sf::FloatRect player = avatarBounds();
 
     for (auto it = stars.begin(); it != stars.end();) {
-        if (it->state == MushroomState::Emerging) {
-            it->elapsed = std::min(it->elapsed + seconds, kMushroomRiseDuration);
-            const float progress = it->elapsed / kMushroomRiseDuration;
-            it->position = {it->blockPosition.x,
-                            it->blockPosition.y - size * progress};
-            if (it->elapsed >= kMushroomRiseDuration) {
-                it->state = MushroomState::Moving;
-                it->velocity = {kStarSpeed, -kStarBounceSpeed};
-            }
-        } else {
-            it->velocity.y = std::min(it->velocity.y + kGravity * seconds,
-                                      kMaxFallSpeed);
+        it->update(seconds, tileMap);
 
-            it->position.x += it->velocity.x * seconds;
-            sf::FloatRect xBounds(it->position, {size, size});
-            xBounds.position.y += 1.f;
-            xBounds.size.y -= 2.f;
-            for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
-                if (it->velocity.x > 0.f) {
-                    it->position.x = tile.position.x - size;
-                } else {
-                    it->position.x = tile.position.x + tile.size.x;
-                }
-                it->velocity.x = -it->velocity.x;
-                break;
-            }
-
-            it->position.y += it->velocity.y * seconds;
-            sf::FloatRect yBounds(it->position, {size, size});
-            yBounds.position.x += 1.f;
-            yBounds.size.x -= 2.f;
-            for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
-                if (it->velocity.y > 0.f) {
-                    it->position.y = tile.position.y - size;
-                    it->velocity.y = -kStarBounceSpeed;
-                } else {
-                    it->position.y = tile.position.y + tile.size.y;
-                    it->velocity.y = 0.f;
-                }
-                break;
-            }
-        }
-
-        const sf::FloatRect bounds(it->position, {size, size});
-        if (it->state == MushroomState::Moving
-            && player.findIntersection(bounds).has_value()) {
+        if (it->isCollectible()
+            && player.findIntersection(it->getBounds()).has_value()) {
             starPowerRemaining = kStarPowerDuration;
             score += 1000;
             hud.setScore(score);
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("PowerUpSound"));
             it = stars.erase(it);
-        } else if (it->position.y > tileMap.pixelHeight()) {
+        } else if (it->hasFallenOut(tileMap.pixelHeight())) {
             it = stars.erase(it);
         } else {
             ++it;
@@ -847,11 +752,8 @@ void PlayState::updateStars(sf::Time dt) {
 }
 
 void PlayState::drawStars(sf::RenderWindow& window) const {
-    sf::Sprite starSprite(assets.getTexture("SuperStar"));
-    starSprite.setScale({Config::kZoom, Config::kZoom});
-    for (const StarEntity& star : stars) {
-        starSprite.setPosition(star.position);
-        window.draw(starSprite);
+    for (const items::Star& star : stars) {
+        star.render(window, assets.getTexture("SuperStar"), Config::kZoom);
     }
 }
 
@@ -1689,7 +1591,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
                 if (starBlock) {
                     spawnStar(tile.position);
                 } else if (oneUpBlock) {
-                    spawnMushroom(tile.position, MushroomKind::OneUp);
+                    spawnMushroom(tile.position, items::MushroomKind::OneUp);
                 } else {
                     BlockReward reward = takeNextItemBlockReward();
                     if (reward == BlockReward::Mushroom) {

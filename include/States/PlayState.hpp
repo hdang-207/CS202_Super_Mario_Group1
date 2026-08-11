@@ -4,6 +4,9 @@
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Input/InputHandler.hpp"
+#include "Items/FireFlower.hpp"
+#include "Items/Mushroom.hpp"
+#include "Items/Star.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -74,34 +77,9 @@ private:
     };
     std::vector<CoinPop> coinPops;
 
-    enum class MushroomState { Emerging, Moving };
-    enum class MushroomKind { Super, OneUp };
-    struct MushroomEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        MushroomState state;
-        float elapsed;
-        MushroomKind kind;
-    };
-    std::vector<MushroomEntity> mushrooms;
-
-    struct FireFlowerEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        MushroomState state; // Can reuse Emerging and Moving(stay still)
-        float elapsed;
-    };
-    std::vector<FireFlowerEntity> fireFlowers;
-
-    struct StarEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        MushroomState state;
-        float elapsed;
-    };
-    std::vector<StarEntity> stars;
+    std::vector<items::Mushroom> mushrooms;
+    std::vector<items::FireFlower> fireFlowers;
+    std::vector<items::Star> stars;
 
     struct GrowingVineEntity {
         sf::Vector2f blockPosition;
@@ -280,7 +258,7 @@ private:
 
     /// @brief Starts a Super or 1-Up mushroom emerging from an activated block.
     void spawnMushroom(sf::Vector2f blockPosition,
-                       MushroomKind kind = MushroomKind::Super);
+                       items::MushroomKind kind = items::MushroomKind::Super);
 
     /// @brief Updates mushroom physics and collision
     void updateMushrooms(sf::Time dt);
