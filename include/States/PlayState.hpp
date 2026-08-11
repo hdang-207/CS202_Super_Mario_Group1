@@ -39,7 +39,6 @@ private:
 
     // === PHYSICS SYSTEM & ENTITY INTEGRATION (Phase 3 & 4) =================
     physics::PhysicsSystem m_physicsSystem;
-    physics::PhysicsBody m_avatarPhysics;
     
     // Encapsulated Player entity (Mario / Luigi subclass instance)
     std::unique_ptr<entity::Player> m_player;
@@ -61,10 +60,6 @@ private:
     bool facingRight{true};
     float runAnimTimer{0.f};
     int currentRunStep{0};
-    sf::Vector2f avatarPos;
-    sf::Vector2f avatarVelocity;
-    bool onGround{false};
-    bool jumpHeld{false};
     float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
     float starPowerRemaining{0.f}; ///< Starman duration; touching enemies defeats them.
 

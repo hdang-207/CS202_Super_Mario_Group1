@@ -1,6 +1,7 @@
 #include "Player/Player.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace entity {
 
@@ -28,7 +29,7 @@ void Player::update(float deltaTime) {
         m_currentState->update(*this, deltaTime);
     }
 
-    processHorizontalMovement();
+    processHorizontalMovement(deltaTime);
     processJump();
 }
 
@@ -47,7 +48,7 @@ const PlayerState* Player::getCurrentState() const noexcept {
     return m_currentState.get();
 }
 
-void Player::processHorizontalMovement() {
+void Player::processHorizontalMovement(float deltaTime) {
     const float moveAxis = std::clamp(
         m_input.moveAxis,
         -1.0f,
@@ -56,27 +57,47 @@ void Player::processHorizontalMovement() {
 
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
-    velocity.x =
-        moveAxis * m_movementConfig.moveSpeed;
+    if (moveAxis != 0.0f) {
+        velocity.x += moveAxis * m_movementConfig.walkAcceleration * deltaTime;
+        velocity.x = std::clamp(
+            velocity.x,
+            -m_movementConfig.moveSpeed,
+            m_movementConfig.moveSpeed
+        );
+    } else {
+        const float friction = m_physicsBody.isGrounded()
+            ? m_movementConfig.groundFriction
+            : m_movementConfig.groundFriction
+                * m_movementConfig.airFrictionMultiplier;
+        const float drop = friction * deltaTime;
+
+        if (std::abs(velocity.x) <= drop) {
+            velocity.x = 0.0f;
+        } else {
+            velocity.x -= std::copysign(drop, velocity.x);
+        }
+    }
 
     m_physicsBody.setVelocity(velocity);
 }
 
 void Player::processJump() {
-    if (!m_input.jumpHeld) {
-        return;
-    }
-
-    if (!m_physicsBody.isGrounded()) {
-        return;
-    }
-
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
-    // In SFML coordinate system: negative Y is upward
-    velocity.y = -m_movementConfig.jumpSpeed;
+    if (m_input.jumpHeld
+        && !m_jumpWasHeldLastFrame
+        && m_physicsBody.isGrounded()) {
+        velocity.y = -m_movementConfig.jumpSpeed;
+        m_physicsBody.setGrounded(false);
+    }
+
+    if (!m_input.jumpHeld
+        && velocity.y < -m_movementConfig.jumpSpeed * m_movementConfig.jumpCutoff) {
+        velocity.y = -m_movementConfig.jumpSpeed * m_movementConfig.jumpCutoff;
+    }
 
     m_physicsBody.setVelocity(velocity);
+    m_jumpWasHeldLastFrame = m_input.jumpHeld;
 }
 
 const PlayerInput& Player::getInput() const noexcept {
@@ -88,4 +109,4 @@ Player::getMovementConfig() const noexcept {
     return m_movementConfig;
 }
 
-} // namespace entity
+} // namespace entity
