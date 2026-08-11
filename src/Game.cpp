@@ -107,11 +107,15 @@ Game::Game()
     assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
     assets.loadTexture("SuperMushroom", Systems::resourcePath("assets/textures/super_mushroom.png"));
+    assets.loadTexture("OneUpMushroom", Systems::resourcePath("assets/textures/one_up_mushroom.png"));
     assets.loadTexture("Goomba", Systems::resourcePath("assets/textures/goomba.png"));
     assets.loadTexture("GoombaUnderground",
                        Systems::resourcePath("assets/textures/goomba_underground.png"));
     assets.loadTexture("BlueKoopaUnderground",
                        Systems::resourcePath("assets/textures/blue_koopa_underground.png"));
+    assets.loadTexture("GreenKoopa", Systems::resourcePath("assets/textures/green_koopa.png"));
+    assets.loadTexture("GreenParatroopa", Systems::resourcePath("assets/textures/green_paratroopa.png"));
+    assets.loadTexture("GreenShell", Systems::resourcePath("assets/textures/green_shell.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
@@ -126,7 +130,19 @@ Game::Game()
     assets.loadTexture("IslandTopRight", Systems::resourcePath("assets/textures/island_top_right.png"));
     assets.loadTexture("IslandTrunk", Systems::resourcePath("assets/textures/island_trunk.png"));
     assets.loadTexture("MovingPlatform", Systems::resourcePath("assets/textures/moving_platform.png"));
+    assets.loadTexture("CoinHeavenLift", Systems::resourcePath("assets/textures/coin_heaven_lift.png"));
     assets.loadTexture("CastleWorld1_3", Systems::resourcePath("assets/textures/castle_world1-3.png"));
+    assets.loadTexture("CastleWorld2_1", Systems::resourcePath("assets/textures/castle_world2-1.png"));
+    assets.loadTexture("HorsetailTall", Systems::resourcePath("assets/textures/green_horsetail_tall.png"));
+    assets.loadTexture("HorsetailShort", Systems::resourcePath("assets/textures/green_horsetail_short.png"));
+    assets.loadTexture("FenceWorld2_1", Systems::resourcePath("assets/textures/fence_world2-1.png"));
+    assets.loadTexture("FenceWorld2_1Group", Systems::resourcePath("assets/textures/fence_world2-1_group.png"));
+    assets.loadTexture("PiranhaPlant", Systems::resourcePath("assets/textures/piranha_plant.png"));
+    assets.loadTexture("SuperStar", Systems::resourcePath("assets/textures/super_star.png"));
+    assets.loadTexture("VineTop", Systems::resourcePath("assets/textures/vine_top.png"));
+    assets.loadTexture("TrampolineNormal", Systems::resourcePath("assets/textures/trampoline_normal.png"));
+    assets.loadTexture("TrampolineCompressed", Systems::resourcePath("assets/textures/trampoline_compressed.png"));
+    assets.loadTexture("TrampolineLaunch", Systems::resourcePath("assets/textures/trampoline_launch.png"));
 
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));
