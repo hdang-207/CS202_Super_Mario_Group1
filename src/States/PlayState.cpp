@@ -72,35 +72,16 @@ namespace {
 
 }
 
-bool PlayState::holding(sf::Keyboard::Key key) const {
-    return heldKeys.count(key) > 0;
-}
-
-bool PlayState::wantsLeft() const {
-    return holding(sf::Keyboard::Key::Left) || holding(sf::Keyboard::Key::A);
-}
-
-bool PlayState::wantsRight() const {
-    return holding(sf::Keyboard::Key::Right) || holding(sf::Keyboard::Key::D);
-}
-
-bool PlayState::wantsJump() const {
-    return holding(sf::Keyboard::Key::Space) || holding(sf::Keyboard::Key::Up)
-        || holding(sf::Keyboard::Key::W);
-}
-
-bool PlayState::wantsBoost() const {
-    return holding(sf::Keyboard::Key::LShift) || holding(sf::Keyboard::Key::RShift);
-}
-
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
+      m_physicsSystem(kGravity, kMaxFallSpeed),
       avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
+      m_physicsSystem(kGravity, kMaxFallSpeed),
       avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"))
 {
     this->currentLevel = data.currentLevel;
@@ -256,7 +237,7 @@ void PlayState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         // Holding a key makes the system repeat KeyPressed; the toggles below must
         // only fire on the first one, otherwise resting on F would flicker the mode.
-        bool repeat = holding(keyPressed->code);
+        bool repeat = heldKeys.count(keyPressed->code) > 0;
         heldKeys.insert(keyPressed->code);
         if (repeat) {
             return;
@@ -296,6 +277,9 @@ void PlayState::update(sf::Time dt) {
     if (isPaused || transitionPending) {
         return;
     }
+
+    // Update the Input pressing from Command Pattern
+    inputHandler.update();
 
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
@@ -666,39 +650,22 @@ void PlayState::updateMushrooms(sf::Time dt) {
                 it->velocity.x = kMushroomSpeed;
             }
         } else if (it->state == MushroomState::Moving) {
-            it->velocity.y = std::min(it->velocity.y + kGravity * seconds, kMaxFallSpeed);
-            
             sf::Vector2f size(tileMap.tileSize(), tileMap.tileSize());
-            
-            // X movement & collision
-            it->position.x += it->velocity.x * seconds;
-            sf::FloatRect xBounds(it->position, size);
-            xBounds.position.y += 1.0f;
-            xBounds.size.y -= 2.0f;
-            
-            for (const auto& tile : tileMap.solidTilesOverlapping(xBounds)) {
-                if (it->velocity.x > 0.f) {
-                    it->position.x = tile.position.x - size.x;
-                } else if (it->velocity.x < 0.f) {
-                    it->position.x = tile.position.x + tile.size.x;
-                }
-                it->velocity.x = -it->velocity.x; // bounce horizontally
-                break;
-            }
-            
-            // Y movement & collision
-            it->position.y += it->velocity.y * seconds;
-            sf::FloatRect yBounds(it->position, size);
-            yBounds.position.x += 1.0f;
-            yBounds.size.x -= 2.0f;
-            
-            for (const auto& tile : tileMap.solidTilesOverlapping(yBounds)) {
-                if (it->velocity.y > 0.f) {
-                    it->position.y = tile.position.y - size.y;
-                } else if (it->velocity.y < 0.f) {
-                    it->position.y = tile.position.y + size.y;
-                }
-                it->velocity.y = 0.f;
+            physics::PhysicsBody mushroomBody(it->position, size);
+            mushroomBody.setVelocity(it->velocity);
+
+            sf::FloatRect broadBounds({it->position.x - 16.f, it->position.y - 16.f}, {size.x + 32.f, size.y + 32.f});
+            std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
+
+            m_physicsSystem.update(mushroomBody, solids, seconds);
+
+            it->position = mushroomBody.getPosition();
+            it->velocity = mushroomBody.getVelocity();
+
+            if (mushroomBody.hitWallLeft()) {
+                it->velocity.x = kMushroomSpeed;
+            } else if (mushroomBody.hitWallRight()) {
+                it->velocity.x = -kMushroomSpeed;
             }
         }
         
@@ -1061,8 +1028,8 @@ void PlayState::spawnWalkingEnemies() {
                            + tileMap.greenParatroopaSpawns().size());
 
     for (sf::Vector2f spawn : tileMap.enemySpawns()) {
-        walkingEnemies.push_back(
-            {EnemyKind::Goomba, spawn, {-kGoombaSpeed, 0.f}});
+        auto data = entity::EntityFactory::createEnemyData(entity::EnemyType::Goomba, spawn, kGoombaSpeed);
+        walkingEnemies.push_back({EnemyKind::Goomba, data.position, data.velocity});
     }
 
     // A Koopa sprite is 24px tall while one map cell is 16px. Markers remain
@@ -1070,8 +1037,8 @@ void PlayState::spawnWalkingEnemies() {
     const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        walkingEnemies.push_back(
-            {EnemyKind::BlueKoopa, spawn, {-kBlueKoopaSpeed, 0.f}});
+        auto data = entity::EntityFactory::createEnemyData(entity::EnemyType::BlueKoopa, spawn, kBlueKoopaSpeed);
+        walkingEnemies.push_back({EnemyKind::BlueKoopa, data.position, data.velocity});
     }
     for (sf::Vector2f spawn : tileMap.greenKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
@@ -1380,25 +1347,35 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             enemy.velocity.x = 0.f;
         }
 
-        enemy.velocity.y = std::min(enemy.velocity.y + kGravity * seconds,
-                                    kMaxFallSpeed);
+        // Delegate enemy kinematics and collision to PhysicsSystem (Phase 3)
+        sf::Vector2f initialVel = enemy.velocity;
+        if (initialVel.x == 0.f && enemy.state == EnemyState::Walking) {
+            initialVel.x = -moveSpeed;
+        }
 
-        // Resolve horizontal movement first. Hitting a solid tile turns the
-        // enemy around instead of stopping it permanently.
-        enemy.position.x += enemy.velocity.x * seconds;
-        sf::FloatRect xBounds(enemy.position, size);
-        xBounds.position.y += 1.f;
-        xBounds.size.y -= 2.f;
+        physics::PhysicsBody enemyBody(enemy.position, size);
+        enemyBody.setVelocity(initialVel);
 
-        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
-            if (enemy.velocity.x > 0.f) {
-                enemy.position.x = tile.position.x - size.x;
-                enemy.velocity.x = -moveSpeed;
-            } else {
-                enemy.position.x = tile.position.x + tile.size.x;
-                enemy.velocity.x = moveSpeed;
-            }
-            break;
+        sf::FloatRect broadBounds(
+            {enemy.position.x - tileSize, enemy.position.y - tileSize},
+            {size.x + tileSize * 2.f, size.y + tileSize * 2.f});
+        const std::vector<physics::AABB> solids =
+            getSolidAABBsOverlapping(broadBounds);
+
+        m_physicsSystem.update(enemyBody, solids, seconds);
+
+        enemy.position = enemyBody.getPosition();
+        enemy.velocity = enemyBody.getVelocity();
+
+        if (enemyBody.hitWallLeft()) {
+            enemy.velocity.x = moveSpeed;
+        } else if (enemyBody.hitWallRight()) {
+            enemy.velocity.x = -moveSpeed;
+        }
+
+        if (isParatroopa && enemy.state == EnemyState::Walking
+            && enemyBody.isGrounded()) {
+            enemy.velocity.y = -kParatroopaBounceSpeed;
         }
 
         if (enemy.position.x < 0.f) {
@@ -1407,25 +1384,6 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
         } else if (enemy.position.x + size.x > tileMap.pixelWidth()) {
             enemy.position.x = tileMap.pixelWidth() - size.x;
             enemy.velocity.x = -moveSpeed;
-        }
-
-        // Gravity and floor/platform collision use the same tile geometry as Mario.
-        enemy.position.y += enemy.velocity.y * seconds;
-        sf::FloatRect yBounds(enemy.position, size);
-        yBounds.position.x += 1.f;
-        yBounds.size.x -= 2.f;
-
-        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
-            if (enemy.velocity.y > 0.f) {
-                enemy.position.y = tile.position.y - size.y;
-                enemy.velocity.y = isParatroopa
-                    && enemy.state == EnemyState::Walking
-                    ? -kParatroopaBounceSpeed : 0.f;
-            } else if (enemy.velocity.y < 0.f) {
-                enemy.position.y = tile.position.y + tile.size.y;
-                enemy.velocity.y = 0.f;
-            }
-            break;
         }
 
         if (enemy.position.y > tileMap.pixelHeight()) {
@@ -1597,6 +1555,16 @@ void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
     }
 }
 
+std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRect& bounds) const {
+    std::vector<physics::AABB> result;
+    const auto tiles = tileMap.solidTilesOverlapping(bounds);
+    result.reserve(tiles.size());
+    for (const auto& tile : tiles) {
+        result.emplace_back(sf::Vector2f(tile.position.x, tile.position.y), sf::Vector2f(tile.size.x, tile.size.y));
+    }
+    return result;
+}
+
 void PlayState::respawnAvatar() {
     sf::Vector2f spawn = tileMap.playerSpawn();
     // Sit the avatar on the bottom of its spawn tile rather than its top-left corner.
@@ -1604,23 +1572,35 @@ void PlayState::respawnAvatar() {
     avatarVelocity = {0.f, 0.f};
     onGround = false;
     maxCameraCenterX = avatarPos.x + avatar.getSize().x / 2.f;
+
+    m_avatarPhysics.setPosition(avatarPos);
+    m_avatarPhysics.setCollider(avatar.getSize());
+    m_avatarPhysics.setVelocity(avatarVelocity);
+
+    if (selectedCharacter == CharacterType::Luigi) {
+        m_player = std::make_unique<entity::Luigi>(avatarPos, avatar.getSize());
+    } else {
+        m_player = std::make_unique<entity::Mario>(avatarPos, avatar.getSize());
+    }
 }
 
 bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
+    const auto& playerInput = inputHandler.getPlayerInput();
+    if (m_player) {
+        m_player->setInput(playerInput);
+    }
+    const auto movementConfig = m_player ? m_player->getMovementConfig() : entity::PlayerMovementConfig{420.f, 1000.f, 2000.f};
+
     // --- horizontal intent -------------------------------------------------
-    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
+    float direction = playerInput.moveAxis;
     if (direction != 0.f) {
         avatarVelocity.x += direction * kWalkAcceleration * seconds;
-        avatarVelocity.x = std::clamp(avatarVelocity.x, -kMaxWalkSpeed, kMaxWalkSpeed);
+        avatarVelocity.x = std::clamp(avatarVelocity.x, -movementConfig.moveSpeed, movementConfig.moveSpeed);
     } else {
-
         // Friction logic: check if character is grounded
-        // If grounded -> apply full ground friction
-        // If airborne -> apply reduced air resistance to retain forward momentum
-        float friction = onGround ? kGroundFriction : (kGroundFriction * 0.02f);
-        // Coast to a stop instead of snapping, so movement keeps some inertia.
+        float friction = onGround ? movementConfig.groundFriction : (movementConfig.groundFriction * 0.02f);
         float drop = friction * seconds;
         if (std::abs(avatarVelocity.x) <= drop) {
             avatarVelocity.x = 0.f;
@@ -1630,61 +1610,55 @@ bool PlayState::moveAvatar(sf::Time dt) {
     }
 
     // --- jumping -----------------------------------------------------------
-    bool jumpPressed = wantsJump();
+    bool jumpPressed = playerInput.jumpHeld;
     if (jumpPressed && !jumpHeld && onGround) {
-        avatarVelocity.y = -kJumpSpeed;
+        avatarVelocity.y = -movementConfig.jumpSpeed;
         onGround = false;
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
     // Let go early and the jump is cut short - the classic variable jump height.
-    if (!jumpPressed && avatarVelocity.y < -kJumpSpeed * kJumpCutoff) {
-        avatarVelocity.y = -kJumpSpeed * kJumpCutoff;
+    if (!jumpPressed && avatarVelocity.y < -movementConfig.jumpSpeed * kJumpCutoff) {
+        avatarVelocity.y = -movementConfig.jumpSpeed * kJumpCutoff;
     }
     jumpHeld = jumpPressed;
 
-    avatarVelocity.y = std::min(avatarVelocity.y + kGravity * seconds, kMaxFallSpeed);
-
-    // --- move and resolve, one axis at a time ------------------------------
+    // --- PHYSICS SYSTEM STEP (Phase 3 Integration) -------------------------
     sf::Vector2f size = avatar.getSize();
+    const float previousBottom = avatarPos.y + size.y;
 
-    avatarPos.x += avatarVelocity.x * seconds;
+    // Sync input state into PhysicsBody
+    m_avatarPhysics.setPosition(avatarPos);
+    m_avatarPhysics.setCollider(size);
+    m_avatarPhysics.setVelocity(avatarVelocity);
 
-    // Virtual X-axis hitbox: slightly narrow height to prevent snagging on floor/ceiling tiles
-    sf::FloatRect xBounds = avatarBounds();
-    xBounds.position.y += 1.0f;    // Shift top edge down by 1 pixel
-    xBounds.size.y -= 2.0f;        // Shift bottom edge up by 1 pixel
+    // Collect solid tile colliders in broadphase area
+    sf::FloatRect broadBounds = avatarBounds();
+    broadBounds.position.x -= 16.0f;
+    broadBounds.position.y -= 16.0f;
+    broadBounds.size.x += 32.0f;
+    broadBounds.size.y += 32.0f;
+    std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
 
+    // Delegate kinematics & collision resolution to PhysicsSystem
+    m_physicsSystem.update(m_avatarPhysics, solids, seconds);
 
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(xBounds)) {
-        if (avatarVelocity.x > 0.f) {
-            avatarPos.x = tile.position.x - size.x;
-            avatarVelocity.x = 0.f;
-        } else if (avatarVelocity.x < 0.f) {
-            avatarPos.x = tile.position.x + tile.size.x;
-            avatarVelocity.x = 0.f;
-        }
-    }
+    // Extract results from PhysicsBody
+    avatarPos = m_avatarPhysics.getPosition();
+    avatarVelocity = m_avatarPhysics.getVelocity();
+    onGround = m_avatarPhysics.isGrounded();
 
     // SMB 1985 Camera Lock: Player cannot walk back past the left edge of the screen
     float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
     avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
+    m_avatarPhysics.setPosition(avatarPos);
 
-    onGround = false;
-    const float previousBottom = avatarPos.y + size.y;
-    avatarPos.y += avatarVelocity.y * seconds;
-    
-    // Virtual Y-axis hitbox: slightly narrow width to prevent snagging on wall tiles
-    sf::FloatRect yBounds = avatarBounds();
-    yBounds.position.x += 1.0f;    // Shift left edge inward by 1 pixel
-    yBounds.size.x -= 2.0f;        // Shift right edge inward by 1 pixel
+    // --- Block Collision Response (hitCeiling) ------------------------------
+    if (m_avatarPhysics.hitCeiling()) {
+        sf::FloatRect headBounds = avatarBounds();
+        headBounds.position.y -= 4.0f;
+        headBounds.size.y = 8.0f;
 
-    for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(yBounds)) {
-        if (avatarVelocity.y > 0.f) {
-            avatarPos.y = tile.position.y - size.y;
-            avatarVelocity.y = 0.f;
-            onGround = true;
-        } else if (avatarVelocity.y < 0.f) {
-            avatarPos.y = tile.position.y + tile.size.y;
+        for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(headBounds)) {
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             const char blockSymbol = tileMap.symbolAt(col, row);
@@ -1793,6 +1767,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
                 }
             }
             avatarVelocity.y = 0.f;
+            m_avatarPhysics.setVelocity(avatarVelocity);
+            break;
         }
     }
 
@@ -1903,8 +1879,10 @@ void PlayState::updateCamera() {
 }
 
 void PlayState::panCamera(sf::Time dt) {
-    float direction = (wantsRight() ? 1.f : 0.f) - (wantsLeft() ? 1.f : 0.f);
-    float speed = kFreeLookSpeed * (wantsBoost() ? kFreeLookBoost : 1.f);
+    const auto& playerInput = inputHandler.getPlayerInput();
+    float direction = playerInput.moveAxis;
+    bool boost = heldKeys.count(sf::Keyboard::Key::LShift) > 0 || heldKeys.count(sf::Keyboard::Key::RShift) > 0;
+    float speed = kFreeLookSpeed * (boost ? kFreeLookBoost : 1.f);
 
     freeLookCentre.x += direction * speed * dt.asSeconds();
     centreCamera(freeLookCentre);
