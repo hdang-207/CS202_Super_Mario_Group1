@@ -496,11 +496,14 @@ bool PlayState::loadLevel(int level) {
 
 bool PlayState::tryEnterNextLevel() {
     const sf::FloatRect player = avatarBounds();
-    const bool reachedLevelExit = currentLevel < Config::kFinalLevel
+    const bool reachedLevelExit = !Config::isLastStageOfWorld(currentLevel)
+        && currentLevel < Config::kFinalLevel
         && tileMap.hasLevelExit()
         && player.findIntersection(tileMap.levelExitBounds()).has_value();
-    const bool reachedStageGoal = Config::stageNumber(currentLevel) == 3
-        && tileMap.hasGoal()
+    // Most stages use a hidden W exit marker. World 2-1 follows the reference
+    // map and ends directly at its flag, so a goal is also valid when no W exists.
+    const bool reachedStageGoal = tileMap.hasGoal()
+        && (Config::isLastStageOfWorld(currentLevel) || !tileMap.hasLevelExit())
         && player.findIntersection(tileMap.goalBounds()).has_value();
 
     if (!reachedLevelExit && !reachedStageGoal) {
