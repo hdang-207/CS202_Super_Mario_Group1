@@ -17,10 +17,11 @@ namespace {
      *   ? question block
      *   U used block      S staircase          [] pipe top    {} pipe body
      *   H hidden block    1 hidden 1-Up block    o coin
+     *   g underground ground   r underground brick   p invisible pipe collider
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * G Green Koopa, J Green Paratroopa, R Piranha Plant, D trampoline,
      * L horizontal lift, and . empty sky.
-     * Scenery characters (M m V v l c F X W I Y Z T t f q N) carry no entry here - they are
+     * Scenery characters (M m V v l c F X W Q I Y Z T t f q N) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
@@ -44,6 +45,9 @@ namespace {
         { '-', TileType::Ground        },
         { ')', TileType::Ground        },
         { '|', TileType::Decoration    },
+        { 'g', TileType::Ground        },
+        { 'r', TileType::Brick         },
+        { 'p', TileType::Pipe          },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -247,6 +251,11 @@ bool TileMap::build(const MapParser& parser, float scale) {
                     // The Coin Heaven vine is tightly cropped and begins one
                     // source pixel below its map row in the reference image.
                     drawPos.y += 1.f * scale;
+                } else if (symbol == 'F') {
+                    // The guide-map pole is centred eight source pixels left of
+                    // its marker and starts halfway down the marker row.
+                    drawPos.x -= 8.f * scale;
+                    drawPos.y += 8.f * scale;
                 }
                 if (symbol == 'I') {
                     // The supplied island is a complete multi-cell sprite. Only
