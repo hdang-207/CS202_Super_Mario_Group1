@@ -1,9 +1,13 @@
 #pragma once
 #include "Core/CharacterType.hpp"
+#include "Combat/Bomb.hpp"
 #include "Entities/Bullet.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Input/InputHandler.hpp"
+#include "Items/FireFlower.hpp"
+#include "Items/Mushroom.hpp"
+#include "Items/Star.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -15,6 +19,7 @@
 #include "Player/Luigi.hpp"
 #include <cstddef>
 #include <random>
+#include <optional>
 #include "UI/HUD.hpp"
 #include <set>
 #include <vector>
@@ -39,7 +44,6 @@ private:
 
     // === PHYSICS SYSTEM & ENTITY INTEGRATION (Phase 3 & 4) =================
     physics::PhysicsSystem m_physicsSystem;
-    physics::PhysicsBody m_avatarPhysics;
     
     // Encapsulated Player entity (Mario / Luigi subclass instance)
     std::unique_ptr<entity::Player> m_player;
@@ -61,15 +65,9 @@ private:
     bool facingRight{true};
     float runAnimTimer{0.f};
     int currentRunStep{0};
-    sf::Vector2f avatarPos;
-    sf::Vector2f avatarVelocity;
-    bool onGround{false};
-    bool jumpHeld{false};
     float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
     float starPowerRemaining{0.f}; ///< Starman duration; touching enemies defeats them.
 
-    enum class PlayerForm { Small, Super };
-    PlayerForm playerForm{PlayerForm::Small};
     float damageProtectionRemaining{0.f};
 
     struct CoinPop {
@@ -79,34 +77,9 @@ private:
     };
     std::vector<CoinPop> coinPops;
 
-    enum class MushroomState { Emerging, Moving };
-    enum class MushroomKind { Super, OneUp };
-    struct MushroomEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        MushroomState state;
-        float elapsed;
-        MushroomKind kind;
-    };
-    std::vector<MushroomEntity> mushrooms;
-
-    struct FireFlowerEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        MushroomState state; // Can reuse Emerging and Moving(stay still)
-        float elapsed;
-    };
-    std::vector<FireFlowerEntity> fireFlowers;
-
-    struct StarEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        MushroomState state;
-        float elapsed;
-    };
-    std::vector<StarEntity> stars;
+    std::vector<items::Mushroom> mushrooms;
+    std::vector<items::FireFlower> fireFlowers;
+    std::vector<items::Star> stars;
 
     struct GrowingVineEntity {
         sf::Vector2f blockPosition;
@@ -118,6 +91,7 @@ private:
     int availableBullets{3};
     float shootCooldownRemaining{0.f};
     std::vector<float> ammoRechargeTimers;
+    std::optional<combat::Bomb> activeBomb;
 
     struct ExplosionEntity {
         sf::Vector2f position;
@@ -125,9 +99,6 @@ private:
         int currentFrame;
     };
     std::vector<ExplosionEntity> explosions;
-
-    enum class AvatarForm { Normal, Fire };
-    AvatarForm currentForm{AvatarForm::Normal};
 
     enum class EnemyKind {
         Goomba,
@@ -238,11 +209,8 @@ private:
      */
     sf::FloatRect avatarBounds() const;
 
-    /// @brief Changes a Small avatar to Super while keeping its feet fixed.
-    void becomeSuper();
-
-    /// @brief Changes a Super avatar back to Small while keeping its feet fixed.
-    void becomeSmall();
+    /// @brief Syncs PlayState-owned visuals with Player-owned form and collider state.
+    void syncAvatarPowerVisuals();
 
     /// @brief Applies one life loss and either restarts the level or opens Game Over.
     void handlePlayerDeath();
@@ -285,7 +253,7 @@ private:
 
     /// @brief Starts a Super or 1-Up mushroom emerging from an activated block.
     void spawnMushroom(sf::Vector2f blockPosition,
-                       MushroomKind kind = MushroomKind::Super);
+                       items::MushroomKind kind = items::MushroomKind::Super);
 
     /// @brief Updates mushroom physics and collision
     void updateMushrooms(sf::Time dt);
@@ -310,6 +278,11 @@ private:
     void spawnBullet();
     void updateBullets(sf::Time dt);
     void drawBullets(sf::RenderWindow& window) const;
+
+    void spawnBomb();
+    void updateBomb(sf::Time dt);
+    void explodeBomb(sf::Vector2f center);
+    void drawBomb(sf::RenderWindow& window) const;
 
     void spawnExplosion(sf::Vector2f position);
     void updateExplosions(sf::Time dt);
