@@ -69,6 +69,7 @@ namespace {
 
     /// Every underground map reserves its final columns for an outdoor goal area.
     constexpr int kOutdoorGoalColumns = 41;
+    constexpr int kWorld21BonusStartColumn = 293;
 
 }
 
@@ -169,6 +170,10 @@ void PlayState::init() {
     tileMap.setTileTexture('-', assets.getTexture("IslandTopMiddle"));
     tileMap.setTileTexture(')', assets.getTexture("IslandTopRight"));
     tileMap.setTileTexture('|', assets.getTexture("IslandTrunk"));
+    // World 2-1 contains a compact underground bonus room in the same panorama.
+    // Dedicated symbols keep its cyan tiles independent of the outdoor palette.
+    tileMap.setTileTexture('g', assets.getTexture("GroundUndergroundTile"));
+    tileMap.setTileTexture('r', assets.getTexture("BrickUndergroundTile"));
 
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
@@ -190,6 +195,7 @@ void PlayState::init() {
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
+    tileMap.setDecorationTexture('Q', assets.getTexture("WarpPipeForked"));
 
     if (!loadLevel(currentLevel)) {
         return;
@@ -1313,7 +1319,12 @@ void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
         coinHeaven ? "CoinHeavenLift" : "MovingPlatform"));
     platformSprite.setScale({Config::kZoom, Config::kZoom});
     for (const MovingPlatform& platform : movingPlatforms) {
-        platformSprite.setPosition(platform.position);
+        sf::Vector2f drawPosition = platform.position;
+        if (coinHeaven) {
+            // The supplied World 2-1 lift sits one source pixel below its map row.
+            drawPosition.y += Config::kZoom;
+        }
+        platformSprite.setPosition(drawPosition);
         window.draw(platformSprite);
     }
 }
@@ -1947,12 +1958,27 @@ void PlayState::render(sf::RenderWindow& window) {
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
     const int outdoorStartColumn = std::max(
         0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
+    const bool world21 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 1;
     bool underground = Config::stageNumber(currentLevel) == 2
                     && avatarPos.x < outdoorStartColumn * Config::kTileSize;
-    sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
+    const sf::Color outdoorSky = world21
+        ? sf::Color(146, 144, 255)
+        : sf::Color(92, 148, 252);
+    sky.setFillColor(underground ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
     window.setView(camera);
+    if (world21 && mapParser.getWidth() > kWorld21BonusStartColumn) {
+        // Unlike a normal stage transition, the reference panorama places the
+        // bonus room directly after Coin Heaven, with a hard sky/black boundary.
+        const float bonusLeft = kWorld21BonusStartColumn * tileMap.tileSize();
+        sf::RectangleShape bonusBackdrop(
+            {tileMap.pixelWidth() - bonusLeft, tileMap.pixelHeight()});
+        bonusBackdrop.setPosition({bonusLeft, 0.f});
+        bonusBackdrop.setFillColor(sf::Color::Black);
+        window.draw(bonusBackdrop);
+    }
     drawPiranhas(window);
     window.draw(tileMap);
     drawGrowingVines(window);
