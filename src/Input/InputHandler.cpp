@@ -1,17 +1,18 @@
 #include "Input/InputHandler.hpp"
-#include <SFML/Window/Keyboard.hpp>
 
-void InputHandler::update() {
-
+void InputHandler::update(const std::set<sf::Keyboard::Key>& heldKeys) {
     reset();
 
-    const bool left = 
-    sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::A) ||
-    sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Left);
-    
-    const bool right = 
-    sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::D) ||
-    sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Right);
+    const auto holding = [&heldKeys](sf::Keyboard::Key key) {
+        return heldKeys.count(key) > 0;
+    };
+    const bool left = holding(sf::Keyboard::Key::A)
+                   || holding(sf::Keyboard::Key::Left);
+    const bool right = holding(sf::Keyboard::Key::D)
+                    || holding(sf::Keyboard::Key::Right);
+    const bool jump = holding(sf::Keyboard::Key::Space)
+                   || holding(sf::Keyboard::Key::W)
+                   || holding(sf::Keyboard::Key::Up);
 
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);
@@ -21,10 +22,9 @@ void InputHandler::update() {
         m_moveRightCommand.execute(m_playerInput);
     }
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space)) {
+    if (jump) {
         m_jumpCommand.execute(m_playerInput);
     }
-
 }
 
 void InputHandler::reset() {
@@ -34,4 +34,3 @@ void InputHandler::reset() {
 const PlayerInput& InputHandler::getPlayerInput() const noexcept {
     return m_playerInput;
 }
-

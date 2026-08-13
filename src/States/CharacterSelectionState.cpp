@@ -2,6 +2,7 @@
 #include "Core/Config.hpp"
 #include "States/IntroMenuState.hpp"
 #include "States/PlayState.hpp"
+#include "States/WorldSelectionState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Core/CharacterType.hpp"
 #include "Systems/SoundController.hpp"
@@ -65,7 +66,7 @@ void CharacterSelectionState::init() {
     luigiOptionText.setOutlineColor(sf::Color::Black);
     luigiOptionText.setOutlineThickness(2.f);
 
-    backHintText.setString("B: MENU | ENTER/SPACE: START | L: LOAD SAVE\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
+    backHintText.setString("B: MENU | ENTER/SPACE: NEXT | L: LOAD SAVE\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
     backHintText.setCharacterSize(13);
     backHintText.setFillColor(sf::Color::White);
     backHintText.setOutlineColor(sf::Color::Black);
@@ -96,15 +97,18 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         if (keyPressed->code == sf::Keyboard::Key::Up || keyPressed->code == sf::Keyboard::Key::W ||
             keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
             selectedIndex = 0; // Select Mario
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         } 
         else if (keyPressed->code == sf::Keyboard::Key::Down || keyPressed->code == sf::Keyboard::Key::S ||
                  keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
             selectedIndex = 1; // Select Luigi
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         }
         else if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space) {
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             CharacterType chosen = (selectedIndex == 0) ? CharacterType::Mario : CharacterType::Luigi;
-            std::cout << "[Core Engine] Character confirmed! Transitioning to PlayState...\n";
-            gsm.changeState(std::make_unique<PlayState>(gsm, assets, chosen));
+            std::cout << "[Core Engine] Character confirmed! Transitioning to WorldSelectionState...\n";
+            gsm.changeState(std::make_unique<WorldSelectionState>(gsm, assets, chosen));
         }
         else if (keyPressed->code == sf::Keyboard::Key::B) {
             std::cout << "[Core Engine] Going back to IntroMenuState...\n";
@@ -113,8 +117,9 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
         else if (keyPressed->code == sf::Keyboard::Key::L) {
             SaveData data;
             if (SaveManager::loadFromFile("savegame.txt", data)) {
-                std::cout << "[Core Engine] Loading saved game at level "
-                          << data.currentLevel << "...\n";
+                std::cout << "[Core Engine] Loading saved game at World "
+                          << Config::worldNumber(data.currentLevel) << "-"
+                          << Config::stageNumber(data.currentLevel) << "...\n";
                 gsm.changeState(std::make_unique<PlayState>(gsm, assets, data));
             }
         }

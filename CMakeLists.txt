@@ -47,12 +47,15 @@ if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE "-framework AppKit" "-framework OpenGL")
 endif()
 
-# Lệnh tự động copy thư mục assets vào thư mục build để game đọc được ảnh/nhạc
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+# Luôn đồng bộ assets khi build target game. POST_BUILD chỉ chạy khi executable
+# được link lại, nên thay đổi riêng PNG sẽ không tới được thư mục bin/.
+add_custom_target(copy_assets
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/assets"
-    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
+    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
+    COMMENT "Synchronizing game assets"
 )
+add_dependencies(${PROJECT_NAME} copy_assets)
 
 # Tự động copy file DLL của SFML vào thư mục bin trên Windows (đối với liên kết động - Dynamic Link)
 if(WIN32)

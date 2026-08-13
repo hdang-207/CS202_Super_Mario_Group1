@@ -1,19 +1,34 @@
 #pragma once
 
+#include <memory>
+#include <vector>
 #include <SFML/System/Vector2.hpp>
 
 #include "Entities/Character.hpp"
 #include "Input/PlayerInput.hpp"
+#include "Player/PlayerState.hpp"
+#include "Player/PowerType.hpp"
 
 namespace entity {
 
 struct PlayerMovementConfig {
-    float moveSpeed{200.0f};
-    float jumpSpeed{450.0f};
+    float moveSpeed{420.0f};
+    float jumpSpeed{1000.0f};
+    float groundFriction{2000.0f};
+    float walkAcceleration{1800.0f};
+    float airFrictionMultiplier{0.02f};
+    float jumpCutoff{0.45f};
 };
 
 class Player : public Character {
 public:
+    Player(
+        const sf::Vector2f& position,
+        const sf::Vector2f& colliderSize = {16.0f, 16.0f},
+        const sf::Vector2f& colliderOffset = {0.0f, 0.0f},
+        const PlayerMovementConfig& movementConfig = {}
+    );
+
     virtual ~Player() override = default;
 
     /**
@@ -26,26 +41,45 @@ public:
      */
     void update(float deltaTime) override;
 
+    /**
+     * @brief Render player sprite.
+     */
+    void render(sf::RenderTarget& target) const override;
+
+    /**
+     * @brief Change current player state (State Pattern).
+     */
+    void changeState(std::unique_ptr<PlayerState> newState);
+
+    [[nodiscard]]
+    const PlayerState* getCurrentState() const noexcept;
+
     [[nodiscard]]
     const PlayerInput& getInput() const noexcept;
 
     [[nodiscard]]
     const PlayerMovementConfig& getMovementConfig() const noexcept;
 
-protected:
-    Player(
-        const sf::Vector2f& position,
-        const sf::Vector2f& colliderSize,
-        const sf::Vector2f& colliderOffset,
-        const PlayerMovementConfig& movementConfig
-    );
+    void applyPower(PowerType power);
+    bool removeLatestPower();
 
-    void processHorizontalMovement();
+    [[nodiscard]] bool hasPower(PowerType power) const noexcept;
+    [[nodiscard]] bool isSuper() const noexcept;
+    [[nodiscard]] bool hasFirePower() const noexcept;
+
+protected:
+    void processHorizontalMovement(float deltaTime);
     void processJump();
 
 private:
+    void setSuperCollider(bool super);
+
     PlayerInput m_input{};
     PlayerMovementConfig m_movementConfig{};
+    std::unique_ptr<PlayerState> m_currentState;
+    bool m_jumpWasHeldLastFrame{false};
+    sf::Vector2f m_smallColliderSize{};
+    std::vector<PowerType> m_powerStack;
 };
 
 } // namespace entity

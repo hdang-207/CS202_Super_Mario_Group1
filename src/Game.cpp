@@ -34,26 +34,59 @@ Game::Game()
     assets.loadSoundBuffer("OneMoreLifeSound", Systems::resourcePath("assets/audio/sound/onemorelife.mp3"));
     assets.loadSoundBuffer("PowerUpSound", Systems::resourcePath("assets/audio/sound/powerup.mp3"));
     assets.loadSoundBuffer("VictorySound", Systems::resourcePath("assets/audio/sound/victory.mp3"));
-
+    
+    // New sounds
+    assets.loadSoundBuffer("SelectSound", Systems::resourcePath("assets/audio/sound/selecting.wav"));
+    assets.loadSoundBuffer("StompSound", Systems::resourcePath("assets/audio/sound/kill.wav"));
+    assets.loadSoundBuffer("WalkingSound", Systems::resourcePath("assets/audio/sound/walking.wav"));
+    assets.loadSoundBuffer("FireSound", Systems::resourcePath("assets/audio/sound/Fire.wav"));
+    assets.loadSoundBuffer("ExplodeSound", Systems::resourcePath("assets/audio/sound/Explode.wav"));
+    assets.loadSoundBuffer("DowngradeSound", Systems::resourcePath("assets/audio/sound/downgrade.wav"));
+    assets.loadSoundBuffer("BrickBreak", Systems::resourcePath("assets/audio/sound/brick_break.wav"));
+    assets.loadSoundBuffer("BrickCollision", Systems::resourcePath("assets/audio/sound/brick_collision.wav"));
+    
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));
 
     // Character preview & movement textures
     assets.loadTexture("MarioPreview", Systems::resourcePath("assets/character/Mario_preview.png"));
     assets.loadTexture("LuigiPreview", Systems::resourcePath("assets/character/Luigi_preview.png"));
+    
+    // Normal Mario
     assets.loadTexture("MarioIdle", Systems::resourcePath("assets/character/Mario_idle.png"));
     assets.loadTexture("MarioJump", Systems::resourcePath("assets/character/Mario_jump.png"));
     assets.loadTexture("MarioRun1", Systems::resourcePath("assets/character/Mario_run1.png"));
     assets.loadTexture("MarioRun2", Systems::resourcePath("assets/character/Mario_run2.png"));
+    
+    // Fire Mario
+    assets.loadTexture("FireMarioIdle", Systems::resourcePath("assets/character/FireMarioIdle.png"));
+    assets.loadTexture("FireMarioJump", Systems::resourcePath("assets/character/FireMarioJump.png"));
+    assets.loadTexture("FireMarioRun1", Systems::resourcePath("assets/character/FireMarioRun1.png"));
+    assets.loadTexture("FireMarioRun2", Systems::resourcePath("assets/character/FireMarioRun2.png"));
+    
+    // Normal Luigi
     assets.loadTexture("LuigiIdle", Systems::resourcePath("assets/character/Luigi_idle.png"));
     assets.loadTexture("LuigiJump", Systems::resourcePath("assets/character/Luigi_jump.png"));
     assets.loadTexture("LuigiRun1", Systems::resourcePath("assets/character/Luigi_run1.png"));
     assets.loadTexture("LuigiRun2", Systems::resourcePath("assets/character/Luigi_run2.png"));
+
+    // Fire Luigi
+    assets.loadTexture("FireLuigiIdle", Systems::resourcePath("assets/character/FireLuigiIdle.png"));
+    assets.loadTexture("FireLuigiJump", Systems::resourcePath("assets/character/FireLuigiJump.png"));
+    assets.loadTexture("FireLuigiRun1", Systems::resourcePath("assets/character/FireLuigiRun1.png"));
+    assets.loadTexture("FireLuigiRun2", Systems::resourcePath("assets/character/FireLuigiRun2.png"));
+
     assets.loadTexture("MusicSymbol", Systems::resourcePath("assets/textures/music_symbol.png"));
     assets.loadTexture("SoundSymbol", Systems::resourcePath("assets/textures/sound_symbol.png"));
 
+    // Items and projectiles
+    assets.loadTexture("FireFlower", Systems::resourcePath("assets/textures/FireFlower.png"));
+    assets.loadTexture("Bullet", Systems::resourcePath("assets/textures/Bullet.png"));
+    assets.loadTexture("Explosion", Systems::resourcePath("assets/textures/explosion.png"));
+
     // Level artwork: one image per map character, no tile atlas involved.
     assets.loadTexture("GroundTile", Systems::resourcePath("assets/textures/ground.png"));
+    assets.loadTexture("CloudBlock", Systems::resourcePath("assets/textures/cloud_block.png"));
     assets.loadTexture("GroundUndergroundTile",
                        Systems::resourcePath("assets/textures/ground_underground.png"));
     assets.loadTexture("BrickTile", Systems::resourcePath("assets/textures/brick.png"));
@@ -74,11 +107,15 @@ Game::Game()
     assets.loadTexture("EmptyBlock", Systems::resourcePath("assets/textures/empty_block.png"));
     assets.loadTexture("Coin", Systems::resourcePath("assets/textures/coin.png"));
     assets.loadTexture("SuperMushroom", Systems::resourcePath("assets/textures/super_mushroom.png"));
+    assets.loadTexture("OneUpMushroom", Systems::resourcePath("assets/textures/one_up_mushroom.png"));
     assets.loadTexture("Goomba", Systems::resourcePath("assets/textures/goomba.png"));
     assets.loadTexture("GoombaUnderground",
                        Systems::resourcePath("assets/textures/goomba_underground.png"));
     assets.loadTexture("BlueKoopaUnderground",
                        Systems::resourcePath("assets/textures/blue_koopa_underground.png"));
+    assets.loadTexture("GreenKoopa", Systems::resourcePath("assets/textures/green_koopa.png"));
+    assets.loadTexture("GreenParatroopa", Systems::resourcePath("assets/textures/green_paratroopa.png"));
+    assets.loadTexture("GreenShell", Systems::resourcePath("assets/textures/green_shell.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
@@ -87,6 +124,25 @@ Game::Game()
     assets.loadTexture("BushSmall", Systems::resourcePath("assets/textures/bush_small.png"));
     assets.loadTexture("CloudBig", Systems::resourcePath("assets/textures/cloud_big.png"));
     assets.loadTexture("CloudSmall", Systems::resourcePath("assets/textures/cloud_small.png"));
+    assets.loadTexture("Island", Systems::resourcePath("assets/textures/island.png"));
+    assets.loadTexture("IslandTopLeft", Systems::resourcePath("assets/textures/island_top_left.png"));
+    assets.loadTexture("IslandTopMiddle", Systems::resourcePath("assets/textures/island_top_middle.png"));
+    assets.loadTexture("IslandTopRight", Systems::resourcePath("assets/textures/island_top_right.png"));
+    assets.loadTexture("IslandTrunk", Systems::resourcePath("assets/textures/island_trunk.png"));
+    assets.loadTexture("MovingPlatform", Systems::resourcePath("assets/textures/moving_platform.png"));
+    assets.loadTexture("CoinHeavenLift", Systems::resourcePath("assets/textures/coin_heaven_lift.png"));
+    assets.loadTexture("CastleWorld1_3", Systems::resourcePath("assets/textures/castle_world1-3.png"));
+    assets.loadTexture("CastleWorld2_1", Systems::resourcePath("assets/textures/castle_world2-1.png"));
+    assets.loadTexture("HorsetailTall", Systems::resourcePath("assets/textures/green_horsetail_tall.png"));
+    assets.loadTexture("HorsetailShort", Systems::resourcePath("assets/textures/green_horsetail_short.png"));
+    assets.loadTexture("FenceWorld2_1", Systems::resourcePath("assets/textures/fence_world2-1.png"));
+    assets.loadTexture("FenceWorld2_1Group", Systems::resourcePath("assets/textures/fence_world2-1_group.png"));
+    assets.loadTexture("PiranhaPlant", Systems::resourcePath("assets/textures/piranha_plant.png"));
+    assets.loadTexture("SuperStar", Systems::resourcePath("assets/textures/super_star.png"));
+    assets.loadTexture("VineTop", Systems::resourcePath("assets/textures/vine_top.png"));
+    assets.loadTexture("TrampolineNormal", Systems::resourcePath("assets/textures/trampoline_normal.png"));
+    assets.loadTexture("TrampolineCompressed", Systems::resourcePath("assets/textures/trampoline_compressed.png"));
+    assets.loadTexture("TrampolineLaunch", Systems::resourcePath("assets/textures/trampoline_launch.png"));
 
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));

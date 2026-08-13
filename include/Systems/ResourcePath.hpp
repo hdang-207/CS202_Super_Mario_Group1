@@ -4,7 +4,7 @@
 namespace Systems {
     /**
      * @brief Turns a repo-relative asset path into one that opens on any machine.
-     * @param relative Path below the assets root, e.g. "assets/maps/level1.txt".
+     * @param relative Path below the assets root, e.g. "assets/maps/level1-1.txt".
      * @return The first candidate that exists on disk, or @p relative unchanged
      *         when none does (so the caller still reports a sensible error).
      *

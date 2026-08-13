@@ -13,6 +13,7 @@ enum class TileType {
     Coin,          ///< Pickup: drawn and animated, but never blocks movement.
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
+    CoinBrick,     ///< Brick that contains coins (solid).
     QuestionBlock, ///< Item block (solid).
     UsedBlock,     ///< Question block after its item has been released (solid).
     StairBlock,    ///< Solid staircase block.
@@ -43,7 +44,7 @@ public:
 
     /**
      * @brief Sets the artwork one map character is drawn with.
-     * @param symbol Character as it appears in the map file, e.g. '#' or '?'.
+     * @param symbol Character as it appears in the map file, e.g. '#', 'b' or '?'.
      * @param texture Image for that character. It is stretched over one whole
      *        tile, so a 16x16 png lines up one-to-one with the level grid.
      * @param frameCount Number of animation frames laid out left to right inside
@@ -81,16 +82,39 @@ public:
     void update(sf::Time dt);
 
     /**
-     * @brief Replaces one question block with a used block.
-     * @return True only on the first activation of a question block at this cell.
+     * @brief Replaces one question or hidden item block with a used block.
+     * @return True only on the first activation of an item block at this cell.
      */
-    bool activateQuestionBlock(int col, int row);
+    bool activateItemBlock(int col, int row);
+
+    /**
+     * @brief Breaks a brick at the specified location, turning it into empty space.
+     * @return True if a brick or coin brick was successfully broken.
+     */
+    bool breakBrick(int col, int row);
+
+    /**
+     * @brief Hides a brick visually for bouncing animation, keeping it solid.
+     * @return The original symbol of the brick, or \0 if not a brick.
+     */
+    char hideBrick(int col, int row);
+
+    /**
+     * @brief Restores a previously hidden brick back to the map.
+     */
+    void restoreBrick(int col, int row, char symbol);
+
+    /// @brief Changes the TileType of the map cell at (col, row).
+    void changeType(int col, int row, TileType newType);
 
     /// @brief True if the tile at this grid cell blocks movement (out of bounds is not solid).
     bool isSolid(int col, int row) const;
 
     /// @brief Gameplay type of a grid cell, or TileType::Empty when out of bounds.
     TileType typeAt(int col, int row) const;
+
+    /// @brief Map character currently stored at a cell, or '.' when out of bounds.
+    char symbolAt(int col, int row) const;
 
     /// @brief World-space rectangles of every solid tile overlapping @p box.
     std::vector<sf::FloatRect> solidTilesOverlapping(const sf::FloatRect& box) const;
@@ -113,6 +137,23 @@ public:
 
     /// @brief Bottom-aligned map cells containing Blue Koopa spawn markers ('K').
     const std::vector<sf::Vector2f>& blueKoopaSpawns() const { return blueKoopas; }
+
+    /// @brief Bottom-aligned Green Koopa spawn markers ('G').
+    const std::vector<sf::Vector2f>& greenKoopaSpawns() const { return greenKoopas; }
+
+    /// @brief Bottom-aligned Green Paratroopa spawn markers ('J').
+    const std::vector<sf::Vector2f>& greenParatroopaSpawns() const {
+        return greenParatroopas;
+    }
+
+    /// @brief Markers two rows above pipes containing Piranha Plants ('R').
+    const std::vector<sf::Vector2f>& piranhaSpawns() const { return piranhas; }
+
+    /// @brief Trampoline markers anchored one row above the ground ('D').
+    const std::vector<sf::Vector2f>& trampolineSpawns() const { return trampolines; }
+
+    /// @brief Top-left world positions of horizontal moving-platform markers ('L').
+    const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
 
     /// @brief True when the map contains a level-exit decoration marker ('W').
     bool hasLevelExit() const { return levelExitAvailable; }
@@ -164,6 +205,11 @@ private:
     sf::Vector2f spawn{0.f, 0.f};
     std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
+    std::vector<sf::Vector2f> greenKoopas; ///< Green Koopa spawn markers ('G').
+    std::vector<sf::Vector2f> greenParatroopas; ///< Green Paratroopa markers ('J').
+    std::vector<sf::Vector2f> piranhas; ///< Piranha Plant markers ('R').
+    std::vector<sf::Vector2f> trampolines; ///< Trampoline markers ('D').
+    std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
     bool goalAvailable{false};

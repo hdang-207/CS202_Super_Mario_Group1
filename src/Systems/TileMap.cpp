@@ -13,25 +13,41 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   # ground   B brick   ? question block   U used block   S staircase
-     *   [] pipe top       {} pipe body          H hidden block  o coin
+     *   # ground   C cloud block   B brick   A star brick   ^ vine brick   b coin brick
+     *   ? question block
+     *   U used block      S staircase          [] pipe top    {} pipe body
+     *   H hidden block    1 hidden 1-Up block    o coin
+     *   g underground ground   r underground brick   p invisible pipe collider
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
-     * and . empty sky.
-     * Scenery characters (M m V v l c F X W) carry no entry here - they are
+     * G Green Koopa, J Green Paratroopa, R Piranha Plant, D trampoline,
+     * L horizontal lift, and . empty sky.
+     * Scenery characters (M m V v l c F X W Q I Y Z T t f q N) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
         { '#', TileType::Ground        },
+        { 'C', TileType::Ground        },
         { 'B', TileType::Brick         },
+        { 'A', TileType::QuestionBlock },
+        { '^', TileType::Brick         },
+        { 'b', TileType::CoinBrick     },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
         { 'H', TileType::HiddenBlock   },
+        { '1', TileType::HiddenBlock   },
         { '[', TileType::Pipe          },
         { ']', TileType::Pipe          },
         { '{', TileType::Pipe          },
         { '}', TileType::Pipe          },
         { 'o', TileType::Coin          },
+        { '(', TileType::Ground        },
+        { '-', TileType::Ground        },
+        { ')', TileType::Ground        },
+        { '|', TileType::Decoration    },
+        { 'g', TileType::Ground        },
+        { 'r', TileType::Brick         },
+        { 'p', TileType::Pipe          },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -157,6 +173,11 @@ bool TileMap::build(const MapParser& parser, float scale) {
     symbols.assign(static_cast<std::size_t>(columns) * rows, '.');
     enemies.clear();
     blueKoopas.clear();
+    greenKoopas.clear();
+    greenParatroopas.clear();
+    piranhas.clear();
+    trampolines.clear();
+    movingPlatforms.clear();
     spawn = {0.f, 0.f};
     levelExitAvailable = false;
     levelExitTrigger = sf::FloatRect();
@@ -193,20 +214,69 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 blueKoopas.push_back(worldPos);
                 continue;
             }
+            if (symbol == 'G') {
+                greenKoopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'J') {
+                greenParatroopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'R') {
+                piranhas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'D') {
+                trampolines.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'L') {
+                movingPlatforms.push_back(worldPos);
+                continue;
+            }
 
             // Scenery is placed by a single character but covers whatever area its
             // picture needs, so it is handled before the one-cell tiles below.
             if (TileBatch* decor = decorationFor(symbol)) {
                 sf::Vector2f artSize(decor->texture->getSize());
                 sf::Vector2f drawSize = artSize * scale;
-                if (symbol == 'W') {
+                sf::Vector2f drawPos = worldPos;
+                if (symbol == 'T' || symbol == 't') {
+                    // These two source images are tightly cropped from World 2-1.
+                    // Centre the narrow tree in its cell and restore the two-pixel
+                    // top offset visible in the reference map.
+                    drawPos.x += (kSourceTileSize - artSize.x) * 0.5f * scale;
+                    drawPos.y += 2.f * scale;
+                } else if (symbol == 'N') {
+                    // The Coin Heaven vine is tightly cropped and begins one
+                    // source pixel below its map row in the reference image.
+                    drawPos.y += 1.f * scale;
+                } else if (symbol == 'F') {
+                    // The guide-map pole is centred eight source pixels left of
+                    // its marker and starts halfway down the marker row.
+                    drawPos.x -= 8.f * scale;
+                    drawPos.y += 8.f * scale;
+                }
+                if (symbol == 'I') {
+                    // The supplied island is a complete multi-cell sprite. Only
+                    // its grassy top is solid; Mario and enemies may pass beside
+                    // the hanging trunks exactly like the floating islands in 1-3.
+                    const int solidCells = std::max(
+                        1, static_cast<int>(std::ceil(artSize.x / kSourceTileSize)));
+                    for (int offset = 0; offset < solidCells && col + offset < columns;
+                         ++offset) {
+                        const std::size_t topIndex =
+                            static_cast<std::size_t>(row) * columns + col + offset;
+                        types[topIndex] = TileType::Ground;
+                    }
+                } else if (symbol == 'W') {
                     levelExitAvailable = true;
                     levelExitTrigger = sf::FloatRect(worldPos, drawSize);
                 } else if (symbol == 'F') {
                     goalAvailable = true;
                     goalTrigger = sf::FloatRect(worldPos, drawSize);
                 }
-                appendQuad(decor->vertices, worldPos, drawSize,
+                appendQuad(decor->vertices, drawPos, drawSize,
                            sf::FloatRect({0.f, 0.f}, artSize));
                 continue;
             }
@@ -264,17 +334,58 @@ void TileMap::update(sf::Time dt) {
     }
 }
 
-bool TileMap::activateQuestionBlock(int col, int row) {
-    if (typeAt(col, row) != TileType::QuestionBlock) {
+bool TileMap::activateItemBlock(int col, int row) {
+    const TileType type = typeAt(col, row);
+    if (type != TileType::QuestionBlock && type != TileType::HiddenBlock) {
         return false;
     }
 
     std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    const char oldSymbol = symbols[index];
     types[index] = TileType::UsedBlock;
     symbols[index] = 'U';
-    rebuildTileBatch('?');
+    rebuildTileBatch(oldSymbol);
     rebuildTileBatch('U');
     return true;
+}
+
+bool TileMap::breakBrick(int col, int row) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return false;
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    if (types[index] == TileType::Brick || types[index] == TileType::CoinBrick) {
+        char oldSymbol = symbols[index];
+        types[index] = TileType::Empty;
+        symbols[index] = '.';
+        rebuildTileBatch(oldSymbol);
+        return true;
+    }
+    return false;
+}
+
+char TileMap::hideBrick(int col, int row) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return '\0';
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    if (types[index] == TileType::Brick || types[index] == TileType::CoinBrick || types[index] == TileType::QuestionBlock || types[index] == TileType::UsedBlock) {
+        char oldSymbol = symbols[index];
+        symbols[index] = '.'; // visually empty
+        // type remains unchanged (still solid)
+        rebuildTileBatch(oldSymbol);
+        return oldSymbol;
+    }
+    return '\0';
+}
+
+void TileMap::restoreBrick(int col, int row, char symbol) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return;
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    symbols[index] = symbol;
+    rebuildTileBatch(symbol);
+}
+
+void TileMap::changeType(int col, int row, TileType newType) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) return;
+    std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    types[index] = newType;
 }
 
 TileType TileMap::typeAt(int col, int row) const {
@@ -282,6 +393,13 @@ TileType TileMap::typeAt(int col, int row) const {
         return TileType::Empty;
     }
     return types[static_cast<std::size_t>(row) * columns + col];
+}
+
+char TileMap::symbolAt(int col, int row) const {
+    if (col < 0 || row < 0 || col >= columns || row >= rows) {
+        return '.';
+    }
+    return symbols[static_cast<std::size_t>(row) * columns + col];
 }
 
 bool TileMap::isSolid(int col, int row) const {
@@ -350,6 +468,9 @@ int TileMap::collectCoinsOverlapping(const sf::FloatRect& box) {
 void TileMap::draw(sf::RenderTarget& target, sf::RenderStates states) const {
     // Scenery first: it has to end up behind the blocks and the ground.
     for (const TileBatch& batch : decorations) {
+        if (batch.symbol == 'N') {
+            continue; // The vine crosses in front of Coin Heaven's cloud floor.
+        }
         if (batch.texture == nullptr || batch.vertices.getVertexCount() == 0) {
             continue;
         }
@@ -359,6 +480,16 @@ void TileMap::draw(sf::RenderTarget& target, sf::RenderStates states) const {
 
     for (const TileBatch& batch : batches) {
         if (batch.texture == nullptr || batch.vertices.getVertexCount() == 0) {
+            continue;
+        }
+        states.texture = batch.texture;
+        target.draw(batch.vertices, states);
+    }
+
+    // Foreground scenery is still non-solid, but must cover the tile layer.
+    for (const TileBatch& batch : decorations) {
+        if (batch.symbol != 'N' || batch.texture == nullptr
+            || batch.vertices.getVertexCount() == 0) {
             continue;
         }
         states.texture = batch.texture;

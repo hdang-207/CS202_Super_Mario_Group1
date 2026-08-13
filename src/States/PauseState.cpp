@@ -97,31 +97,38 @@ void PauseState::handleInput(const sf::Event& event) {
 
     if (key == sf::Keyboard::Key::Up || key == sf::Keyboard::Key::W) {
         selectedIndex = (selectedIndex - 1 + static_cast<int>(menuLabels.size())) % static_cast<int>(menuLabels.size());
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         updateMenuLabels();
     } else if (key == sf::Keyboard::Key::Down || key == sf::Keyboard::Key::S) {
         selectedIndex = (selectedIndex + 1) % static_cast<int>(menuLabels.size());
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         updateMenuLabels();
     } else if (key == sf::Keyboard::Key::Left || key == sf::Keyboard::Key::A) {
         if (selectedIndex == 1) { // BGM Volume
             float vol = std::max(0.f, Systems::SoundController::getInstance().getMusicVolume() - 10.f);
             Systems::SoundController::getInstance().setMusicVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         } else if (selectedIndex == 2) { // SFX Volume
             float vol = std::max(0.f, Systems::SoundController::getInstance().getSoundVolume() - 10.f);
             Systems::SoundController::getInstance().setSoundVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
     } else if (key == sf::Keyboard::Key::Right || key == sf::Keyboard::Key::D) {
         if (selectedIndex == 1) { // BGM Volume
             float vol = std::min(100.f, Systems::SoundController::getInstance().getMusicVolume() + 10.f);
             Systems::SoundController::getInstance().setMusicVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         } else if (selectedIndex == 2) { // SFX Volume
             float vol = std::min(100.f, Systems::SoundController::getInstance().getSoundVolume() + 10.f);
             Systems::SoundController::getInstance().setSoundVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
     } else if (key == sf::Keyboard::Key::Enter) {
+        Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         switch (selectedIndex) {
             case 0: // RESUME GAME
                 gsm.popState();
