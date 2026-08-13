@@ -69,6 +69,7 @@ private:
     float starPowerRemaining{0.f}; ///< Starman duration; touching enemies defeats them.
 
     float damageProtectionRemaining{0.f};
+    bool swimButtonHeld{false}; ///< Rising-edge latch for repeated World 2-2 swim strokes.
 
     struct CoinPop {
         sf::Vector2f position;
@@ -230,8 +231,11 @@ private:
      */
     bool loadLevel(int level);
 
+    /// @brief Moves World 2-2 from its outdoor entrance pipe into the water room.
+    bool tryEnterWorld22WaterPipe();
+
     /**
-     * @brief Enters level 2 when the avatar reaches level 1's warp pipe.
+     * @brief Completes the current level at its exit or goal marker.
      * @return True when a transition happened during this frame.
      */
     bool tryEnterNextLevel();

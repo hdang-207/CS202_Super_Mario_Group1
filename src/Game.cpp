@@ -89,6 +89,12 @@ Game::Game()
     assets.loadTexture("CloudBlock", Systems::resourcePath("assets/textures/cloud_block.png"));
     assets.loadTexture("GroundUndergroundTile",
                        Systems::resourcePath("assets/textures/ground_underground.png"));
+    assets.loadTexture("UnderwaterTiles",
+                       Systems::resourcePath("assets/textures/underwater_tiles.png"));
+    assets.loadTexture("UnderwaterRock",
+                       Systems::resourcePath("assets/textures/underwater_rock.png"));
+    assets.loadTexture("CoralTall",
+                       Systems::resourcePath("assets/textures/coral_tall.png"));
     assets.loadTexture("BrickTile", Systems::resourcePath("assets/textures/brick.png"));
     assets.loadTexture("BrickUndergroundTile",
                        Systems::resourcePath("assets/textures/brick_underground.png"));

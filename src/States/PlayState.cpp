@@ -22,6 +22,9 @@ namespace {
     constexpr float kGroundFriction = 2000.f;
     constexpr float kJumpSpeed = 1000.f;
     constexpr float kMaxFallSpeed = 1400.f;
+    constexpr float kWaterGravity = 360.f;
+    constexpr float kSwimStrokeSpeed = 430.f;
+    constexpr float kMaxSwimFallSpeed = 320.f;
 
     /// Coin released by a question block: rises, falls back, then vanishes.
     constexpr float kCoinPopSpeed = -480.f;
@@ -66,6 +69,12 @@ namespace {
     /// Every underground map reserves its final columns for an outdoor goal area.
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
+    constexpr int kWorld22EntrancePipeColumn = 15;
+    constexpr int kWorld22WaterStartColumn = 37;
+    constexpr int kWorld22WaterEndColumn = 198;
+    constexpr int kWorld22WaterSurfaceRow = 2;
+    constexpr int kWorld22WaterSpawnColumn = 39;
+    constexpr int kWorld22WaterSpawnRow = 9;
 
 }
 
@@ -170,6 +179,12 @@ void PlayState::init() {
     // Dedicated symbols keep its cyan tiles independent of the outdoor palette.
     tileMap.setTileTexture('g', assets.getTexture("GroundUndergroundTile"));
     tileMap.setTileTexture('r', assets.getTexture("BrickUndergroundTile"));
+    // World 2-2 returns to the normal outdoor palette around its underwater
+    // section. Dedicated symbols prevent stage-2's underground recolour from
+    // leaking into the entrance, staircase, and goal area.
+    tileMap.setTileTexture('O', assets.getTexture("GroundTile"));
+    tileMap.setTileTexture('w', assets.getTexture("UnderwaterRock"));
+    tileMap.setTileTexture('s', assets.getTexture("HardBlockTile"));
 
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
@@ -188,6 +203,7 @@ void PlayState::init() {
     tileMap.setDecorationTexture('f', assets.getTexture("FenceWorld2_1Group"));
     tileMap.setDecorationTexture('q', assets.getTexture("FenceWorld2_1"));
     tileMap.setDecorationTexture('N', assets.getTexture("VineTop"));
+    tileMap.setDecorationTexture('a', assets.getTexture("CoralTall"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
@@ -312,6 +328,11 @@ void PlayState::update(sf::Time dt) {
     }
 
     updateMovingPlatforms(dt);
+    if (tryEnterWorld22WaterPipe()) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
     if (!moveAvatar(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -453,6 +474,7 @@ bool PlayState::loadLevel(int level) {
     fireFlowers.clear();
     stars.clear();
     growingVines.clear();
+    swimButtonHeld = false;
     starPowerRemaining = 0.f;
     bullets.clear();
     activeBomb.reset();
@@ -502,6 +524,47 @@ bool PlayState::tryEnterNextLevel() {
     std::cout << "[Core Engine] Level exit reached. Transitioning to LevelCompleteState...\n";
     transitionPending = true;
     gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, progress));
+    return true;
+}
+
+bool PlayState::tryEnterWorld22WaterPipe() {
+    const bool world22 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 2;
+    if (!world22 || inputHandler.getPlayerInput().moveAxis <= 0.f) {
+        return false;
+    }
+
+    // The reference panorama places both rooms next to each other, but gameplay
+    // enters the horizontal branch of the forked pipe before showing the water.
+    // This trigger covers that left-facing branch and the avatar-sized opening
+    // immediately in front of it.
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect pipeEntrance(
+        {(kWorld22EntrancePipeColumn - 1) * tile, 10.f * tile},
+        {5.f * tile, 3.f * tile});
+    if (!avatarBounds().findIntersection(pipeEntrance).has_value()) {
+        return false;
+    }
+
+    auto& body = m_player->getPhysicsBody();
+    body.setPosition({
+        kWorld22WaterSpawnColumn * tile,
+        kWorld22WaterSpawnRow * tile});
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+    swimButtonHeld = false;
+    facingRight = true;
+    syncAvatarPowerVisuals();
+
+    // Snap to the first full underwater screen. The 24-column spacer in the map
+    // remains outside both camera views, so the outdoor and underwater rooms can
+    // never appear side by side during normal play.
+    maxCameraCenterX = kWorld22WaterStartColumn * tile + Config::kViewWidth / 2.f;
+    centreCamera({maxCameraCenterX, Config::kViewHeight / 2.f});
+    freeLookCentre = camera.getCenter();
+
+    std::cout << "[Core Engine] World 2-2 entrance pipe: entered underwater room.\n";
     return true;
 }
 
@@ -1639,13 +1702,38 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     const auto& playerInput = inputHandler.getPlayerInput();
     auto& body = m_player->getPhysicsBody();
+    const bool world22 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 2;
+    const float playerColumn = body.getPosition().x / tileMap.tileSize();
+    const physics::AABB playerBounds = body.getAABB();
+    const float playerCentreY = playerBounds.position.y + playerBounds.size.y * 0.5f;
+    const bool underwater = world22
+                         && playerColumn >= kWorld22WaterStartColumn
+                         && playerColumn < kWorld22WaterEndColumn
+                         && playerCentreY >= kWorld22WaterSurfaceRow * tileMap.tileSize();
     const bool wasGrounded = body.isGrounded();
     m_player->setInput(playerInput);
     m_player->update(seconds);
 
+    bool swimStroke = false;
+    if (underwater) {
+        sf::Vector2f velocity = body.getVelocity();
+        swimStroke = playerInput.jumpHeld && !swimButtonHeld;
+        if (swimStroke) {
+            velocity.y = -kSwimStrokeSpeed;
+            body.setGrounded(false);
+        }
+        body.setVelocity(velocity);
+        // PhysicsSystem adds normal gravity later in the frame. Counter most of
+        // it here to retain buoyant underwater motion without changing every
+        // other level's shared physics configuration.
+        body.addAcceleration({0.f, -(kGravity - kWaterGravity)});
+    }
+    swimButtonHeld = underwater && playerInput.jumpHeld;
+
     const sf::Vector2f size = body.getColliderSize();
     const float previousBottom = body.getAABB().bottom();
-    if (wasGrounded && body.getVelocity().y < 0.f) {
+    if (swimStroke || (!underwater && wasGrounded && body.getVelocity().y < 0.f)) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
 
@@ -1659,6 +1747,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     // Delegate kinematics & collision resolution to PhysicsSystem
     m_physicsSystem.update(body, solids, seconds);
+    if (underwater && body.getVelocity().y > kMaxSwimFallSpeed) {
+        sf::Vector2f velocity = body.getVelocity();
+        velocity.y = kMaxSwimFallSpeed;
+        body.setVelocity(velocity);
+    }
 
     // SMB 1985 Camera Lock: Player cannot walk back past the left edge of the screen
     float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
@@ -1956,16 +2049,58 @@ void PlayState::render(sf::RenderWindow& window) {
         0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     const bool world21 = Config::worldNumber(currentLevel) == 2
                       && Config::stageNumber(currentLevel) == 1;
-    bool underground = Config::stageNumber(currentLevel) == 2
+    const bool world22 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 2;
+    bool underground = Config::stageNumber(currentLevel) == 2 && !world22
                     && m_player->getPhysicsBody().getPosition().x
                         < outdoorStartColumn * Config::kTileSize;
-    const sf::Color outdoorSky = world21
+    const sf::Color outdoorSky = (world21 || world22)
         ? sf::Color(146, 144, 255)
         : sf::Color(92, 148, 252);
     sky.setFillColor(underground ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
     window.setView(camera);
+    if (world22) {
+        const float waterLeft = kWorld22WaterStartColumn * tileMap.tileSize();
+        const float waterRight = kWorld22WaterEndColumn * tileMap.tileSize();
+        const float waterTop = kWorld22WaterSurfaceRow * tileMap.tileSize();
+        const float waterHeight = tileMap.pixelHeight() - waterTop;
+        const float bandHeight = waterHeight / 4.f;
+        const sf::Color depthColours[] = {
+            sf::Color(66, 64, 255),
+            sf::Color(59, 68, 244),
+            sf::Color(51, 73, 230),
+            sf::Color(43, 79, 214)
+        };
+
+        // Four broad pixel-clean bands add depth without introducing blurry
+        // scaling or requiring another background texture.
+        for (int band = 0; band < 4; ++band) {
+            const float top = waterTop + band * bandHeight;
+            const float bottom = band == 3
+                ? tileMap.pixelHeight()
+                : waterTop + (band + 1) * bandHeight;
+            sf::RectangleShape waterBand({waterRight - waterLeft, bottom - top});
+            waterBand.setPosition({waterLeft, top});
+            waterBand.setFillColor(depthColours[band]);
+            window.draw(waterBand);
+        }
+
+        // The supplied NES crop contains four 16px-wide surface tiles followed
+        // by a solid water row. Repeat it at the project's integer zoom, clipping
+        // the last copy to the exact water-room boundary.
+        sf::Sprite waterSurface(assets.getTexture("UnderwaterTiles"));
+        waterSurface.setScale({Config::kZoom, Config::kZoom});
+        for (int column = kWorld22WaterStartColumn;
+             column < kWorld22WaterEndColumn; column += 4) {
+            const int tileCount = std::min(4, kWorld22WaterEndColumn - column);
+            waterSurface.setTextureRect(
+                sf::IntRect({0, 0}, {tileCount * TileMap::kSourceTileSize, 32}));
+            waterSurface.setPosition({column * tileMap.tileSize(), waterTop});
+            window.draw(waterSurface);
+        }
+    }
     if (world21 && mapParser.getWidth() > kWorld21BonusStartColumn) {
         // Unlike a normal stage transition, the reference panorama places the
         // bonus room directly after Coin Heaven, with a hard sky/black boundary.
