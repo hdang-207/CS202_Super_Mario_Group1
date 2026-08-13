@@ -18,6 +18,8 @@ namespace {
      *   U used block      S staircase          [] pipe top    {} pipe body
      *   H hidden block    1 hidden 1-Up block    o coin
      *   g underground ground   r underground brick   p invisible pipe collider
+     *   w underwater rock collider   O outdoor ground
+     *   s outdoor staircase
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * G Green Koopa, J Green Paratroopa, R Piranha Plant, D trampoline,
      * L horizontal lift, and . empty sky.
@@ -48,6 +50,9 @@ namespace {
         { 'g', TileType::Ground        },
         { 'r', TileType::Brick         },
         { 'p', TileType::Pipe          },
+        { 'w', TileType::Ground        },
+        { 'O', TileType::Ground        },
+        { 's', TileType::StairBlock    },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
