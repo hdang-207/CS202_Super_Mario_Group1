@@ -53,9 +53,6 @@ namespace {
 
     constexpr float kBulletSpeed = 500.f;
     constexpr float kBulletLifetime = 2.f;
-    constexpr float kShootCooldown = 0.25f;
-    constexpr float kBulletRechargeTime = 10.f;
-    constexpr int kMaxBullets = 3;
     constexpr float kBombExplosionRadius = 72.f;
 
     constexpr float kMovingPlatformSpeed = 90.f;
@@ -111,7 +108,6 @@ void PlayState::init() {
     hud.setCoins(this->coins);
     hud.setLives(this->lives);
     hud.setWorld(this->currentLevel);
-    hud.setAmmo(availableBullets, kMaxBullets);
 
     // Setup SoundController and Data event listeners
     auto& events = Core::EventSystem::getInstance();
@@ -300,24 +296,6 @@ void PlayState::update(sf::Time dt) {
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
     starPowerRemaining = std::max(0.f, starPowerRemaining - dt.asSeconds());
-    shootCooldownRemaining = std::max(0.f, shootCooldownRemaining - dt.asSeconds());
-    for (float& timer : ammoRechargeTimers) {
-        timer -= dt.asSeconds();
-    }
-    const auto expiredTimer = std::remove_if(
-        ammoRechargeTimers.begin(), ammoRechargeTimers.end(),
-        [this](float timer) {
-            if (timer > 0.f) {
-                return false;
-            }
-            availableBullets = std::min(kMaxBullets, availableBullets + 1);
-            return true;
-        });
-    if (expiredTimer != ammoRechargeTimers.end()) {
-        ammoRechargeTimers.erase(expiredTimer, ammoRechargeTimers.end());
-        hud.setAmmo(availableBullets, kMaxBullets);
-    }
-
     if (freeLook) {
         // The avatar is deliberately frozen: left it running it would walk off or
         // fall into a pit while the camera is somewhere else entirely.
@@ -478,10 +456,6 @@ bool PlayState::loadLevel(int level) {
     starPowerRemaining = 0.f;
     bullets.clear();
     activeBomb.reset();
-    availableBullets = kMaxBullets;
-    shootCooldownRemaining = 0.f;
-    ammoRechargeTimers.clear();
-    hud.setAmmo(availableBullets, kMaxBullets);
     explosions.clear();
     walkingEnemies.clear();
     piranhas.clear();

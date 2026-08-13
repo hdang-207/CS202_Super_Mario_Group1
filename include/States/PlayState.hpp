@@ -89,9 +89,6 @@ private:
     std::vector<GrowingVineEntity> growingVines;
 
     std::vector<entity::Bullet> bullets;
-    int availableBullets{3};
-    float shootCooldownRemaining{0.f};
-    std::vector<float> ammoRechargeTimers;
     std::optional<combat::Bomb> activeBomb;
 
     struct ExplosionEntity {
