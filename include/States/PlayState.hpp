@@ -1,9 +1,13 @@
 #pragma once
 #include "Core/CharacterType.hpp"
+#include "Combat/Bomb.hpp"
 #include "Entities/Bullet.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Input/InputHandler.hpp"
+#include "Items/FireFlower.hpp"
+#include "Items/Mushroom.hpp"
+#include "Items/Star.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -15,6 +19,7 @@
 #include "Player/Luigi.hpp"
 #include <cstddef>
 #include <random>
+#include <optional>
 #include "UI/HUD.hpp"
 #include <set>
 #include <vector>
@@ -39,7 +44,6 @@ private:
 
     // === PHYSICS SYSTEM & ENTITY INTEGRATION (Phase 3 & 4) =================
     physics::PhysicsSystem m_physicsSystem;
-    physics::PhysicsBody m_avatarPhysics;
     
     // Encapsulated Player entity (Mario / Luigi subclass instance)
     std::unique_ptr<entity::Player> m_player;
@@ -61,15 +65,11 @@ private:
     bool facingRight{true};
     float runAnimTimer{0.f};
     int currentRunStep{0};
-    sf::Vector2f avatarPos;
-    sf::Vector2f avatarVelocity;
-    bool onGround{false};
-    bool jumpHeld{false};
     float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
+    float starPowerRemaining{0.f}; ///< Starman duration; touching enemies defeats them.
 
-    enum class PlayerForm { Small, Super };
-    PlayerForm playerForm{PlayerForm::Small};
     float damageProtectionRemaining{0.f};
+    bool swimButtonHeld{false}; ///< Rising-edge latch for repeated World 2-2 swim strokes.
 
     struct CoinPop {
         sf::Vector2f position;
@@ -78,28 +78,18 @@ private:
     };
     std::vector<CoinPop> coinPops;
 
-    enum class MushroomState { Emerging, Moving };
-    struct MushroomEntity {
-        sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        MushroomState state;
-        float elapsed;
-    };
-    std::vector<MushroomEntity> mushrooms;
+    std::vector<items::Mushroom> mushrooms;
+    std::vector<items::FireFlower> fireFlowers;
+    std::vector<items::Star> stars;
 
-    struct FireFlowerEntity {
+    struct GrowingVineEntity {
         sf::Vector2f blockPosition;
-        sf::Vector2f position;
-        MushroomState state; // Can reuse Emerging and Moving(stay still)
         float elapsed;
     };
-    std::vector<FireFlowerEntity> fireFlowers;
+    std::vector<GrowingVineEntity> growingVines;
 
     std::vector<entity::Bullet> bullets;
-    int availableBullets{3};
-    float shootCooldownRemaining{0.f};
-    std::vector<float> ammoRechargeTimers;
+    std::optional<combat::Bomb> activeBomb;
 
     struct ExplosionEntity {
         sf::Vector2f position;
@@ -108,12 +98,17 @@ private:
     };
     std::vector<ExplosionEntity> explosions;
 
-    enum class AvatarForm { Normal, Fire };
-    AvatarForm currentForm{AvatarForm::Normal};
-
     enum class EnemyKind {
         Goomba,
-        BlueKoopa
+        BlueKoopa,
+        GreenKoopa,
+        GreenParatroopa
+    };
+
+    enum class EnemyState {
+        Walking,
+        ShellIdle,
+        ShellMoving
     };
 
     struct WalkingEnemy {
@@ -124,8 +119,18 @@ private:
         bool alive{true};
         float animationElapsed{0.f};
         int animationFrame{0};
+        EnemyState state{EnemyState::Walking};
     };
     std::vector<WalkingEnemy> walkingEnemies;
+
+    struct PiranhaEntity {
+        sf::Vector2f position;
+        float pipeTopY;
+        float elapsed{0.f};
+        float exposure{1.f};
+        bool alive{true};
+    };
+    std::vector<PiranhaEntity> piranhas;
 
     struct MovingPlatform {
         sf::Vector2f position;
@@ -134,6 +139,16 @@ private:
         float velocityX;
     };
     std::vector<MovingPlatform> movingPlatforms;
+
+    enum class TrampolineState { Normal, Compressed, Launch };
+    struct TrampolineEntity {
+        float x;
+        float bottomY;
+        TrampolineState state{TrampolineState::Normal};
+        float elapsed{0.f};
+        bool carryingPlayer{false};
+    };
+    std::vector<TrampolineEntity> trampolines;
 
     struct DeadEnemy {
         EnemyKind kind;
@@ -192,11 +207,8 @@ private:
      */
     sf::FloatRect avatarBounds() const;
 
-    /// @brief Changes a Small avatar to Super while keeping its feet fixed.
-    void becomeSuper();
-
-    /// @brief Changes a Super avatar back to Small while keeping its feet fixed.
-    void becomeSmall();
+    /// @brief Syncs PlayState-owned visuals with Player-owned form and collider state.
+    void syncAvatarPowerVisuals();
 
     /// @brief Applies one life loss and either restarts the level or opens Game Over.
     void handlePlayerDeath();
@@ -216,8 +228,11 @@ private:
      */
     bool loadLevel(int level);
 
+    /// @brief Moves World 2-2 from its outdoor entrance pipe into the water room.
+    bool tryEnterWorld22WaterPipe();
+
     /**
-     * @brief Enters level 2 when the avatar reaches level 1's warp pipe.
+     * @brief Completes the current level at its exit or goal marker.
      * @return True when a transition happened during this frame.
      */
     bool tryEnterNextLevel();
@@ -237,8 +252,9 @@ private:
     /// @brief Returns the reward assigned to the next activated item block.
     BlockReward takeNextItemBlockReward();
 
-    /// @brief Starts a mushroom emerging from an activated question block.
-    void spawnMushroom(sf::Vector2f blockPosition);
+    /// @brief Starts a Super or 1-Up mushroom emerging from an activated block.
+    void spawnMushroom(sf::Vector2f blockPosition,
+                       items::MushroomKind kind = items::MushroomKind::Super);
 
     /// @brief Updates mushroom physics and collision
     void updateMushrooms(sf::Time dt);
@@ -250,9 +266,24 @@ private:
     void updateFireFlowers(sf::Time dt);
     void drawFireFlowers(sf::RenderWindow& window) const;
 
+    /// @brief Releases, moves, collects, and draws the World 2-1 Starman.
+    void spawnStar(sf::Vector2f blockPosition);
+    void updateStars(sf::Time dt);
+    void drawStars(sf::RenderWindow& window) const;
+
+    /// @brief Grows the Coin Heaven vine upward from its special brick.
+    bool spawnGrowingVine(sf::Vector2f blockPosition);
+    void updateGrowingVines(sf::Time dt);
+    void drawGrowingVines(sf::RenderWindow& window) const;
+
     void spawnBullet();
     void updateBullets(sf::Time dt);
     void drawBullets(sf::RenderWindow& window) const;
+
+    void spawnBomb();
+    void updateBomb(sf::Time dt);
+    void explodeBomb(sf::Vector2f center);
+    void drawBomb(sf::RenderWindow& window) const;
 
     void spawnExplosion(sf::Vector2f position);
     void updateExplosions(sf::Time dt);
@@ -264,7 +295,7 @@ private:
     void updateBlocks(sf::Time dt);
     void drawBlocks(sf::RenderWindow& window) const;
 
-    /// @brief Creates Goombas and Blue Koopas from their map markers.
+    /// @brief Creates Goombas, Koopas, and Paratroopas from their map markers.
     void spawnWalkingEnemies();
 
     /// @brief Updates walking-enemy activation, movement, gravity, and collisions.
@@ -272,6 +303,15 @@ private:
 
     /// @brief Draws all animated walking enemies.
     void drawWalkingEnemies(sf::RenderWindow& window) const;
+
+    /// @brief Creates Piranha Plants from 'R' markers above pipe cells.
+    void spawnPiranhas();
+
+    /// @brief Animates Piranhas and applies their contact damage.
+    bool updatePiranhas(sf::Time dt);
+
+    /// @brief Draws Piranhas before the pipe tiles so retracted parts are hidden.
+    void drawPiranhas(sf::RenderWindow& window) const;
 
     /// @brief Creates horizontal lifts from every 'L' marker in the map.
     void spawnMovingPlatforms();
@@ -281,6 +321,15 @@ private:
 
     /// @brief Draws the three-tile moving lifts used by World 1-3.
     void drawMovingPlatforms(sf::RenderWindow& window) const;
+
+    /// @brief Creates World 2-1 trampolines from 'D' map markers.
+    void spawnTrampolines();
+
+    /// @brief Compresses and launches Mario when he lands on a trampoline.
+    void updateTrampolines(sf::Time dt);
+
+    /// @brief Draws the normal, compressed, or launch trampoline frame.
+    void drawTrampolines(sf::RenderWindow& window) const;
 
     /**
      * @brief Updates test avatar physics, movement, and collision resolution against TileMap.
@@ -349,6 +398,12 @@ public:
      * @param window The target render window.
      */
     void render(sf::RenderWindow& window) override;
+
+    /// @brief Clears event-held controls when a menu overlay takes focus.
+    void pause() override;
+
+    /// @brief Resumes with a neutral input state to prevent stuck movement keys.
+    void resume() override;
 
     /**
      * @brief Gets current SaveData progress snapshot.

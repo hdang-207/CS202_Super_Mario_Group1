@@ -29,15 +29,10 @@ private:
     std::optional<sf::Text> livesLabelText;
     std::optional<sf::Text> livesText;
 
-    std::optional<sf::Text> ammoLabelText;
-    std::optional<sf::Text> ammoText;
-
     int currentScore{0};
     int currentCoins{0};
     float timeRemaining{400.f};
     int currentLives{3};
-    int currentAmmo{3};
-    int maximumAmmo{3};
 
     /**
      * @brief Formats a number with leading zeros.
@@ -79,12 +74,10 @@ public:
     void setTime(float time);
     void setLives(int lives);
     void addLives(int amount);
-    void setAmmo(int ammo, int maximum);
 
     int getScore() const { return currentScore; }
     int getCoins() const { return currentCoins; }
     int getLives() const { return currentLives; }
-    int getAmmo() const { return currentAmmo; }
     float getTime() const { return timeRemaining; }
 };
 

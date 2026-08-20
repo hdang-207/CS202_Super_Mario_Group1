@@ -11,39 +11,49 @@
 #include "Core/EventSystem.hpp"
 #include "Systems/SoundController.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 namespace {
     // Kinematics, in world pixels per second. Tuned against a 48px tile so the jump
     // clears roughly three and a half tiles, like Super Mario Bros.
     constexpr float kGravity = 2400.f;
-    constexpr float kWalkAcceleration = 1800.f;
     constexpr float kMaxWalkSpeed = 420.f;
     constexpr float kGroundFriction = 2000.f;
     constexpr float kJumpSpeed = 1000.f;
-    constexpr float kJumpCutoff = 0.45f; ///< Releasing jump early shortens the hop.
     constexpr float kMaxFallSpeed = 1400.f;
+    constexpr float kWaterGravity = 360.f;
+    constexpr float kSwimStrokeSpeed = 430.f;
+    constexpr float kMaxSwimFallSpeed = 320.f;
 
     /// Coin released by a question block: rises, falls back, then vanishes.
     constexpr float kCoinPopSpeed = -480.f;
     constexpr float kCoinPopGravity = 1400.f;
     constexpr float kCoinPopLifetime = 0.7f;
-    constexpr float kMushroomRiseDuration = 0.45f;
+    constexpr float kVineGrowDuration = 2.25f;
     constexpr std::size_t kMushroomRewardDivisor = 4; ///< About 25% mushroom rewards.
+    constexpr float kStarPowerDuration = 10.f;
 
     /// Goombas wake up when their spawn enters the camera, then walk until defeated.
     constexpr float kGoombaSpeed = 72.f;
     constexpr float kGoombaFrameDuration = 0.3f;
     constexpr float kBlueKoopaSpeed = 60.f;
     constexpr float kBlueKoopaFrameDuration = 0.2f;
+    constexpr float kGreenKoopaSpeed = 60.f;
+    constexpr float kParatroopaBounceSpeed = 600.f;
+    constexpr float kShellSpeed = 360.f;
+    constexpr float kPiranhaVisibleDuration = 1.f;
+    constexpr float kPiranhaMoveDuration = 0.55f;
+    constexpr float kPiranhaHiddenDuration = 1.f;
+    constexpr float kTrampolineCompressDuration = 0.12f;
+    constexpr float kTrampolineLaunchDuration = 0.18f;
+    constexpr float kTrampolineLaunchSpeed = 1400.f;
     constexpr float kGoombaStompBounce = 550.f;
     constexpr float kDamageProtectionDuration = 0.75f;
 
     constexpr float kBulletSpeed = 500.f;
     constexpr float kBulletLifetime = 2.f;
-    constexpr float kShootCooldown = 0.25f;
-    constexpr float kBulletRechargeTime = 10.f;
-    constexpr int kMaxBullets = 3;
+    constexpr float kBombExplosionRadius = 72.f;
 
     constexpr float kMovingPlatformSpeed = 90.f;
     constexpr float kMovingPlatformRangeTiles = 3.f;
@@ -55,6 +65,13 @@ namespace {
 
     /// Every underground map reserves its final columns for an outdoor goal area.
     constexpr int kOutdoorGoalColumns = 41;
+    constexpr int kWorld21BonusStartColumn = 293;
+    constexpr int kWorld22EntrancePipeColumn = 15;
+    constexpr int kWorld22WaterStartColumn = 37;
+    constexpr int kWorld22WaterEndColumn = 198;
+    constexpr int kWorld22WaterSurfaceRow = 2;
+    constexpr int kWorld22WaterSpawnColumn = 39;
+    constexpr int kWorld22WaterSpawnRow = 9;
 
 }
 
@@ -91,7 +108,6 @@ void PlayState::init() {
     hud.setCoins(this->coins);
     hud.setLives(this->lives);
     hud.setWorld(this->currentLevel);
-    hud.setAmmo(availableBullets, kMaxBullets);
 
     // Setup SoundController and Data event listeners
     auto& events = Core::EventSystem::getInstance();
@@ -135,11 +151,13 @@ void PlayState::init() {
         this->hud.setLives(this->lives);
     });
 
-    // Artwork for every character the map file uses. 'H' is left out on purpose:
-    // the hidden block has to stay invisible until it is struck.
+    // Artwork for every character the map file uses. 'H' and '1' are left out
+    // on purpose: hidden blocks stay invisible until they are struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
     tileMap.setTileTexture('C', assets.getTexture("CloudBlock"));
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('A', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('^', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('b', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
@@ -153,6 +171,16 @@ void PlayState::init() {
     tileMap.setTileTexture('-', assets.getTexture("IslandTopMiddle"));
     tileMap.setTileTexture(')', assets.getTexture("IslandTopRight"));
     tileMap.setTileTexture('|', assets.getTexture("IslandTrunk"));
+    // World 2-1 contains a compact underground bonus room in the same panorama.
+    // Dedicated symbols keep its cyan tiles independent of the outdoor palette.
+    tileMap.setTileTexture('g', assets.getTexture("GroundUndergroundTile"));
+    tileMap.setTileTexture('r', assets.getTexture("BrickUndergroundTile"));
+    // World 2-2 returns to the normal outdoor palette around its underwater
+    // section. Dedicated symbols prevent stage-2's underground recolour from
+    // leaking into the entrance, staircase, and goal area.
+    tileMap.setTileTexture('O', assets.getTexture("GroundTile"));
+    tileMap.setTileTexture('w', assets.getTexture("UnderwaterRock"));
+    tileMap.setTileTexture('s', assets.getTexture("HardBlockTile"));
 
     // Scenery. One character places a whole object, which is why these go through
     // setDecorationTexture: they are several tiles big, never collide, and are
@@ -165,9 +193,17 @@ void PlayState::init() {
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
     tileMap.setDecorationTexture('I', assets.getTexture("Island"));
     tileMap.setDecorationTexture('Y', assets.getTexture("CastleWorld1_3"));
+    tileMap.setDecorationTexture('Z', assets.getTexture("CastleWorld2_1"));
+    tileMap.setDecorationTexture('T', assets.getTexture("HorsetailTall"));
+    tileMap.setDecorationTexture('t', assets.getTexture("HorsetailShort"));
+    tileMap.setDecorationTexture('f', assets.getTexture("FenceWorld2_1Group"));
+    tileMap.setDecorationTexture('q', assets.getTexture("FenceWorld2_1"));
+    tileMap.setDecorationTexture('N', assets.getTexture("VineTop"));
+    tileMap.setDecorationTexture('a', assets.getTexture("CoralTall"));
     tileMap.setDecorationTexture('F', assets.getTexture("Flagpole"));
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
+    tileMap.setDecorationTexture('Q', assets.getTexture("WarpPipeForked"));
 
     if (!loadLevel(currentLevel)) {
         return;
@@ -183,7 +219,7 @@ void PlayState::init() {
     respawnAvatar();
     updateCamera();
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, left click to shoot, Esc to pause.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
                  "through the level with A/D (hold Shift to go faster).\n";
 }
@@ -197,18 +233,12 @@ void PlayState::handleInput(const sf::Event& event) {
     // stay down forever and the level would scroll on its own.
     if (event.is<sf::Event::FocusLost>()) {
         heldKeys.clear();
+        inputHandler.reset();
         return;
     }
 
     if (const auto* keyReleased = event.getIf<sf::Event::KeyReleased>()) {
         heldKeys.erase(keyReleased->code);
-        return;
-    }
-
-    if (const auto* mousePressed = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mousePressed->button == sf::Mouse::Button::Left) {
-            spawnBullet();
-        }
         return;
     }
 
@@ -222,7 +252,11 @@ void PlayState::handleInput(const sf::Event& event) {
         }
 
         // Push interactive PauseState menu overlay on P or Escape
-        if (keyPressed->code == sf::Keyboard::Key::P || keyPressed->code == sf::Keyboard::Key::Escape) {
+        if (keyPressed->code == sf::Keyboard::Key::X) {
+            spawnBullet();
+        } else if (keyPressed->code == sf::Keyboard::Key::C) {
+            spawnBomb();
+        } else if (keyPressed->code == sf::Keyboard::Key::P || keyPressed->code == sf::Keyboard::Key::Escape) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
@@ -257,28 +291,11 @@ void PlayState::update(sf::Time dt) {
     }
 
     // Update the Input pressing from Command Pattern
-    inputHandler.update();
+    inputHandler.update(heldKeys);
 
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
-    shootCooldownRemaining = std::max(0.f, shootCooldownRemaining - dt.asSeconds());
-    for (float& timer : ammoRechargeTimers) {
-        timer -= dt.asSeconds();
-    }
-    const auto expiredTimer = std::remove_if(
-        ammoRechargeTimers.begin(), ammoRechargeTimers.end(),
-        [this](float timer) {
-            if (timer > 0.f) {
-                return false;
-            }
-            availableBullets = std::min(kMaxBullets, availableBullets + 1);
-            return true;
-        });
-    if (expiredTimer != ammoRechargeTimers.end()) {
-        ammoRechargeTimers.erase(expiredTimer, ammoRechargeTimers.end());
-        hud.setAmmo(availableBullets, kMaxBullets);
-    }
-
+    starPowerRemaining = std::max(0.f, starPowerRemaining - dt.asSeconds());
     if (freeLook) {
         // The avatar is deliberately frozen: left it running it would walk off or
         // fall into a pit while the camera is somewhere else entirely.
@@ -289,7 +306,18 @@ void PlayState::update(sf::Time dt) {
     }
 
     updateMovingPlatforms(dt);
+    if (tryEnterWorld22WaterPipe()) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
     if (!moveAvatar(dt)) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+    updateTrampolines(dt);
+    if (!updatePiranhas(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
         return;
@@ -299,6 +327,7 @@ void PlayState::update(sf::Time dt) {
         return;
     }
     updateBullets(dt);
+    updateBomb(dt);
     if (!updateWalkingEnemies(dt)) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -308,6 +337,8 @@ void PlayState::update(sf::Time dt) {
     updateCoinPops(dt);
     updateMushrooms(dt);
     updateFireFlowers(dt);
+    updateStars(dt);
+    updateGrowingVines(dt);
     updateExplosions(dt);
     updateDeadEnemies(dt);
     updateBlocks(dt);
@@ -323,52 +354,37 @@ void PlayState::update(sf::Time dt) {
     Systems::SoundController::getInstance().update(); // Clean up finished sounds
 }
 
-sf::FloatRect PlayState::avatarBounds() const {
-    return sf::FloatRect(avatarPos, avatar.getSize());
+void PlayState::pause() {
+    heldKeys.clear();
+    inputHandler.reset();
 }
 
-void PlayState::becomeSuper() {
-    if (playerForm == PlayerForm::Super) {
-        return;
-    }
+void PlayState::resume() {
+    heldKeys.clear();
+    inputHandler.reset();
+}
 
-    const float feetY = avatarPos.y + avatar.getSize().y;
-    const sf::Vector2f superSize(avatar.getSize().x, tileMap.tileSize() * 1.9f);
+sf::FloatRect PlayState::avatarBounds() const {
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return sf::FloatRect(bounds.position, bounds.size);
+}
 
-    playerForm = PlayerForm::Super;
-    avatar.setSize(superSize);
-    avatarPos.y = feetY - superSize.y;
-    avatar.setPosition(avatarPos);
+void PlayState::syncAvatarPowerVisuals() {
+    auto& body = m_player->getPhysicsBody();
+    const sf::Vector2f position = body.getPosition();
+    const sf::Vector2f colliderSize = body.getColliderSize();
+    const float feetY = position.y + colliderSize.y;
+    avatar.setSize(colliderSize);
+    avatar.setPosition(position);
 
     // The available character art is shared between forms. Keep its existing
     // bottom-centred convention and scale it to the new collider immediately.
     const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
     const float scale = spriteBounds.size.y > 0.f
-        ? (superSize.y * 1.5f / spriteBounds.size.y)
+        ? (colliderSize.y * 1.5f / spriteBounds.size.y)
         : 1.f;
     avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({avatarPos.x + superSize.x / 2.f, feetY});
-}
-
-void PlayState::becomeSmall() {
-    if (playerForm == PlayerForm::Small) {
-        return;
-    }
-
-    const float feetY = avatarPos.y + avatar.getSize().y;
-    const sf::Vector2f smallSize(avatar.getSize().x, tileMap.tileSize() * 0.95f);
-
-    playerForm = PlayerForm::Small;
-    avatar.setSize(smallSize);
-    avatarPos.y = feetY - smallSize.y;
-    avatar.setPosition(avatarPos);
-
-    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
-    const float scale = spriteBounds.size.y > 0.f
-        ? (smallSize.y * 1.5f / spriteBounds.size.y)
-        : 1.f;
-    avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({avatarPos.x + smallSize.x / 2.f, feetY});
+    avatarSprite.setPosition({position.x + colliderSize.x / 2.f, feetY});
 }
 
 void PlayState::playLevelMusic() {
@@ -410,6 +426,10 @@ bool PlayState::loadLevel(int level) {
         underground ? "GroundUndergroundTile" : "GroundTile"));
     tileMap.setTileTexture('B', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('A', assets.getTexture(
+        underground ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('^', assets.getTexture(
+        underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('b', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
@@ -430,31 +450,43 @@ bool PlayState::loadLevel(int level) {
     coinPops.clear();
     mushrooms.clear();
     fireFlowers.clear();
+    stars.clear();
+    growingVines.clear();
+    swimButtonHeld = false;
+    starPowerRemaining = 0.f;
     bullets.clear();
-    availableBullets = kMaxBullets;
-    shootCooldownRemaining = 0.f;
-    ammoRechargeTimers.clear();
-    hud.setAmmo(availableBullets, kMaxBullets);
+    activeBomb.reset();
     explosions.clear();
     walkingEnemies.clear();
+    piranhas.clear();
+    trampolines.clear();
     spawnWalkingEnemies();
+    spawnPiranhas();
+    spawnTrampolines();
     spawnMovingPlatforms();
     prepareItemBlockRewards();
     std::cout << "[Core Engine] World " << world << "-" << stage << " loaded: "
               << mapParser.getWidth() << "x" << mapParser.getHeight() << " tiles, "
               << tileMap.enemySpawns().size() << " Goombas, "
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
+              << tileMap.greenKoopaSpawns().size() << " Green Koopas, "
+              << tileMap.greenParatroopaSpawns().size() << " Green Paratroopas, "
+              << tileMap.piranhaSpawns().size() << " Piranha Plants, "
+              << tileMap.trampolineSpawns().size() << " trampolines, "
               << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
     return true;
 }
 
 bool PlayState::tryEnterNextLevel() {
     const sf::FloatRect player = avatarBounds();
-    const bool reachedLevelExit = currentLevel < Config::kFinalLevel
+    const bool reachedLevelExit = !Config::isLastStageOfWorld(currentLevel)
+        && currentLevel < Config::kFinalLevel
         && tileMap.hasLevelExit()
         && player.findIntersection(tileMap.levelExitBounds()).has_value();
-    const bool reachedStageGoal = Config::stageNumber(currentLevel) == 3
-        && tileMap.hasGoal()
+    // Most stages use a hidden W exit marker. World 2-1 follows the reference
+    // map and ends directly at its flag, so a goal is also valid when no W exists.
+    const bool reachedStageGoal = tileMap.hasGoal()
+        && (Config::isLastStageOfWorld(currentLevel) || !tileMap.hasLevelExit())
         && player.findIntersection(tileMap.goalBounds()).has_value();
 
     if (!reachedLevelExit && !reachedStageGoal) {
@@ -466,6 +498,47 @@ bool PlayState::tryEnterNextLevel() {
     std::cout << "[Core Engine] Level exit reached. Transitioning to LevelCompleteState...\n";
     transitionPending = true;
     gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, progress));
+    return true;
+}
+
+bool PlayState::tryEnterWorld22WaterPipe() {
+    const bool world22 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 2;
+    if (!world22 || inputHandler.getPlayerInput().moveAxis <= 0.f) {
+        return false;
+    }
+
+    // The reference panorama places both rooms next to each other, but gameplay
+    // enters the horizontal branch of the forked pipe before showing the water.
+    // This trigger covers that left-facing branch and the avatar-sized opening
+    // immediately in front of it.
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect pipeEntrance(
+        {(kWorld22EntrancePipeColumn - 1) * tile, 10.f * tile},
+        {5.f * tile, 3.f * tile});
+    if (!avatarBounds().findIntersection(pipeEntrance).has_value()) {
+        return false;
+    }
+
+    auto& body = m_player->getPhysicsBody();
+    body.setPosition({
+        kWorld22WaterSpawnColumn * tile,
+        kWorld22WaterSpawnRow * tile});
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+    swimButtonHeld = false;
+    facingRight = true;
+    syncAvatarPowerVisuals();
+
+    // Snap to the first full underwater screen. The 24-column spacer in the map
+    // remains outside both camera views, so the outdoor and underwater rooms can
+    // never appear side by side during normal play.
+    maxCameraCenterX = kWorld22WaterStartColumn * tile + Config::kViewWidth / 2.f;
+    centreCamera({maxCameraCenterX, Config::kViewHeight / 2.f});
+    freeLookCentre = camera.getCenter();
+
+    std::cout << "[Core Engine] World 2-2 entrance pipe: entered underwater room.\n";
     return true;
 }
 
@@ -579,55 +652,40 @@ PlayState::BlockReward PlayState::takeNextItemBlockReward() {
     return blockRewards[nextBlockReward++];
 }
 
-void PlayState::spawnMushroom(sf::Vector2f blockPosition) {
-    mushrooms.push_back({blockPosition, blockPosition, {0.f, 0.f}, MushroomState::Emerging, 0.f});
+void PlayState::spawnMushroom(sf::Vector2f blockPosition,
+                              items::MushroomKind kind) {
+    mushrooms.emplace_back(blockPosition, kind);
 }
 
 void PlayState::updateMushrooms(sf::Time dt) {
-    constexpr float kMushroomSpeed = 120.f;
-    constexpr float kGravity = 2400.f;
-    constexpr float kMaxFallSpeed = 600.f;
-    float seconds = dt.asSeconds();
-    
-    sf::FloatRect ab = avatarBounds();
+    const float seconds = dt.asSeconds();
+    const sf::FloatRect player = avatarBounds();
+    const float tileSize = tileMap.tileSize();
 
     for (auto it = mushrooms.begin(); it != mushrooms.end(); ) {
-        if (it->state == MushroomState::Emerging) {
-            it->elapsed = std::min(it->elapsed + seconds, kMushroomRiseDuration);
-            float progress = it->elapsed / kMushroomRiseDuration;
-            it->position = {it->blockPosition.x,
-                            it->blockPosition.y - tileMap.tileSize() * progress};
-            
-            if (it->elapsed >= kMushroomRiseDuration) {
-                it->state = MushroomState::Moving;
-                it->velocity.x = kMushroomSpeed;
-            }
-        } else if (it->state == MushroomState::Moving) {
-            sf::Vector2f size(tileMap.tileSize(), tileMap.tileSize());
-            physics::PhysicsBody mushroomBody(it->position, size);
-            mushroomBody.setVelocity(it->velocity);
-
-            sf::FloatRect broadBounds({it->position.x - 16.f, it->position.y - 16.f}, {size.x + 32.f, size.y + 32.f});
-            std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
-
-            m_physicsSystem.update(mushroomBody, solids, seconds);
-
-            it->position = mushroomBody.getPosition();
-            it->velocity = mushroomBody.getVelocity();
-
-            if (mushroomBody.hitWallLeft()) {
-                it->velocity.x = kMushroomSpeed;
-            } else if (mushroomBody.hitWallRight()) {
-                it->velocity.x = -kMushroomSpeed;
-            }
+        std::vector<physics::AABB> solids;
+        if (it->isCollectible()) {
+            sf::FloatRect broadBounds = it->getBounds();
+            broadBounds.position.x -= 16.f;
+            broadBounds.position.y -= 16.f;
+            broadBounds.size.x += 32.f;
+            broadBounds.size.y += 32.f;
+            solids = getSolidAABBsOverlapping(broadBounds);
         }
-        
-        sf::FloatRect mushroomBounds(it->position, sf::Vector2f(tileMap.tileSize(), tileMap.tileSize()));
-        if (it->state == MushroomState::Moving && ab.findIntersection(mushroomBounds)) {
-            becomeSuper();
-            Core::EventSystem::getInstance().broadcast({Core::EventType::MushroomCollected});
+
+        it->update(seconds, tileSize, m_physicsSystem, solids);
+
+        if (it->isCollectible()
+            && player.findIntersection(it->getBounds()).has_value()) {
+            if (it->getKind() == items::MushroomKind::OneUp) {
+                Core::EventSystem::getInstance().broadcast({Core::EventType::OneMoreLife});
+            } else {
+                m_player->applyPower(entity::PowerType::Super);
+                syncAvatarPowerVisuals();
+                Core::EventSystem::getInstance().broadcast({Core::EventType::MushroomCollected});
+            }
             it = mushrooms.erase(it);
-        } else if (it->position.y > tileMap.pixelHeight()) {
+        } else if (it->hasFallenOut(tileMap.pixelHeight())) {
             // fell into a pit
             it = mushrooms.erase(it);
         } else {
@@ -637,46 +695,32 @@ void PlayState::updateMushrooms(sf::Time dt) {
 }
 
 void PlayState::drawMushrooms(sf::RenderWindow& window) const {
-    sf::Sprite mushroomSprite(assets.getTexture("SuperMushroom"));
-    mushroomSprite.setScale({Config::kZoom, Config::kZoom});
-
-    for (const MushroomEntity& mushroom : mushrooms) {
-        mushroomSprite.setPosition(mushroom.position);
-        window.draw(mushroomSprite);
+    for (const items::Mushroom& mushroom : mushrooms) {
+        const char* textureKey = mushroom.getKind() == items::MushroomKind::OneUp
+            ? "OneUpMushroom"
+            : "SuperMushroom";
+        mushroom.render(window, assets.getTexture(textureKey), Config::kZoom);
     }
 }
 
 void PlayState::spawnFireFlower(sf::Vector2f blockPosition) {
-    fireFlowers.push_back({blockPosition, blockPosition, MushroomState::Emerging, 0.f});
+    fireFlowers.emplace_back(blockPosition);
 }
 
 void PlayState::updateFireFlowers(sf::Time dt) {
-    float seconds = dt.asSeconds();
-    sf::FloatRect ab = avatarBounds();
-    float ts = tileMap.tileSize();
-    // Flower drawn size (fit within a tile)
-    float flowerSize = ts * 0.75f; // 75% of a tile
+    const float seconds = dt.asSeconds();
+    const sf::FloatRect player = avatarBounds();
+    const float tileSize = tileMap.tileSize();
 
     for (auto it = fireFlowers.begin(); it != fireFlowers.end(); ) {
-        if (it->state == MushroomState::Emerging) {
-            it->elapsed = std::min(it->elapsed + seconds, 0.6f); // 0.6s rise
-            float progress = it->elapsed / 0.6f;
-            // Start at bottom of the block above, rise up one tile
-            float centerX = it->blockPosition.x + (ts - flowerSize) / 2.f;
-            it->position = {centerX,
-                            it->blockPosition.y - flowerSize * progress};
-            
-            if (it->elapsed >= 0.6f) {
-                it->state = MushroomState::Moving; // stays still
-            }
-        }
-        
-        sf::FloatRect bounds(it->position, sf::Vector2f(flowerSize, flowerSize));
-        if (it->state == MushroomState::Moving && ab.findIntersection(bounds)) {
+        it->update(seconds, tileSize);
+
+        if (it->isCollectible()
+            && player.findIntersection(it->getBounds()).has_value()) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("PowerUpSound"));
             score += 1000;
             hud.setScore(score);
-            currentForm = AvatarForm::Fire;
+            m_player->applyPower(entity::PowerType::Fire);
             it = fireFlowers.erase(it);
         } else {
             ++it;
@@ -685,40 +729,109 @@ void PlayState::updateFireFlowers(sf::Time dt) {
 }
 
 void PlayState::drawFireFlowers(sf::RenderWindow& window) const {
-    sf::Sprite flowerSprite(assets.getTexture("FireFlower"));
-    // Scale flower to 75% of a tile size
-    float ts = tileMap.tileSize();
-    float flowerSize = ts * 0.75f;
-    sf::Vector2u texSize = flowerSprite.getTexture().getSize();
-    if (texSize.x > 0 && texSize.y > 0) {
-        flowerSprite.setScale({flowerSize / static_cast<float>(texSize.x),
-                               flowerSize / static_cast<float>(texSize.y)});
+    for (const items::FireFlower& flower : fireFlowers) {
+        flower.render(window, assets.getTexture("FireFlower"), tileMap.tileSize());
+    }
+}
+
+void PlayState::spawnStar(sf::Vector2f blockPosition) {
+    stars.emplace_back(blockPosition);
+}
+
+void PlayState::updateStars(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const sf::FloatRect player = avatarBounds();
+
+    for (auto it = stars.begin(); it != stars.end();) {
+        it->update(seconds, tileMap);
+
+        if (it->isCollectible()
+            && player.findIntersection(it->getBounds()).has_value()) {
+            starPowerRemaining = kStarPowerDuration;
+            score += 1000;
+            hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("PowerUpSound"));
+            it = stars.erase(it);
+        } else if (it->hasFallenOut(tileMap.pixelHeight())) {
+            it = stars.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PlayState::drawStars(sf::RenderWindow& window) const {
+    for (const items::Star& star : stars) {
+        star.render(window, assets.getTexture("SuperStar"), Config::kZoom);
+    }
+}
+
+bool PlayState::spawnGrowingVine(sf::Vector2f blockPosition) {
+    const bool alreadyGrowing = std::any_of(
+        growingVines.begin(), growingVines.end(),
+        [blockPosition](const GrowingVineEntity& vine) {
+            return vine.blockPosition == blockPosition;
+        });
+    if (alreadyGrowing) {
+        return false;
     }
 
-    for (const FireFlowerEntity& flower : fireFlowers) {
-        flowerSprite.setPosition(flower.position);
-        window.draw(flowerSprite);
+    growingVines.push_back({blockPosition, 0.f});
+    Systems::SoundController::getInstance().playSound(
+        assets.getSoundBuffer("PowerUpSound"));
+    return true;
+}
+
+void PlayState::updateGrowingVines(sf::Time dt) {
+    for (GrowingVineEntity& vine : growingVines) {
+        vine.elapsed = std::min(vine.elapsed + dt.asSeconds(), kVineGrowDuration);
+    }
+}
+
+void PlayState::drawGrowingVines(sf::RenderWindow& window) const {
+    const sf::Texture& texture = assets.getTexture("VineTop");
+    const sf::Vector2u textureSize = texture.getSize();
+    if (textureSize.x == 0 || textureSize.y == 0) {
+        return;
+    }
+
+    for (const GrowingVineEntity& vine : growingVines) {
+        const float progress = std::clamp(vine.elapsed / kVineGrowDuration, 0.f, 1.f);
+        const int visibleHeight = std::clamp(
+            static_cast<int>(std::ceil(textureSize.y * progress)),
+            0, static_cast<int>(textureSize.y));
+        if (visibleHeight == 0) {
+            continue;
+        }
+
+        sf::Sprite sprite(texture);
+        sprite.setTextureRect(sf::IntRect(
+            {0, 0}, {static_cast<int>(textureSize.x), visibleHeight}));
+        sprite.setScale({Config::kZoom, Config::kZoom});
+        const float width = textureSize.x * Config::kZoom;
+        sprite.setPosition({
+            vine.blockPosition.x + (tileMap.tileSize() - width) * 0.5f,
+            vine.blockPosition.y - visibleHeight * Config::kZoom
+        });
+        window.draw(sprite);
     }
 }
 
 void PlayState::spawnBullet() {
-    if (shootCooldownRemaining > 0.f || availableBullets <= 0
-        || bullets.size() >= static_cast<std::size_t>(kMaxBullets)) {
+    if (!m_player || !m_player->hasFirePower()) {
         return;
     }
     
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
 
     // Position bullet at character's upper body / gun height (about 1/3 from top)
-    float bulletX = facingRight ? avatarPos.x + avatar.getSize().x : avatarPos.x - entity::Bullet::kSize;
-    float bulletY = avatarPos.y + avatar.getSize().y * 0.3f;
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    float bulletX = facingRight ? player.right() : player.left() - entity::Bullet::kSize;
+    float bulletY = player.top() + player.size.y * 0.3f;
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
-    --availableBullets;
-    ammoRechargeTimers.push_back(kBulletRechargeTime);
-    shootCooldownRemaining = kShootCooldown;
-    hud.setAmmo(availableBullets, kMaxBullets);
 }
 
 void PlayState::updateBullets(sf::Time dt) {
@@ -741,15 +854,39 @@ void PlayState::updateBullets(sf::Time dt) {
                 if (!enemy.alive || !enemy.active) {
                     continue;
                 }
-                const float enemyHeight = enemy.kind == EnemyKind::BlueKoopa
-                    ? tileMap.tileSize() * 1.5f : tileMap.tileSize();
+                const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+                const float enemyHeight = enemy.state == EnemyState::Walking
+                    ? (isKoopa ? tileMap.tileSize() * 1.5f : tileMap.tileSize())
+                    : tileMap.tileSize() * 14.f / 16.f;
                 const sf::FloatRect enemyBounds(
                     enemy.position, {tileMap.tileSize(), enemyHeight});
                 if (!bulletBounds.findIntersection(enemyBounds).has_value()) {
                     continue;
                 }
                 enemy.alive = false;
-                score += enemy.kind == EnemyKind::BlueKoopa ? 200 : 100;
+                score += isKoopa ? 200 : 100;
+                hud.setScore(score);
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("StompSound"));
+                collided = true;
+                break;
+            }
+        }
+
+        if (!collided) {
+            const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+            for (PiranhaEntity& plant : piranhas) {
+                if (!plant.alive || plant.exposure < 0.65f) {
+                    continue;
+                }
+                const sf::FloatRect plantBounds(
+                    {plant.position.x + scale, plant.position.y + scale},
+                    {16.f * scale, 23.f * scale});
+                if (!bulletBounds.findIntersection(plantBounds).has_value()) {
+                    continue;
+                }
+                plant.alive = false;
+                score += 200;
                 hud.setScore(score);
                 Systems::SoundController::getInstance().playSound(
                     assets.getSoundBuffer("StompSound"));
@@ -815,7 +952,9 @@ void PlayState::drawExplosions(sf::RenderWindow& window) const {
 void PlayState::spawnWalkingEnemies() {
     walkingEnemies.clear();
     walkingEnemies.reserve(tileMap.enemySpawns().size()
-                           + tileMap.blueKoopaSpawns().size());
+                           + tileMap.blueKoopaSpawns().size()
+                           + tileMap.greenKoopaSpawns().size()
+                           + tileMap.greenParatroopaSpawns().size());
 
     for (sf::Vector2f spawn : tileMap.enemySpawns()) {
         auto data = entity::EntityFactory::createEnemyData(entity::EnemyType::Goomba, spawn, kGoombaSpeed);
@@ -829,6 +968,217 @@ void PlayState::spawnWalkingEnemies() {
         spawn.y -= koopaHeightOffset;
         auto data = entity::EntityFactory::createEnemyData(entity::EnemyType::BlueKoopa, spawn, kBlueKoopaSpeed);
         walkingEnemies.push_back({EnemyKind::BlueKoopa, data.position, data.velocity});
+    }
+    for (sf::Vector2f spawn : tileMap.greenKoopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        walkingEnemies.push_back(
+            {EnemyKind::GreenKoopa, spawn, {-kGreenKoopaSpeed, 0.f}});
+    }
+    for (sf::Vector2f spawn : tileMap.greenParatroopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        walkingEnemies.push_back(
+            {EnemyKind::GreenParatroopa, spawn, {-kGreenKoopaSpeed, 0.f}});
+    }
+}
+
+void PlayState::spawnPiranhas() {
+    piranhas.clear();
+    piranhas.reserve(tileMap.piranhaSpawns().size());
+    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+
+    for (const sf::Vector2f marker : tileMap.piranhaSpawns()) {
+        const float pipeTopY = marker.y + tileMap.tileSize() * 2.f;
+        const sf::Vector2f shownPosition(
+            marker.x + 7.f * scale,
+            pipeTopY - 23.f * scale);
+        piranhas.push_back({shownPosition, pipeTopY});
+    }
+}
+
+bool PlayState::updatePiranhas(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+    const float cycleDuration = kPiranhaVisibleDuration
+        + kPiranhaMoveDuration + kPiranhaHiddenDuration
+        + kPiranhaMoveDuration;
+
+    for (PiranhaEntity& plant : piranhas) {
+        if (!plant.alive) {
+            continue;
+        }
+
+        plant.elapsed = std::fmod(plant.elapsed + seconds, cycleDuration);
+        if (plant.elapsed < kPiranhaVisibleDuration) {
+            plant.exposure = 1.f;
+        } else if (plant.elapsed < kPiranhaVisibleDuration + kPiranhaMoveDuration) {
+            const float progress = (plant.elapsed - kPiranhaVisibleDuration)
+                / kPiranhaMoveDuration;
+            plant.exposure = 1.f - progress;
+        } else if (plant.elapsed < kPiranhaVisibleDuration + kPiranhaMoveDuration
+                                  + kPiranhaHiddenDuration) {
+            plant.exposure = 0.f;
+        } else {
+            const float progress = (plant.elapsed - kPiranhaVisibleDuration
+                - kPiranhaMoveDuration - kPiranhaHiddenDuration)
+                / kPiranhaMoveDuration;
+            plant.exposure = progress;
+        }
+        plant.position.y = plant.pipeTopY - plant.exposure * 23.f * scale;
+
+        if (plant.exposure < 0.65f) {
+            continue;
+        }
+        const sf::FloatRect bounds(
+            {plant.position.x + scale, plant.position.y + scale},
+            {16.f * scale, 23.f * scale});
+        if (!avatarBounds().findIntersection(bounds).has_value()) {
+            continue;
+        }
+
+        if (starPowerRemaining > 0.f) {
+            plant.alive = false;
+            score += 200;
+            hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("StompSound"));
+            continue;
+        }
+        if (damageProtectionRemaining > 0.f || invincibleTimer > 0.f) {
+            continue;
+        }
+        const bool hadFirePower = m_player->hasFirePower();
+        if (m_player->removeLatestPower()) {
+            syncAvatarPowerVisuals();
+            damageProtectionRemaining = kDamageProtectionDuration;
+            if (hadFirePower && !m_player->hasFirePower()) {
+                invincibleTimer = 1.5f;
+                sf::Vector2f velocity = m_player->getPhysicsBody().getVelocity();
+                velocity.y = -300.f;
+                m_player->getPhysicsBody().setVelocity(velocity);
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("DowngradeSound"));
+            }
+            return true;
+        }
+
+        handlePlayerDeath();
+        return false;
+    }
+    return true;
+}
+
+void PlayState::drawPiranhas(sf::RenderWindow& window) const {
+    sf::Sprite sprite(assets.getTexture("PiranhaPlant"));
+    sprite.setScale({Config::kZoom, Config::kZoom});
+    for (const PiranhaEntity& plant : piranhas) {
+        if (!plant.alive) {
+            continue;
+        }
+        sprite.setPosition(plant.position);
+        window.draw(sprite);
+    }
+}
+
+void PlayState::spawnTrampolines() {
+    trampolines.clear();
+    trampolines.reserve(tileMap.trampolineSpawns().size());
+    for (const sf::Vector2f marker : tileMap.trampolineSpawns()) {
+        trampolines.push_back(
+            {marker.x, marker.y + tileMap.tileSize() * 2.f});
+    }
+}
+
+void PlayState::updateTrampolines(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+    const float normalHeight = 31.f * scale;
+    const float compressedHeight = 9.f * scale;
+    auto& body = m_player->getPhysicsBody();
+
+    for (TrampolineEntity& trampoline : trampolines) {
+        if (trampoline.state == TrampolineState::Compressed) {
+            trampoline.elapsed += seconds;
+            if (trampoline.carryingPlayer) {
+                sf::Vector2f position = body.getPosition();
+                position.y = trampoline.bottomY - compressedHeight
+                           - body.getColliderSize().y;
+                body.setPosition(position);
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = 0.f;
+                body.setVelocity(velocity);
+                avatar.setPosition(position);
+            }
+            if (trampoline.elapsed >= kTrampolineCompressDuration) {
+                trampoline.state = TrampolineState::Launch;
+                trampoline.elapsed = 0.f;
+                trampoline.carryingPlayer = false;
+                sf::Vector2f position = body.getPosition();
+                position.y = trampoline.bottomY - normalHeight
+                           - body.getColliderSize().y;
+                body.setPosition(position);
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = -kTrampolineLaunchSpeed;
+                body.setVelocity(velocity);
+                body.setGrounded(false);
+                avatar.setPosition(position);
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("JumpSound"));
+            }
+            continue;
+        }
+
+        if (trampoline.state == TrampolineState::Launch) {
+            trampoline.elapsed += seconds;
+            if (trampoline.elapsed >= kTrampolineLaunchDuration) {
+                trampoline.state = TrampolineState::Normal;
+                trampoline.elapsed = 0.f;
+            }
+            continue;
+        }
+
+        const sf::FloatRect player = avatarBounds();
+        const float trampolineTop = trampoline.bottomY - normalHeight;
+        const bool horizontallyOverlapping =
+            player.position.x + player.size.x > trampoline.x + 2.f
+            && player.position.x < trampoline.x + tileMap.tileSize() - 2.f;
+        const bool crossingTop = player.position.y < trampolineTop
+            && player.position.y + player.size.y >= trampolineTop;
+        if (body.getVelocity().y >= 0.f && horizontallyOverlapping && crossingTop) {
+            trampoline.state = TrampolineState::Compressed;
+            trampoline.elapsed = 0.f;
+            trampoline.carryingPlayer = true;
+            sf::Vector2f position = body.getPosition();
+            position.y = trampoline.bottomY - compressedHeight
+                       - body.getColliderSize().y;
+            body.setPosition(position);
+            sf::Vector2f velocity = body.getVelocity();
+            velocity.y = 0.f;
+            body.setVelocity(velocity);
+            body.setGrounded(true);
+            avatar.setPosition(position);
+        }
+    }
+}
+
+void PlayState::drawTrampolines(sf::RenderWindow& window) const {
+    sf::Sprite normalSprite(assets.getTexture("TrampolineNormal"));
+    sf::Sprite compressedSprite(assets.getTexture("TrampolineCompressed"));
+    sf::Sprite launchSprite(assets.getTexture("TrampolineLaunch"));
+    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+
+    for (const TrampolineEntity& trampoline : trampolines) {
+        sf::Sprite* sprite = &normalSprite;
+        float sourceHeight = 31.f;
+        if (trampoline.state == TrampolineState::Compressed) {
+            sprite = &compressedSprite;
+            sourceHeight = 9.f;
+        } else if (trampoline.state == TrampolineState::Launch) {
+            sprite = &launchSprite;
+        }
+        sprite->setScale({scale, scale});
+        sprite->setPosition(
+            {trampoline.x, trampoline.bottomY - sourceHeight * scale});
+        window.draw(*sprite);
     }
 }
 
@@ -850,6 +1200,7 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
     const sf::Vector2f platformSize(
         tileSize * kMovingPlatformWidthTiles, tileSize * 0.5f);
     const float travel = tileSize * kMovingPlatformRangeTiles;
+    auto& body = m_player->getPhysicsBody();
 
     for (MovingPlatform& platform : movingPlatforms) {
         platform.previousPosition = platform.position;
@@ -863,7 +1214,7 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
             && player.position.x < oldBounds.position.x + oldBounds.size.x - 2.f;
         const bool standingOnPlatform = horizontallyOverlapping
             && std::abs(playerBottom - oldTop) <= 4.f
-            && avatarVelocity.y >= 0.f;
+            && body.getVelocity().y >= 0.f;
 
         platform.position.x += platform.velocityX * seconds;
         const float leftEnd = platform.originX - travel;
@@ -877,17 +1228,27 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
         }
 
         if (standingOnPlatform) {
-            avatarPos.x += platform.position.x - platform.previousPosition.x;
-            avatar.setPosition(avatarPos);
+            sf::Vector2f position = body.getPosition();
+            position.x += platform.position.x - platform.previousPosition.x;
+            body.setPosition(position);
+            avatar.setPosition(position);
         }
     }
 }
 
 void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
-    sf::Sprite platformSprite(assets.getTexture("MovingPlatform"));
+    const bool coinHeaven = Config::worldNumber(currentLevel) == 2
+                         && Config::stageNumber(currentLevel) == 1;
+    sf::Sprite platformSprite(assets.getTexture(
+        coinHeaven ? "CoinHeavenLift" : "MovingPlatform"));
     platformSprite.setScale({Config::kZoom, Config::kZoom});
     for (const MovingPlatform& platform : movingPlatforms) {
-        platformSprite.setPosition(platform.position);
+        sf::Vector2f drawPosition = platform.position;
+        if (coinHeaven) {
+            // The supplied World 2-1 lift sits one source pixel below its map row.
+            drawPosition.y += Config::kZoom;
+        }
+        platformSprite.setPosition(drawPosition);
         window.draw(platformSprite);
     }
 }
@@ -904,11 +1265,20 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
             continue;
         }
 
-        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
-        const float walkSpeed = isKoopa ? kBlueKoopaSpeed : kGoombaSpeed;
+        const bool isGreenKoopa = enemy.kind == EnemyKind::GreenKoopa;
+        const bool isParatroopa = enemy.kind == EnemyKind::GreenParatroopa;
+        const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+        const bool isShell = enemy.state != EnemyState::Walking;
+        const float shellHeight = tileSize * 14.f / 16.f;
+        const float enemyHeight = isShell
+            ? shellHeight : (isKoopa ? tileSize * 1.5f : tileSize);
+        const sf::Vector2f size(tileSize, enemyHeight);
+        const float baseWalkSpeed = enemy.kind == EnemyKind::BlueKoopa
+            ? kBlueKoopaSpeed : (isKoopa ? kGreenKoopaSpeed : kGoombaSpeed);
+        const float moveSpeed = enemy.state == EnemyState::ShellMoving
+            ? kShellSpeed : baseWalkSpeed;
         const float frameDuration = isKoopa
             ? kBlueKoopaFrameDuration : kGoombaFrameDuration;
-        const sf::Vector2f size(tileSize, isKoopa ? tileSize * 1.5f : tileSize);
 
         if (!enemy.active) {
             const float centreX = enemy.position.x + size.x / 2.f;
@@ -919,22 +1289,29 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
         }
 
         enemy.animationElapsed += seconds;
-        if (enemy.animationElapsed >= frameDuration) {
+        if (enemy.state == EnemyState::Walking
+            && enemy.animationElapsed >= frameDuration) {
             enemy.animationElapsed -= frameDuration;
             enemy.animationFrame = (enemy.animationFrame + 1) % 2;
+        }
+        if (enemy.state == EnemyState::ShellIdle) {
+            enemy.velocity.x = 0.f;
         }
 
         // Delegate enemy kinematics and collision to PhysicsSystem (Phase 3)
         sf::Vector2f initialVel = enemy.velocity;
-        if (initialVel.x == 0.f) {
-            initialVel.x = -walkSpeed;
+        if (initialVel.x == 0.f && enemy.state == EnemyState::Walking) {
+            initialVel.x = -moveSpeed;
         }
 
         physics::PhysicsBody enemyBody(enemy.position, size);
         enemyBody.setVelocity(initialVel);
 
-        sf::FloatRect broadBounds({enemy.position.x - 16.f, enemy.position.y - 16.f}, {size.x + 32.f, size.y + 32.f});
-        std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
+        sf::FloatRect broadBounds(
+            {enemy.position.x - tileSize, enemy.position.y - tileSize},
+            {size.x + tileSize * 2.f, size.y + tileSize * 2.f});
+        const std::vector<physics::AABB> solids =
+            getSolidAABBsOverlapping(broadBounds);
 
         m_physicsSystem.update(enemyBody, solids, seconds);
 
@@ -942,17 +1319,22 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
         enemy.velocity = enemyBody.getVelocity();
 
         if (enemyBody.hitWallLeft()) {
-            enemy.velocity.x = walkSpeed;
+            enemy.velocity.x = moveSpeed;
         } else if (enemyBody.hitWallRight()) {
-            enemy.velocity.x = -walkSpeed;
+            enemy.velocity.x = -moveSpeed;
+        }
+
+        if (isParatroopa && enemy.state == EnemyState::Walking
+            && enemyBody.isGrounded()) {
+            enemy.velocity.y = -kParatroopaBounceSpeed;
         }
 
         if (enemy.position.x < 0.f) {
             enemy.position.x = 0.f;
-            enemy.velocity.x = walkSpeed;
+            enemy.velocity.x = moveSpeed;
         } else if (enemy.position.x + size.x > tileMap.pixelWidth()) {
             enemy.position.x = tileMap.pixelWidth() - size.x;
-            enemy.velocity.x = -walkSpeed;
+            enemy.velocity.x = -moveSpeed;
         }
 
         if (enemy.position.y > tileMap.pixelHeight()) {
@@ -961,36 +1343,105 @@ bool PlayState::updateWalkingEnemies(sf::Time dt) {
         }
 
         sf::FloatRect enemyBounds(enemy.position, size);
+        if (enemy.state == EnemyState::ShellMoving) {
+            for (WalkingEnemy& other : walkingEnemies) {
+                if (&other == &enemy || !other.alive || !other.active) {
+                    continue;
+                }
+                const bool otherKoopa = other.kind != EnemyKind::Goomba;
+                const bool otherShell = other.state != EnemyState::Walking;
+                const float otherHeight = otherShell
+                    ? shellHeight : (otherKoopa ? tileSize * 1.5f : tileSize);
+                const sf::FloatRect otherBounds(
+                    other.position, {tileSize, otherHeight});
+                if (!enemyBounds.findIntersection(otherBounds).has_value()) {
+                    continue;
+                }
+                other.alive = false;
+                deadEnemies.push_back(
+                    {other.kind, other.position, {0.f, -250.f}, 0.f});
+                score += otherKoopa ? 400 : 200;
+                hud.setScore(score);
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("StompSound"));
+            }
+        }
+
         if (!avatarBounds().findIntersection(enemyBounds).has_value()) {
             continue;
         }
 
-        const float avatarBottom = avatarPos.y + avatar.getSize().y;
-        const bool stomped = avatarVelocity.y > 0.f
+        if (starPowerRemaining > 0.f) {
+            enemy.alive = false;
+            deadEnemies.push_back(
+                {enemy.kind, enemy.position, {0.f, -250.f}, 0.f});
+            score += isKoopa ? 400 : 200;
+            hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("StompSound"));
+            continue;
+        }
+
+        auto& body = m_player->getPhysicsBody();
+        const float avatarBottom = body.getAABB().bottom();
+        const bool stomped = body.getVelocity().y > 0.f
                           && avatarBottom <= enemy.position.y + size.y * 0.55f;
         if (stomped) {
-            enemy.alive = false;
-            avatarVelocity.y = -kGoombaStompBounce;
-            onGround = false;
-            score += isKoopa ? 200 : 100;
+            sf::Vector2f velocity = body.getVelocity();
+            velocity.y = -kGoombaStompBounce;
+            body.setVelocity(velocity);
+            body.setGrounded(false);
+            if (isParatroopa && enemy.state == EnemyState::Walking) {
+                enemy.kind = EnemyKind::GreenKoopa;
+                enemy.velocity.x = std::copysign(kGreenKoopaSpeed,
+                                                  enemy.velocity.x);
+                score += 200;
+            } else if (isGreenKoopa && enemy.state == EnemyState::Walking) {
+                enemy.position.y += size.y - shellHeight;
+                enemy.state = EnemyState::ShellIdle;
+                enemy.velocity = {0.f, 0.f};
+                enemy.animationFrame = 0;
+                score += 200;
+            } else if (enemy.state == EnemyState::ShellMoving) {
+                enemy.state = EnemyState::ShellIdle;
+                enemy.velocity.x = 0.f;
+                score += 100;
+            } else if (enemy.state == EnemyState::ShellIdle) {
+                enemy.state = EnemyState::ShellMoving;
+                enemy.velocity.x = facingRight ? kShellSpeed : -kShellSpeed;
+                score += 400;
+            } else {
+                enemy.alive = false;
+                score += isKoopa ? 200 : 100;
+            }
             hud.setScore(score);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
+        } else if (enemy.state == EnemyState::ShellIdle) {
+            const physics::AABB playerBounds = body.getAABB();
+            const float playerCentre = playerBounds.left() + playerBounds.size.x / 2.f;
+            const float shellCentre = enemy.position.x + size.x / 2.f;
+            enemy.state = EnemyState::ShellMoving;
+            enemy.velocity.x = playerCentre < shellCentre ? kShellSpeed : -kShellSpeed;
+            damageProtectionRemaining = 0.25f;
         } else if (damageProtectionRemaining > 0.f) {
             continue;
-        } else if (playerForm == PlayerForm::Super) {
-            becomeSmall();
-            damageProtectionRemaining = kDamageProtectionDuration;
-            break;
         } else {
             if (invincibleTimer > 0.f) {
                 // Still invincible from recent downgrade, ignore hit
                 continue;
             }
-            if (currentForm == AvatarForm::Fire) {
-                currentForm = AvatarForm::Normal;
-                invincibleTimer = 1.5f; // 1.5 seconds of invincibility
-                avatarVelocity.y = -300.f; // Knockback upward
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
+            const bool hadFirePower = m_player->hasFirePower();
+            if (m_player->removeLatestPower()) {
+                syncAvatarPowerVisuals();
+                damageProtectionRemaining = kDamageProtectionDuration;
+                if (hadFirePower && !m_player->hasFirePower()) {
+                    invincibleTimer = 1.5f; // 1.5 seconds of invincibility
+                    sf::Vector2f velocity = body.getVelocity();
+                    velocity.y = -300.f; // Knockback upward
+                    body.setVelocity(velocity);
+                    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("DowngradeSound"));
+                }
+                break;
             } else {
                 playerHit = true;
                 break;
@@ -1014,26 +1465,51 @@ void PlayState::drawWalkingEnemies(sf::RenderWindow& window) const {
     const std::string goombaTextureKey = Config::stageNumber(currentLevel) == 2
         ? "GoombaUnderground" : "Goomba";
     sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
-    sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
+    sf::Sprite blueKoopaSprite(assets.getTexture("BlueKoopaUnderground"));
+    sf::Sprite greenKoopaSprite(assets.getTexture("GreenKoopa"));
+    sf::Sprite paratroopaSprite(assets.getTexture("GreenParatroopa"));
+    sf::Sprite shellSprite(assets.getTexture("GreenShell"));
 
     for (const WalkingEnemy& enemy : walkingEnemies) {
-        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
-        sf::Sprite& sprite = isKoopa ? koopaSprite : goombaSprite;
-        const int sourceHeight = isKoopa ? 24 : TileMap::kSourceTileSize;
+        const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+        const bool isShell = enemy.state != EnemyState::Walking;
+        sf::Sprite* sprite = &goombaSprite;
+        int sourceHeight = TileMap::kSourceTileSize;
+        int frame = enemy.animationFrame;
+        float verticalOffset = 0.f;
 
-        sprite.setTextureRect(sf::IntRect(
-            {enemy.animationFrame * TileMap::kSourceTileSize, 0},
+        if (isShell) {
+            sprite = &shellSprite;
+            sourceHeight = 14;
+            frame = 0;
+        } else if (enemy.kind == EnemyKind::BlueKoopa) {
+            sprite = &blueKoopaSprite;
+            sourceHeight = 24;
+        } else if (enemy.kind == EnemyKind::GreenKoopa) {
+            sprite = &greenKoopaSprite;
+            sourceHeight = 23;
+            frame = 0;
+            verticalOffset = Config::kZoom; // bottom-align 23px art in a 24px body
+        } else if (enemy.kind == EnemyKind::GreenParatroopa) {
+            sprite = &paratroopaSprite;
+            sourceHeight = 24;
+        }
+
+        sprite->setTextureRect(sf::IntRect(
+            {frame * TileMap::kSourceTileSize, 0},
             {TileMap::kSourceTileSize, sourceHeight}));
 
         // The supplied Koopa faces left. Mirror it only after a wall sends it right.
-        if (isKoopa && enemy.velocity.x > 0.f) {
-            sprite.setScale({-Config::kZoom, Config::kZoom});
-            sprite.setPosition({enemy.position.x + tileMap.tileSize(), enemy.position.y});
+        if (isKoopa && !isShell && enemy.velocity.x > 0.f) {
+            sprite->setScale({-Config::kZoom, Config::kZoom});
+            sprite->setPosition({enemy.position.x + tileMap.tileSize(),
+                                 enemy.position.y + verticalOffset});
         } else {
-            sprite.setScale({Config::kZoom, Config::kZoom});
-            sprite.setPosition(enemy.position);
+            sprite->setScale({Config::kZoom, Config::kZoom});
+            sprite->setPosition({enemy.position.x,
+                                 enemy.position.y + verticalOffset});
         }
-        window.draw(sprite);
+        window.draw(*sprite);
     }
 }
 
@@ -1048,21 +1524,150 @@ std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRe
 }
 
 void PlayState::respawnAvatar() {
+    // A newly created Player always starts with an empty power stack and the
+    // original Small collider dimensions.
+    avatar.setSize({tileMap.tileSize() * 0.7f, tileMap.tileSize() * 0.95f});
     sf::Vector2f spawn = tileMap.playerSpawn();
     // Sit the avatar on the bottom of its spawn tile rather than its top-left corner.
-    avatarPos = {spawn.x, spawn.y + tileMap.tileSize() - avatar.getSize().y};
-    avatarVelocity = {0.f, 0.f};
-    onGround = false;
-    maxCameraCenterX = avatarPos.x + avatar.getSize().x / 2.f;
-
-    m_avatarPhysics.setPosition(avatarPos);
-    m_avatarPhysics.setCollider(avatar.getSize());
-    m_avatarPhysics.setVelocity(avatarVelocity);
+    const sf::Vector2f position{
+        spawn.x, spawn.y + tileMap.tileSize() - avatar.getSize().y};
+    maxCameraCenterX = position.x + avatar.getSize().x / 2.f;
 
     if (selectedCharacter == CharacterType::Luigi) {
-        m_player = std::make_unique<entity::Luigi>(avatarPos, avatar.getSize());
+        m_player = std::make_unique<entity::Luigi>(position, avatar.getSize());
     } else {
-        m_player = std::make_unique<entity::Mario>(avatarPos, avatar.getSize());
+        m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
+    }
+    syncAvatarPowerVisuals();
+}
+
+void PlayState::spawnBomb() {
+    if (!m_player || !m_player->hasFirePower() || activeBomb.has_value()) {
+        return;
+    }
+
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    const sf::Vector2f position{
+        facingRight ? player.right() : player.left() - combat::Bomb::kSize,
+        player.top() + player.size.y * 0.5f
+    };
+    activeBomb.emplace(position, facingRight);
+}
+
+void PlayState::updateBomb(sf::Time dt) {
+    if (!activeBomb) {
+        return;
+    }
+
+    activeBomb->update(dt.asSeconds());
+    const sf::FloatRect bounds = activeBomb->getBounds();
+    bool shouldExplode = activeBomb->fuseExpired()
+        || tileMap.intersectsSolid(bounds);
+
+    if (!shouldExplode) {
+        for (const WalkingEnemy& enemy : walkingEnemies) {
+            if (!enemy.alive || !enemy.active) {
+                continue;
+            }
+            const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+            const float height = enemy.state == EnemyState::Walking
+                ? (isKoopa ? tileMap.tileSize() * 1.5f : tileMap.tileSize())
+                : tileMap.tileSize() * 14.f / 16.f;
+            if (bounds.findIntersection(
+                    sf::FloatRect(enemy.position, {tileMap.tileSize(), height}))) {
+                shouldExplode = true;
+                break;
+            }
+        }
+    }
+
+    if (!shouldExplode) {
+        const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+        for (const PiranhaEntity& plant : piranhas) {
+            const sf::FloatRect plantBounds(
+                {plant.position.x + scale, plant.position.y + scale},
+                {16.f * scale, 23.f * scale});
+            if (plant.alive && plant.exposure >= 0.65f
+                && bounds.findIntersection(plantBounds)) {
+                shouldExplode = true;
+                break;
+            }
+        }
+    }
+
+    if (shouldExplode) {
+        explodeBomb(activeBomb->getPosition()
+                    + sf::Vector2f{combat::Bomb::kSize * 0.5f,
+                                   combat::Bomb::kSize * 0.5f});
+        activeBomb.reset();
+    }
+}
+
+void PlayState::explodeBomb(sf::Vector2f center) {
+    const sf::FloatRect blast(
+        center - sf::Vector2f{kBombExplosionRadius, kBombExplosionRadius},
+        {kBombExplosionRadius * 2.f, kBombExplosionRadius * 2.f});
+
+    for (WalkingEnemy& enemy : walkingEnemies) {
+        if (!enemy.alive || !enemy.active) {
+            continue;
+        }
+        const bool isKoopa = enemy.kind != EnemyKind::Goomba;
+        const float height = enemy.state == EnemyState::Walking
+            ? (isKoopa ? tileMap.tileSize() * 1.5f : tileMap.tileSize())
+            : tileMap.tileSize() * 14.f / 16.f;
+        const sf::FloatRect enemyBounds(
+            enemy.position, {tileMap.tileSize(), height});
+        if (!blast.findIntersection(enemyBounds)) {
+            continue;
+        }
+
+        if (enemy.state == EnemyState::ShellIdle) {
+            const float shellCenter = enemy.position.x + tileMap.tileSize() * 0.5f;
+            enemy.state = EnemyState::ShellMoving;
+            enemy.velocity.x = shellCenter < center.x ? -kShellSpeed : kShellSpeed;
+            continue;
+        }
+
+        enemy.alive = false;
+        deadEnemies.push_back({enemy.kind, enemy.position, {0.f, -250.f}, 0.f});
+        score += isKoopa ? 200 : 100;
+    }
+
+    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+    for (PiranhaEntity& plant : piranhas) {
+        const sf::FloatRect plantBounds(
+            {plant.position.x + scale, plant.position.y + scale},
+            {16.f * scale, 23.f * scale});
+        if (plant.alive && plant.exposure >= 0.65f
+            && blast.findIntersection(plantBounds)) {
+            plant.alive = false;
+            score += 200;
+        }
+    }
+    hud.setScore(score);
+
+    const float tileSize = tileMap.tileSize();
+    const int firstCol = static_cast<int>(std::floor(blast.position.x / tileSize));
+    const int lastCol = static_cast<int>(std::floor(
+        (blast.position.x + blast.size.x) / tileSize));
+    const int firstRow = static_cast<int>(std::floor(blast.position.y / tileSize));
+    const int lastRow = static_cast<int>(std::floor(
+        (blast.position.y + blast.size.y) / tileSize));
+    for (int row = firstRow; row <= lastRow; ++row) {
+        for (int col = firstCol; col <= lastCol; ++col) {
+            if (tileMap.typeAt(col, row) == TileType::Brick) {
+                tileMap.breakBrick(col, row);
+            }
+        }
+    }
+
+    spawnExplosion(center);
+}
+
+void PlayState::drawBomb(sf::RenderWindow& window) const {
+    if (activeBomb) {
+        activeBomb->render(window);
     }
 }
 
@@ -1070,48 +1675,41 @@ bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
     const auto& playerInput = inputHandler.getPlayerInput();
-    if (m_player) {
-        m_player->setInput(playerInput);
-    }
-    const auto movementConfig = m_player ? m_player->getMovementConfig() : entity::PlayerMovementConfig{420.f, 1000.f, 2000.f};
+    auto& body = m_player->getPhysicsBody();
+    const bool world22 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 2;
+    const float playerColumn = body.getPosition().x / tileMap.tileSize();
+    const physics::AABB playerBounds = body.getAABB();
+    const float playerCentreY = playerBounds.position.y + playerBounds.size.y * 0.5f;
+    const bool underwater = world22
+                         && playerColumn >= kWorld22WaterStartColumn
+                         && playerColumn < kWorld22WaterEndColumn
+                         && playerCentreY >= kWorld22WaterSurfaceRow * tileMap.tileSize();
+    const bool wasGrounded = body.isGrounded();
+    m_player->setInput(playerInput);
+    m_player->update(seconds);
 
-    // --- horizontal intent -------------------------------------------------
-    float direction = playerInput.moveAxis;
-    if (direction != 0.f) {
-        avatarVelocity.x += direction * kWalkAcceleration * seconds;
-        avatarVelocity.x = std::clamp(avatarVelocity.x, -movementConfig.moveSpeed, movementConfig.moveSpeed);
-    } else {
-        // Friction logic: check if character is grounded
-        float friction = onGround ? movementConfig.groundFriction : (movementConfig.groundFriction * 0.02f);
-        float drop = friction * seconds;
-        if (std::abs(avatarVelocity.x) <= drop) {
-            avatarVelocity.x = 0.f;
-        } else {
-            avatarVelocity.x -= std::copysign(drop, avatarVelocity.x);
+    bool swimStroke = false;
+    if (underwater) {
+        sf::Vector2f velocity = body.getVelocity();
+        swimStroke = playerInput.jumpHeld && !swimButtonHeld;
+        if (swimStroke) {
+            velocity.y = -kSwimStrokeSpeed;
+            body.setGrounded(false);
         }
+        body.setVelocity(velocity);
+        // PhysicsSystem adds normal gravity later in the frame. Counter most of
+        // it here to retain buoyant underwater motion without changing every
+        // other level's shared physics configuration.
+        body.addAcceleration({0.f, -(kGravity - kWaterGravity)});
     }
+    swimButtonHeld = underwater && playerInput.jumpHeld;
 
-    // --- jumping -----------------------------------------------------------
-    bool jumpPressed = playerInput.jumpHeld;
-    if (jumpPressed && !jumpHeld && onGround) {
-        avatarVelocity.y = -movementConfig.jumpSpeed;
-        onGround = false;
+    const sf::Vector2f size = body.getColliderSize();
+    const float previousBottom = body.getAABB().bottom();
+    if (swimStroke || (!underwater && wasGrounded && body.getVelocity().y < 0.f)) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
-    // Let go early and the jump is cut short - the classic variable jump height.
-    if (!jumpPressed && avatarVelocity.y < -movementConfig.jumpSpeed * kJumpCutoff) {
-        avatarVelocity.y = -movementConfig.jumpSpeed * kJumpCutoff;
-    }
-    jumpHeld = jumpPressed;
-
-    // --- PHYSICS SYSTEM STEP (Phase 3 Integration) -------------------------
-    sf::Vector2f size = avatar.getSize();
-    const float previousBottom = avatarPos.y + size.y;
-
-    // Sync input state into PhysicsBody
-    m_avatarPhysics.setPosition(avatarPos);
-    m_avatarPhysics.setCollider(size);
-    m_avatarPhysics.setVelocity(avatarVelocity);
 
     // Collect solid tile colliders in broadphase area
     sf::FloatRect broadBounds = avatarBounds();
@@ -1122,20 +1720,23 @@ bool PlayState::moveAvatar(sf::Time dt) {
     std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
 
     // Delegate kinematics & collision resolution to PhysicsSystem
-    m_physicsSystem.update(m_avatarPhysics, solids, seconds);
-
-    // Extract results from PhysicsBody
-    avatarPos = m_avatarPhysics.getPosition();
-    avatarVelocity = m_avatarPhysics.getVelocity();
-    onGround = m_avatarPhysics.isGrounded();
+    m_physicsSystem.update(body, solids, seconds);
+    if (underwater && body.getVelocity().y > kMaxSwimFallSpeed) {
+        sf::Vector2f velocity = body.getVelocity();
+        velocity.y = kMaxSwimFallSpeed;
+        body.setVelocity(velocity);
+    }
 
     // SMB 1985 Camera Lock: Player cannot walk back past the left edge of the screen
     float cameraLeftEdge = camera.getCenter().x - Config::kViewWidth / 2.f;
-    avatarPos.x = std::clamp(avatarPos.x, cameraLeftEdge, std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
-    m_avatarPhysics.setPosition(avatarPos);
+    sf::Vector2f position = body.getPosition();
+    position.x = std::clamp(
+        position.x, cameraLeftEdge,
+        std::max(cameraLeftEdge, tileMap.pixelWidth() - size.x));
+    body.setPosition(position);
 
     // --- Block Collision Response (hitCeiling) ------------------------------
-    if (m_avatarPhysics.hitCeiling()) {
+    if (body.hitCeiling()) {
         sf::FloatRect headBounds = avatarBounds();
         headBounds.position.y -= 4.0f;
         headBounds.size.y = 8.0f;
@@ -1143,15 +1744,38 @@ bool PlayState::moveAvatar(sf::Time dt) {
         for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(headBounds)) {
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
-            if (tileMap.activateItemBlock(col, row)) {
-                BlockReward reward = takeNextItemBlockReward();
-                if (reward == BlockReward::Mushroom) {
-                    spawnMushroom(tile.position);
-                } else if (reward == BlockReward::FireFlower) {
-                    spawnFireFlower(tile.position);
+            const char blockSymbol = tileMap.symbolAt(col, row);
+            const bool starBlock = blockSymbol == 'A';
+            const bool oneUpBlock = blockSymbol == '1';
+            const bool vineBlock = blockSymbol == '^';
+            if (vineBlock) {
+                const bool startedGrowing = spawnGrowingVine(tile.position);
+                if (!startedGrowing) {
+                    Systems::SoundController::getInstance().playSound(
+                        assets.getSoundBuffer("BrickCollision"));
+                }
+                const char symbol = tileMap.hideBrick(col, row);
+                if (symbol != '\0') {
+                    bouncingBlocks.push_back(
+                        {col, row, symbol, tile.position, tile.position.y,
+                         -150.f, true});
+                }
+            } else if (tileMap.activateItemBlock(col, row)) {
+                if (starBlock) {
+                    spawnStar(tile.position);
+                } else if (oneUpBlock) {
+                    spawnMushroom(tile.position, items::MushroomKind::OneUp);
                 } else {
-                    spawnCoinPop(tile.position);
-                    Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
+                    BlockReward reward = takeNextItemBlockReward();
+                    if (reward == BlockReward::Mushroom) {
+                        spawnMushroom(tile.position);
+                    } else if (reward == BlockReward::FireFlower) {
+                        spawnFireFlower(tile.position);
+                    } else {
+                        spawnCoinPop(tile.position);
+                        Core::EventSystem::getInstance().broadcast(
+                            {Core::EventType::CoinCollected});
+                    }
                 }
                 char symbol = tileMap.hideBrick(col, row);
                 if (symbol != '\0') {
@@ -1161,7 +1785,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
                 TileType type = tileMap.typeAt(col, row);
                 if (type == TileType::Brick || type == TileType::CoinBrick || type == TileType::UsedBlock) {
                     // Break normal bricks if Fire Mario or Super Mario
-                    if (type == TileType::Brick && (currentForm == AvatarForm::Fire || playerForm == PlayerForm::Super)) {
+                    if (type == TileType::Brick && (m_player->hasFirePower() || m_player->isSuper())) {
                         if (tileMap.breakBrick(col, row)) {
                             // Spawn debris
                             float tx = tile.position.x;
@@ -1225,16 +1849,17 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     }
                 }
             }
-            avatarVelocity.y = 0.f;
-            m_avatarPhysics.setVelocity(avatarVelocity);
+            sf::Vector2f velocity = body.getVelocity();
+            velocity.y = 0.f;
+            body.setVelocity(velocity);
             break;
         }
     }
 
     // World 1-3 lifts are one-way platforms: Mario may jump through them from
     // below, then lands when his feet cross their top surface while falling.
-    if (!onGround && avatarVelocity.y >= 0.f) {
-        const float currentBottom = avatarPos.y + size.y;
+    if (!body.isGrounded() && body.getVelocity().y >= 0.f) {
+        const float currentBottom = body.getAABB().bottom();
         const sf::FloatRect player = avatarBounds();
         for (const MovingPlatform& platform : movingPlatforms) {
             const float platformTop = platform.position.y;
@@ -1246,9 +1871,13 @@ bool PlayState::moveAvatar(sf::Time dt) {
             if (horizontallyOverlapping
                 && previousBottom <= platformTop + 2.f
                 && currentBottom >= platformTop) {
-                avatarPos.y = platformTop - size.y;
-                avatarVelocity.y = 0.f;
-                onGround = true;
+                position = body.getPosition();
+                position.y = platformTop - size.y;
+                body.setPosition(position);
+                sf::Vector2f velocity = body.getVelocity();
+                velocity.y = 0.f;
+                body.setVelocity(velocity);
+                body.setGrounded(true);
                 break;
             }
         }
@@ -1260,28 +1889,28 @@ bool PlayState::moveAvatar(sf::Time dt) {
     }
 
     // Fell down one of the level's pits: lose a life or game over.
-    if (avatarPos.y > tileMap.pixelHeight()) {
+    if (body.getPosition().y > tileMap.pixelHeight()) {
         std::cout << "[Core Engine] Avatar fell into a pit.\n";
         handlePlayerDeath();
         return false;
     }
 
-    avatar.setPosition(avatarPos);
+    avatar.setPosition(body.getPosition());
 
     // --- Update Avatar Movement Animation & Facing Direction ---
-    if (avatarVelocity.x > 10.f) {
+    if (body.getVelocity().x > 10.f) {
         facingRight = true;
-    } else if (avatarVelocity.x < -10.f) {
+    } else if (body.getVelocity().x < -10.f) {
         facingRight = false;
     }
 
-    std::string prefix = (currentForm == AvatarForm::Fire ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
+    std::string prefix = (m_player->hasFirePower() ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
 
-    if (!onGround) {
+    if (!body.isGrounded()) {
         // Jumping state
         avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
     }
-    else if (std::abs(avatarVelocity.x) > 10.f) {
+    else if (std::abs(body.getVelocity().x) > 10.f) {
         // Running state (cycle Idle -> Run1 -> Run2 -> Run1)
         runAnimTimer += dt.asSeconds();
         if (runAnimTimer >= 0.08f) {
@@ -1316,7 +1945,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
     float scaleX = facingRight ? scaleY : -scaleY;
 
     avatarSprite.setScale({scaleX, scaleY});
-    avatarSprite.setPosition({avatarPos.x + avatar.getSize().x / 2.f, avatarPos.y + avatar.getSize().y});
+    position = body.getPosition();
+    avatarSprite.setPosition({position.x + size.x / 2.f, position.y + size.y});
     return true;
 }
 
@@ -1332,9 +1962,10 @@ void PlayState::centreCamera(sf::Vector2f target) {
 }
 
 void PlayState::updateCamera() {
-    float playerCenterX = avatarPos.x + avatar.getSize().x / 2.f;
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    float playerCenterX = player.left() + player.size.x / 2.f;
     maxCameraCenterX = std::max(maxCameraCenterX, playerCenterX);
-    centreCamera({maxCameraCenterX, avatarPos.y + avatar.getSize().y / 2.f});
+    centreCamera({maxCameraCenterX, player.top() + player.size.y / 2.f});
 }
 
 void PlayState::panCamera(sf::Time dt) {
@@ -1390,18 +2021,81 @@ void PlayState::render(sf::RenderWindow& window) {
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
     const int outdoorStartColumn = std::max(
         0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
-    bool underground = Config::stageNumber(currentLevel) == 2
-                    && avatarPos.x < outdoorStartColumn * Config::kTileSize;
-    sky.setFillColor(underground ? sf::Color(0, 0, 0) : sf::Color(92, 148, 252));
+    const bool world21 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 1;
+    const bool world22 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 2;
+    bool underground = Config::stageNumber(currentLevel) == 2 && !world22
+                    && m_player->getPhysicsBody().getPosition().x
+                        < outdoorStartColumn * Config::kTileSize;
+    const sf::Color outdoorSky = (world21 || world22)
+        ? sf::Color(146, 144, 255)
+        : sf::Color(92, 148, 252);
+    sky.setFillColor(underground ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
     window.setView(camera);
+    if (world22) {
+        const float waterLeft = kWorld22WaterStartColumn * tileMap.tileSize();
+        const float waterRight = kWorld22WaterEndColumn * tileMap.tileSize();
+        const float waterTop = kWorld22WaterSurfaceRow * tileMap.tileSize();
+        const float waterHeight = tileMap.pixelHeight() - waterTop;
+        const float bandHeight = waterHeight / 4.f;
+        const sf::Color depthColours[] = {
+            sf::Color(66, 64, 255),
+            sf::Color(59, 68, 244),
+            sf::Color(51, 73, 230),
+            sf::Color(43, 79, 214)
+        };
+
+        // Four broad pixel-clean bands add depth without introducing blurry
+        // scaling or requiring another background texture.
+        for (int band = 0; band < 4; ++band) {
+            const float top = waterTop + band * bandHeight;
+            const float bottom = band == 3
+                ? tileMap.pixelHeight()
+                : waterTop + (band + 1) * bandHeight;
+            sf::RectangleShape waterBand({waterRight - waterLeft, bottom - top});
+            waterBand.setPosition({waterLeft, top});
+            waterBand.setFillColor(depthColours[band]);
+            window.draw(waterBand);
+        }
+
+        // The supplied NES crop contains four 16px-wide surface tiles followed
+        // by a solid water row. Repeat it at the project's integer zoom, clipping
+        // the last copy to the exact water-room boundary.
+        sf::Sprite waterSurface(assets.getTexture("UnderwaterTiles"));
+        waterSurface.setScale({Config::kZoom, Config::kZoom});
+        for (int column = kWorld22WaterStartColumn;
+             column < kWorld22WaterEndColumn; column += 4) {
+            const int tileCount = std::min(4, kWorld22WaterEndColumn - column);
+            waterSurface.setTextureRect(
+                sf::IntRect({0, 0}, {tileCount * TileMap::kSourceTileSize, 32}));
+            waterSurface.setPosition({column * tileMap.tileSize(), waterTop});
+            window.draw(waterSurface);
+        }
+    }
+    if (world21 && mapParser.getWidth() > kWorld21BonusStartColumn) {
+        // Unlike a normal stage transition, the reference panorama places the
+        // bonus room directly after Coin Heaven, with a hard sky/black boundary.
+        const float bonusLeft = kWorld21BonusStartColumn * tileMap.tileSize();
+        sf::RectangleShape bonusBackdrop(
+            {tileMap.pixelWidth() - bonusLeft, tileMap.pixelHeight()});
+        bonusBackdrop.setPosition({bonusLeft, 0.f});
+        bonusBackdrop.setFillColor(sf::Color::Black);
+        window.draw(bonusBackdrop);
+    }
+    drawPiranhas(window);
     window.draw(tileMap);
+    drawGrowingVines(window);
+    drawTrampolines(window);
     drawMovingPlatforms(window);
     drawCoinPops(window);
     drawMushrooms(window);
     drawFireFlowers(window);
+    drawStars(window);
     drawBullets(window);
+    drawBomb(window);
     drawWalkingEnemies(window);
     drawDeadEnemies(window);
     drawBlocks(window);
@@ -1469,7 +2163,7 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
         const sf::Texture* tex = nullptr;
         sf::IntRect rect;
 
-        if (drawSymbol == 'B') {
+        if (drawSymbol == 'B' || drawSymbol == '^') {
             tex = &assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile");
         } else if (drawSymbol == '?') {
             tex = &assets.getTexture(underground ? "QuestionBlockUnderground" : "QuestionBlock");
@@ -1533,7 +2227,6 @@ bool PlayState::quickLoad() {
             freeLook = false;
             isPaused = false;
             heldKeys.clear();
-            jumpHeld = false;
             respawnAvatar();
             updateCamera();
             playLevelMusic();
@@ -1562,22 +2255,33 @@ void PlayState::drawDeadEnemies(sf::RenderWindow& window) const {
     const std::string goombaTextureKey = Config::stageNumber(currentLevel) == 2
         ? "GoombaUnderground" : "Goomba";
     sf::Sprite goombaSprite(assets.getTexture(goombaTextureKey));
-    sf::Sprite koopaSprite(assets.getTexture("BlueKoopaUnderground"));
+    sf::Sprite blueKoopaSprite(assets.getTexture("BlueKoopaUnderground"));
+    sf::Sprite greenKoopaSprite(assets.getTexture("GreenKoopa"));
+    sf::Sprite paratroopaSprite(assets.getTexture("GreenParatroopa"));
 
     for (const DeadEnemy& enemy : deadEnemies) {
-        const bool isKoopa = enemy.kind == EnemyKind::BlueKoopa;
-        sf::Sprite& sprite = isKoopa ? koopaSprite : goombaSprite;
-        const int sourceHeight = isKoopa ? 24 : TileMap::kSourceTileSize;
+        sf::Sprite* sprite = &goombaSprite;
+        int sourceHeight = TileMap::kSourceTileSize;
+        if (enemy.kind == EnemyKind::BlueKoopa) {
+            sprite = &blueKoopaSprite;
+            sourceHeight = 24;
+        } else if (enemy.kind == EnemyKind::GreenKoopa) {
+            sprite = &greenKoopaSprite;
+            sourceHeight = 23;
+        } else if (enemy.kind == EnemyKind::GreenParatroopa) {
+            sprite = &paratroopaSprite;
+            sourceHeight = 24;
+        }
 
-        sprite.setTextureRect(sf::IntRect(
+        sprite->setTextureRect(sf::IntRect(
             {0, 0},
             {TileMap::kSourceTileSize, sourceHeight}));
         
         // Upside down
-        sprite.setScale({Config::kZoom, -Config::kZoom});
+        sprite->setScale({Config::kZoom, -Config::kZoom});
         float scaledHeight = sourceHeight * Config::kZoom;
-        sprite.setPosition({enemy.position.x, enemy.position.y + scaledHeight});
+        sprite->setPosition({enemy.position.x, enemy.position.y + scaledHeight});
         
-        window.draw(sprite);
+        window.draw(*sprite);
     }
 }

@@ -113,6 +113,9 @@ public:
     /// @brief Gameplay type of a grid cell, or TileType::Empty when out of bounds.
     TileType typeAt(int col, int row) const;
 
+    /// @brief Map character currently stored at a cell, or '.' when out of bounds.
+    char symbolAt(int col, int row) const;
+
     /// @brief World-space rectangles of every solid tile overlapping @p box.
     std::vector<sf::FloatRect> solidTilesOverlapping(const sf::FloatRect& box) const;
 
@@ -134,6 +137,20 @@ public:
 
     /// @brief Bottom-aligned map cells containing Blue Koopa spawn markers ('K').
     const std::vector<sf::Vector2f>& blueKoopaSpawns() const { return blueKoopas; }
+
+    /// @brief Bottom-aligned Green Koopa spawn markers ('G').
+    const std::vector<sf::Vector2f>& greenKoopaSpawns() const { return greenKoopas; }
+
+    /// @brief Bottom-aligned Green Paratroopa spawn markers ('J').
+    const std::vector<sf::Vector2f>& greenParatroopaSpawns() const {
+        return greenParatroopas;
+    }
+
+    /// @brief Markers two rows above pipes containing Piranha Plants ('R').
+    const std::vector<sf::Vector2f>& piranhaSpawns() const { return piranhas; }
+
+    /// @brief Trampoline markers anchored one row above the ground ('D').
+    const std::vector<sf::Vector2f>& trampolineSpawns() const { return trampolines; }
 
     /// @brief Top-left world positions of horizontal moving-platform markers ('L').
     const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
@@ -188,6 +205,10 @@ private:
     sf::Vector2f spawn{0.f, 0.f};
     std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
+    std::vector<sf::Vector2f> greenKoopas; ///< Green Koopa spawn markers ('G').
+    std::vector<sf::Vector2f> greenParatroopas; ///< Green Paratroopa markers ('J').
+    std::vector<sf::Vector2f> piranhas; ///< Piranha Plant markers ('R').
+    std::vector<sf::Vector2f> trampolines; ///< Trampoline markers ('D').
     std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;

@@ -2,12 +2,18 @@
 
 #include "PlayerInput.hpp"
 #include "Input/PlayerCommand.hpp"
-
-
+#include <SFML/Window/Keyboard.hpp>
+#include <set>
 
 class InputHandler {
 public:
-    void update();
+    /**
+     * @brief Converts event-tracked keys into the current gameplay command state.
+     *
+     * Using window events avoids macOS Input Monitoring permission requirements
+     * that can make global sf::Keyboard polling report every key as released.
+     */
+    void update(const std::set<sf::Keyboard::Key>& heldKeys);
 
     void reset();
 
