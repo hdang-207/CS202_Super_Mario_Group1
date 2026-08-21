@@ -1,19 +1,31 @@
 #pragma once
 
 #include "Entities/Entity.hpp"
+#include "Entities/Goomba.hpp"
+#include "Entities/Koopa.hpp"
+#include "Entities/Paratroopa.hpp"
+#include "Entities/PiranhaPlant.hpp"
+#include "Entities/CoinPop.hpp"
+#include "Items/Mushroom.hpp"
+#include "Items/FireFlower.hpp"
+#include "Items/Star.hpp"
 #include <memory>
 
 namespace entity {
 
 enum class EnemyType {
     Goomba,
-    BlueKoopa
+    BlueKoopa,
+    GreenKoopa,
+    GreenParatroopa
 };
 
 enum class ItemType {
     Mushroom,
     FireFlower,
-    Coin
+    Coin,
+    Star,
+    OneUpMushroom
 };
 
 struct WalkingData {
@@ -34,20 +46,17 @@ struct ItemData {
  */
 class EntityFactory {
 public:
-    /**
-     * @brief Creates a walking enemy entity structure/object based on requested type.
-     * @param type Enemy type (Goomba, BlueKoopa).
-     * @param spawnPos Initial world coordinates.
-     * @param initialSpeed Initial horizontal speed.
-     */
     static WalkingData createEnemyData(EnemyType type, const sf::Vector2f& spawnPos, float initialSpeed);
-
-    /**
-     * @brief Creates an item entity structure based on requested type.
-     * @param type Item type (Mushroom, FireFlower, Coin).
-     * @param blockPos Position of the block generating the item.
-     */
     static ItemData createItemData(ItemType type, const sf::Vector2f& blockPos);
+
+    static std::unique_ptr<Goomba> createGoomba(const sf::Vector2f& spawnPos, float tileSize, GoombaType type = GoombaType::Normal, float initialSpeed = 72.f);
+    static std::unique_ptr<Koopa> createKoopa(const sf::Vector2f& spawnPos, float tileSize, KoopaKind kind = KoopaKind::Green, float initialSpeed = 60.f);
+    static std::unique_ptr<Paratroopa> createParatroopa(const sf::Vector2f& spawnPos, float tileSize, float initialSpeed = 60.f, float bounceSpeed = 600.f);
+    static std::unique_ptr<PiranhaPlant> createPiranhaPlant(const sf::Vector2f& basePos, float pipeTopY, float scale = 3.f);
+    static std::unique_ptr<CoinPop> createCoinPop(const sf::Vector2f& blockPos, float tileSize);
+    static std::unique_ptr<items::Mushroom> createMushroom(const sf::Vector2f& blockPos, items::MushroomKind kind = items::MushroomKind::Super);
+    static std::unique_ptr<items::FireFlower> createFireFlower(const sf::Vector2f& blockPos);
+    static std::unique_ptr<items::Star> createStar(const sf::Vector2f& blockPos);
 };
 
 } // namespace entity

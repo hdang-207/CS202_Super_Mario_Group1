@@ -1,27 +1,28 @@
 #pragma once
 
 #include <SFML/System/Vector2.hpp>
-
+#include <SFML/Graphics/Rect.hpp>
+#include "Entities/Entity.hpp"
 #include "Physics/PhysicsBody.hpp"
 
 namespace sf {
 class RenderTarget;
+class RenderWindow;
 }
 
 namespace entity {
 
-class Character {
+class Character : public Entity {
 public:
-    virtual ~Character() = default;
+    virtual ~Character() override = default;
 
-    /**
-     * @brief Each subclass defines its own gameplay update logic.
-     */
+    void update(sf::Time dt) override {
+        update(dt.asSeconds());
+    }
+
+    void render(sf::RenderWindow& window) const override;
+
     virtual void update(float deltaTime) = 0;
-
-    /**
-     * @brief Each subclass handles rendering its sprite/animation.
-     */
     virtual void render(sf::RenderTarget& target) const = 0;
 
     [[nodiscard]]
@@ -34,6 +35,12 @@ public:
 
     [[nodiscard]]
     const sf::Vector2f& getPosition() const noexcept;
+
+    [[nodiscard]]
+    sf::FloatRect getBounds() const override {
+        const auto& aabb = m_physicsBody.getAABB();
+        return sf::FloatRect(aabb.position, aabb.size);
+    }
 
 protected:
     Character(
