@@ -1,5 +1,6 @@
 #include "Entities/Goomba.hpp"
 #include "Physics/PhysicsSystem.hpp"
+#include <SFML/Graphics/RenderTarget.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Sprite.hpp>
 #include <cmath>
@@ -12,12 +13,15 @@ namespace {
     constexpr int kSourceTileSize = 16;
 }
 
-Goomba::Goomba(const sf::Vector2f& position, float tileSize, GoombaType type, float initialSpeed)
+Goomba::Goomba(const sf::Vector2f& position, float tileSize, const sf::Texture* texture, GoombaType type, float initialSpeed)
     : Character(position, {tileSize, tileSize}),
+      m_texture(texture),
       m_type(type),
       m_tileSize(tileSize),
       m_walkSpeed(initialSpeed) {
-    m_physicsBody.setVelocity({-m_walkSpeed, 0.f});
+    m_active = true;
+    m_velocity = {-m_walkSpeed, 0.f};
+    m_physicsBody.setVelocity(m_velocity);
 }
 
 void Goomba::update(float deltaTime) {
@@ -38,6 +42,9 @@ void Goomba::update(float deltaTime) {
         m_animElapsed -= kGoombaFrameDuration;
         m_animationFrame = (m_animationFrame + 1) % 2;
     }
+
+    m_position.x += m_velocity.x * deltaTime;
+    m_physicsBody.setPosition(m_position);
 }
 
 void Goomba::update(float deltaTime, physics::PhysicsSystem& physicsSystem, const std::vector<physics::AABB>& solids, float mapWidth, float mapHeight) {
@@ -66,30 +73,59 @@ void Goomba::update(float deltaTime, physics::PhysicsSystem& physicsSystem, cons
 
     // Turn around at walls
     if (m_physicsBody.hitWallLeft()) {
-        m_physicsBody.setVelocity({m_walkSpeed, m_velocity.y});
+        m_velocity.x = m_walkSpeed;
+        m_physicsBody.setVelocity(m_velocity);
     } else if (m_physicsBody.hitWallRight()) {
-        m_physicsBody.setVelocity({-m_walkSpeed, m_velocity.y});
+        m_velocity.x = -m_walkSpeed;
+        m_physicsBody.setVelocity(m_velocity);
     }
 
     // Map bounds
     if (m_position.x < 0.f) {
         m_position.x = 0.f;
+        m_velocity.x = m_walkSpeed;
         m_physicsBody.setPosition(m_position);
-        m_physicsBody.setVelocity({m_walkSpeed, m_velocity.y});
+        m_physicsBody.setVelocity(m_velocity);
     } else if (m_position.x + m_tileSize > mapWidth) {
         m_position.x = mapWidth - m_tileSize;
+        m_velocity.x = -m_walkSpeed;
         m_physicsBody.setPosition(m_position);
-        m_physicsBody.setVelocity({-m_walkSpeed, m_velocity.y});
+        m_physicsBody.setVelocity(m_velocity);
     }
 
     // Fell in pit
-    if (m_position.y > mapHeight) {
+    if (m_position.y > mapHeight + 100.f) {
         m_alive = false;
     }
 }
 
-void Goomba::render(sf::RenderTarget& /*target*/) const {
-    // Default render
+void Goomba::render(sf::RenderTarget& target) const {
+    if (!m_alive && !m_stomped) {
+        return;
+    }
+    if (!m_texture) {
+        return;
+    }
+
+    sf::Sprite sprite(*m_texture);
+    const float scale = m_tileSize / static_cast<float>(kSourceTileSize);
+    sprite.setScale({scale, scale});
+
+    if (m_stomped) {
+        sprite.setTextureRect(sf::IntRect(
+            {2 * kSourceTileSize, 8},
+            {kSourceTileSize, 8}
+        ));
+        sprite.setPosition({m_position.x, m_position.y + 8.f * scale});
+    } else {
+        sprite.setTextureRect(sf::IntRect(
+            {m_animationFrame * kSourceTileSize, 0},
+            {kSourceTileSize, kSourceTileSize}
+        ));
+        sprite.setPosition(m_position);
+    }
+
+    target.draw(sprite);
 }
 
 void Goomba::renderWithTexture(sf::RenderWindow& window, const sf::Texture& texture) const {
@@ -101,19 +137,28 @@ void Goomba::renderWithTexture(sf::RenderWindow& window, const sf::Texture& text
     const float scale = m_tileSize / static_cast<float>(kSourceTileSize);
     sprite.setScale({scale, scale});
 
-    int frameX = m_stomped ? 2 : m_animationFrame;
-    sprite.setTextureRect(sf::IntRect(
-        {frameX * kSourceTileSize, 0},
-        {kSourceTileSize, kSourceTileSize}
-    ));
-    sprite.setPosition(m_physicsBody.getPosition());
+    if (m_stomped) {
+        sprite.setTextureRect(sf::IntRect(
+            {2 * kSourceTileSize, 8},
+            {kSourceTileSize, 8}
+        ));
+        sprite.setPosition({m_position.x, m_position.y + 8.f * scale});
+    } else {
+        sprite.setTextureRect(sf::IntRect(
+            {m_animationFrame * kSourceTileSize, 0},
+            {kSourceTileSize, kSourceTileSize}
+        ));
+        sprite.setPosition(m_position);
+    }
+
     window.draw(sprite);
 }
 
 void Goomba::stomp() {
     m_stomped = true;
     m_stompTimer = 0.f;
-    m_physicsBody.setVelocity({0.f, 0.f});
+    m_velocity = {0.f, 0.f};
+    m_physicsBody.setVelocity(m_velocity);
 }
 
 void Goomba::defeat() {

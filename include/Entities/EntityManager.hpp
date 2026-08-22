@@ -10,6 +10,11 @@ namespace sf {
 class RenderWindow;
 }
 
+namespace physics {
+class PhysicsSystem;
+struct AABB;
+}
+
 namespace entity {
 
 /**
@@ -33,10 +38,36 @@ public:
     void addEntity(std::unique_ptr<Entity> entity);
 
     /**
-     * @brief Processes pending entities, updates all active/alive entities, and cleans up dead ones.
+     * @brief Simple update fallback.
      * @param dt Frame delta time.
      */
     void update(sf::Time dt);
+
+    /**
+     * @brief Processes pending entities, updates all active/alive entities with solid collisions.
+     * @param dt Frame delta time.
+     * @param physicsSystem Physics collision solver.
+     * @param broadphaseSolidQuery Lambda returning solid bounding boxes in a region.
+     * @param mapWidth Pixel width of the level.
+     * @param mapHeight Pixel height of the level.
+     * @param tileSize Size of one tile in pixels.
+     * @param cameraCenterX Current center X coordinate of the game camera.
+     */
+    void update(
+        sf::Time dt,
+        physics::PhysicsSystem& physicsSystem,
+        const std::function<std::vector<physics::AABB>(const sf::FloatRect&)>& broadphaseSolidQuery,
+        float mapWidth,
+        float mapHeight,
+        float tileSize,
+        float cameraCenterX
+    );
+
+    /**
+     * @brief Renders piranha plant entities (called before tileMap so they emerge cleanly behind pipe lips).
+     * @param window Target render window.
+     */
+    void renderPiranhas(sf::RenderWindow& window) const;
 
     /**
      * @brief Renders all alive entities to the target window.
@@ -65,23 +96,24 @@ public:
     [[nodiscard]] const std::vector<std::unique_ptr<Entity>>& getEntities() const noexcept;
 
     /**
-     * @brief Apply a function to every active/alive entity.
+     * @brief Iterate through entities with a custom function.
      */
     void forEach(const std::function<void(Entity&)>& callback);
-    void forEach(const std::function<void(const Entity&)>& callback) const;
 
     /**
-     * @brief Queries entities whose bounding box intersects the given bounds.
+     * @brief Query entities whose bounding box intersects a given search box (Broadphase / Narrowphase query).
+     * @param searchArea Bounding box to query against.
+     * @return Vector of raw pointers to colliding entities.
      */
-    [[nodiscard]] std::vector<Entity*> queryOverlapping(const sf::FloatRect& bounds) const;
+    [[nodiscard]] std::vector<Entity*> queryOverlapping(const sf::FloatRect& searchArea) const;
 
 private:
+    void processPendingEntities();
+    void removeDeadEntities();
+
     std::vector<std::unique_ptr<Entity>> m_entities;
     std::vector<std::unique_ptr<Entity>> m_pendingEntities;
     bool m_isUpdating{false};
-
-    void processPendingEntities();
-    void removeDeadEntities();
 };
 
 } // namespace entity

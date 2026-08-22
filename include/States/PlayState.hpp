@@ -1,6 +1,7 @@
 #pragma once
 #include "Core/CharacterType.hpp"
 #include "Combat/Bomb.hpp"
+#include "Entities/Bullet.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Entities/EntityManager.hpp"
@@ -112,7 +113,7 @@ private:
 
     bool isPaused{false};
     bool transitionPending{false};
-    std::set<sf::Keyboard::Key> heldKeys;
+    std::set<sf::Keyboard::Scancode> heldKeys;
 
     std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
     sf::FloatRect avatarBounds() const;
@@ -134,7 +135,21 @@ private:
     void updateGrowingVines(sf::Time dt);
     void drawGrowingVines(sf::RenderWindow& window) const;
 
+    struct ExplosionEntity {
+        sf::Vector2f position;
+        float elapsed;
+        int currentFrame;
+    };
+    std::vector<entity::Bullet> bullets;
+    std::vector<ExplosionEntity> explosions;
+
     void spawnBullet();
+    void updateBullets(sf::Time dt);
+    void drawBullets(sf::RenderWindow& window) const;
+    void spawnExplosion(sf::Vector2f position);
+    void updateExplosions(sf::Time dt);
+    void drawExplosions(sf::RenderWindow& window) const;
+
     void spawnBomb();
     void updateBomb(sf::Time dt);
     void explodeBomb(sf::Vector2f center);

@@ -63,25 +63,25 @@ void CameraSystem::setFreeLook(bool enable) {
 }
 
 void CameraSystem::drawFreeLookHint(sf::RenderWindow& window, const sf::Font& font, int currentLevel) const {
-    std::string label = "F = MAP VIEW";
+    std::string label = "F = MAP VIEW   X = SHOOT   C = BOMB";
     sf::Vector2f position(16.f, Config::kViewHeight - 34.f);
     unsigned size = 16;
 
     if (m_freeLook) {
         float leftEdge = m_view.getCenter().x - Config::kViewWidth / 2.f;
         int firstColumn = static_cast<int>(leftEdge / Config::kTileSize);
-        label = "MAP VIEW " + std::to_string(Config::worldNumber(currentLevel))
+        label = "[MAP VIEW " + std::to_string(Config::worldNumber(currentLevel))
               + "-" + std::to_string(Config::stageNumber(currentLevel))
-              + "   COL " + std::to_string(firstColumn) + "-"
+              + "]  COL " + std::to_string(firstColumn) + "-"
               + std::to_string(firstColumn + Config::kViewTilesX - 1)
-              + "   A/D SCROLL   SHIFT FASTER   F EXIT";
-        position = {16.f, 12.f};
-        size = 20;
+              + " | A/D SCROLL | SHIFT FASTER | F EXIT";
+        position = {16.f, Config::kViewHeight - 38.f};
+        size = 18;
     }
 
     sf::Text hint(font, label, size);
     hint.setPosition(position);
-    hint.setFillColor(sf::Color::White);
+    hint.setFillColor(m_freeLook ? sf::Color::Yellow : sf::Color::White);
     hint.setOutlineColor(sf::Color::Black);
     hint.setOutlineThickness(3.f);
     window.draw(hint);

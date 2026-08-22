@@ -15,6 +15,7 @@ private:
     sf::Text statsText;
     sf::Text promptText;
     SaveData progress;
+    float m_elapsedTime{0.f};
 
 public:
     LevelCompleteState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data);

@@ -1,14 +1,13 @@
 #pragma once
 
 #include "Entities/Entity.hpp"
-#include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/Texture.hpp>
 
 namespace entity {
 
 class CoinPop : public Entity {
 public:
-    explicit CoinPop(const sf::Vector2f& blockPosition, float tileSize, float initialSpeed = -480.f, float gravity = 1400.f, float lifetime = 0.7f);
+    CoinPop(const sf::Vector2f& blockPosition, float tileSize, const sf::Texture* texture = nullptr, float initialSpeed = -350.f, float gravity = 1200.f, float lifetime = 0.5f);
     virtual ~CoinPop() override = default;
 
     void update(sf::Time dt) override;
@@ -18,13 +17,13 @@ public:
     void renderWithTexture(sf::RenderWindow& window, const sf::Texture& texture, float scale) const;
 
     [[nodiscard]] sf::FloatRect getBounds() const override;
-    [[nodiscard]] bool isExpired() const noexcept { return m_elapsed >= m_lifetime; }
 
 private:
-    float m_velocityY{-480.f};
-    float m_gravity{1400.f};
-    float m_lifetime{0.7f};
+    const sf::Texture* m_texture{nullptr};
+    float m_velocityY{-350.f};
+    float m_gravity{1200.f};
     float m_elapsed{0.f};
+    float m_lifetime{0.5f};
     float m_scale{3.f};
 };
 

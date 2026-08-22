@@ -157,6 +157,7 @@ Game::Game()
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
+    window.setKeyRepeatEnabled(false);
     
     // Initialize the stack with the intro menu state
     gsm.pushState(std::make_unique<IntroMenuState>(gsm, assets));
@@ -244,6 +245,7 @@ void Game::toggleFullscreen() {
 
     // Window settings do not survive a recreate, so restore them here.
     window.setFramerateLimit(60);
+    window.setKeyRepeatEnabled(false);
     updateScreenView();
 }
 

@@ -18,7 +18,7 @@ enum class GoombaType {
 
 class Goomba : public Character {
 public:
-    Goomba(const sf::Vector2f& position, float tileSize, GoombaType type = GoombaType::Normal, float initialSpeed = 72.f);
+    Goomba(const sf::Vector2f& position, float tileSize, const sf::Texture* texture = nullptr, GoombaType type = GoombaType::Normal, float initialSpeed = 72.f);
     virtual ~Goomba() override = default;
 
     void update(float deltaTime) override;
@@ -30,12 +30,20 @@ public:
     void stomp();
     void defeat();
 
+    [[nodiscard]] sf::FloatRect getBounds() const override {
+        if (m_stomped) {
+            return sf::FloatRect();
+        }
+        return Character::getBounds();
+    }
+
     [[nodiscard]] bool isStomped() const noexcept { return m_stomped; }
     [[nodiscard]] GoombaType getType() const noexcept { return m_type; }
     [[nodiscard]] int getAnimationFrame() const noexcept { return m_animationFrame; }
     [[nodiscard]] float getTileSize() const noexcept { return m_tileSize; }
 
 private:
+    const sf::Texture* m_texture{nullptr};
     GoombaType m_type{GoombaType::Normal};
     float m_tileSize{48.f};
     float m_walkSpeed{72.f};
