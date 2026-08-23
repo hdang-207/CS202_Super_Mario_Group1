@@ -347,6 +347,7 @@ private:
      * @brief Updates camera position to follow avatar.
      */
     void updateCamera();
+    void registerEvents();
 
     /**
      * @brief Pans camera manually during free-look mode.

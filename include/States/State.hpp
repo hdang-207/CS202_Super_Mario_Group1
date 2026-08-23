@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include "Systems/AssetManager.hpp"
+#include "Core/EventSystem.hpp"
 
 class GameStateManager;
 
@@ -32,7 +33,9 @@ public:
     /**
      * @brief Virtual destructor to ensure correct cleanup of derived classes.
      */
-    virtual ~State() = default;
+    virtual ~State() {
+        Core::EventSystem::getInstance().clearAllListeners();
+    }
 
     /**
      * @brief Initializes resources, loads assets, texture settings, etc. when the state starts.

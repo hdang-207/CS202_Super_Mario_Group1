@@ -93,9 +93,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->lives = data.lives;
 }
 
-PlayState::~PlayState() {
-    Core::EventSystem::getInstance().clearAllListeners();
-}
+PlayState::~PlayState() = default;
 
 void PlayState::init() {
     Core::EventSystem::getInstance().clearAllListeners();
@@ -108,57 +106,8 @@ void PlayState::init() {
     hud.setCoins(this->coins);
     hud.setLives(this->lives);
     hud.setWorld(this->currentLevel);
-
     // Setup SoundController and Data event listeners
-    auto& events = Core::EventSystem::getInstance();
-    
-    events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("CoinSound"));
-        this->coins += 1;
-        this->score += 200;
-        if (this->coins >= 100) {
-            this->coins -= 100;
-            Core::EventSystem::getInstance().broadcast({Core::EventType::OneMoreLife});
-        }
-        this->hud.setCoins(this->coins);
-        this->hud.setScore(this->score);
-    });
-    
-    events.subscribe(Core::EventType::MushroomCollected, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("PowerUpSound"));
-        this->score += 1000;
-        this->hud.setScore(this->score);
-    });
-    
-    events.subscribe(Core::EventType::PlayerJumped, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("JumpSound"));
-    });
-    
-    events.subscribe(Core::EventType::PlayerDied, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("DieSound"));
-        this->lives = std::max(0, this->lives - 1);
-        this->hud.setLives(this->lives);
-    });
-
-    events.subscribe(Core::EventType::OneMoreLife, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
-        this->lives += 1;
-        this->hud.setLives(this->lives);
-    });
-
-    events.subscribe(Core::EventType::GameSaved, [this](const Core::Event&) {
-        this->hud.showToast("GAME SAVED!");
-    });
-
-    events.subscribe(Core::EventType::GameLoaded, [this](const Core::Event&) {
-        this->hud.showToast("GAME LOADED!");
-    });
-
+    registerEvents();
     // Artwork for every character the map file uses. 'H' and '1' are left out
     // on purpose: hidden blocks stay invisible until they are struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
@@ -376,6 +325,7 @@ void PlayState::pause() {
 void PlayState::resume() {
     heldKeys.clear();
     inputHandler.reset();
+    registerEvents();
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
@@ -2298,4 +2248,55 @@ void PlayState::drawDeadEnemies(sf::RenderWindow& window) const {
         
         window.draw(*sprite);
     }
+}
+
+void PlayState::registerEvents() {
+    auto& events = Core::EventSystem::getInstance();
+
+    events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("CoinSound"));
+        this->coins += 1;
+        this->score += 200;
+        if (this->coins >= 100) {
+            this->coins -= 100;
+            Core::EventSystem::getInstance().broadcast({Core::EventType::OneMoreLife});
+        }
+        this->hud.setCoins(this->coins);
+        this->hud.setScore(this->score);
+    });
+
+    events.subscribe(Core::EventType::MushroomCollected, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("PowerUpSound"));
+        this->score += 1000;
+        this->hud.setScore(this->score);
+    });
+
+    events.subscribe(Core::EventType::PlayerJumped, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("JumpSound"));
+    });
+
+    events.subscribe(Core::EventType::PlayerDied, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("DieSound"));
+        this->lives = std::max(0, this->lives - 1);
+        this->hud.setLives(this->lives);
+    });
+
+    events.subscribe(Core::EventType::OneMoreLife, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
+        this->lives += 1;
+        this->hud.setLives(this->lives);
+    });
+
+    events.subscribe(Core::EventType::GameSaved, [this](const Core::Event&) {
+        this->hud.showToast("GAME SAVED!");
+    });
+
+    events.subscribe(Core::EventType::GameLoaded, [this](const Core::Event&) {
+        this->hud.showToast("GAME LOADED!");
+    });
 }
