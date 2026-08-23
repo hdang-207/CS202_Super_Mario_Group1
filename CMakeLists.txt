@@ -38,6 +38,10 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE MARIO_SOURCE_DIR="${CMAKE_SOU
 # Liên kết các module của SFML vào dự án
 target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Window SFML::System SFML::Audio)
 
+if(MINGW)
+    target_link_options(${PROJECT_NAME} PRIVATE -mconsole)
+endif()
+
 # Trên macOS: SFML tạo surface OpenGL ở mật độ 1x nên màn Retina bị phóng to làm mờ.
 # File .mm dưới đây (Objective-C++) bật surface đúng độ phân giải màn hình.
 # Windows/Linux không cần, phần thân hàm nằm ở HighDpi.cpp và chỉ trả về 1.

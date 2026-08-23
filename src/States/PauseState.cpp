@@ -105,22 +105,22 @@ void PauseState::handleInput(const sf::Event& event) {
         return;
     }
 
-    sf::Keyboard::Key key = keyPressed->code;
+    const auto key = keyPressed->scancode;
 
-    if (key == sf::Keyboard::Key::Escape || key == sf::Keyboard::Key::P) {
+    if (key == sf::Keyboard::Scancode::Escape || key == sf::Keyboard::Scancode::P) {
         gsm.popState();
         return;
     }
 
-    if (key == sf::Keyboard::Key::Up || key == sf::Keyboard::Key::W) {
+    if (key == sf::Keyboard::Scancode::Up || key == sf::Keyboard::Scancode::W) {
         selectedIndex = (selectedIndex - 1 + static_cast<int>(menuLabels.size())) % static_cast<int>(menuLabels.size());
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         updateMenuLabels();
-    } else if (key == sf::Keyboard::Key::Down || key == sf::Keyboard::Key::S) {
+    } else if (key == sf::Keyboard::Scancode::Down || key == sf::Keyboard::Scancode::S) {
         selectedIndex = (selectedIndex + 1) % static_cast<int>(menuLabels.size());
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         updateMenuLabels();
-    } else if (key == sf::Keyboard::Key::Left || key == sf::Keyboard::Key::A) {
+    } else if (key == sf::Keyboard::Scancode::Left || key == sf::Keyboard::Scancode::A) {
         if (selectedIndex == 1) { // BGM Volume
             float vol = std::max(0.f, Systems::SoundController::getInstance().getMusicVolume() - 10.f);
             Systems::SoundController::getInstance().setMusicVolume(vol);
@@ -132,7 +132,7 @@ void PauseState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
-    } else if (key == sf::Keyboard::Key::Right || key == sf::Keyboard::Key::D) {
+    } else if (key == sf::Keyboard::Scancode::Right || key == sf::Keyboard::Scancode::D) {
         if (selectedIndex == 1) { // BGM Volume
             float vol = std::min(100.f, Systems::SoundController::getInstance().getMusicVolume() + 10.f);
             Systems::SoundController::getInstance().setMusicVolume(vol);
@@ -144,7 +144,7 @@ void PauseState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
-    } else if (key == sf::Keyboard::Key::Enter) {
+    } else if (key == sf::Keyboard::Scancode::Enter) {
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         switch (selectedIndex) {
             case 0: // RESUME GAME

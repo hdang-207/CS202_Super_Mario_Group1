@@ -127,10 +127,9 @@ bool Player::removeLatestPower() {
     if (m_powerStack.empty()) {
         return false;
     }
-
-    const PowerType removed = m_powerStack.back();
-    m_powerStack.pop_back();
-    if (removed == PowerType::Super) {
+    bool wasSuper = isSuper();
+    m_powerStack.clear();
+    if (wasSuper) {
         setSuperCollider(false);
     }
     return true;

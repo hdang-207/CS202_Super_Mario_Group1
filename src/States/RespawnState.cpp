@@ -53,9 +53,7 @@ void RespawnState::init() {
 
 void RespawnState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
-        if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space) {
-            displayTimer = 0.f; // Skip directly
-        }
+        displayTimer = 0.f; // Skip directly on any key
     }
 }
 

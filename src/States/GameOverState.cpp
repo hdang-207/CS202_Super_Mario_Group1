@@ -38,7 +38,7 @@ void GameOverState::init() {
 
 void GameOverState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
-        if (keyPressed->code == sf::Keyboard::Key::Enter) {
+        if (keyPressed->scancode == sf::Keyboard::Scancode::Enter) {
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         }
     }
