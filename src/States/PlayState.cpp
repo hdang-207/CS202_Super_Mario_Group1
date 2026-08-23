@@ -228,8 +228,10 @@ void PlayState::init() {
     updateCamera();
 
     std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
+#ifdef DEBUG_MODE
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
                  "through the level with A/D (hold Shift to go faster).\n";
+#endif
 }
 
 void PlayState::handleInput(const sf::Event& event) {
@@ -268,6 +270,7 @@ void PlayState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
+#ifdef DEBUG_MODE
         } else if (keyPressed->code == sf::Keyboard::Key::F) {
             freeLook = !freeLook;
             // Pick the scrolling up exactly where the camera already is, so the
@@ -277,6 +280,7 @@ void PlayState::handleInput(const sf::Event& event) {
                 maxCameraCenterX = std::max(maxCameraCenterX, camera.getCenter().x);
             }
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
+#endif
         } else if (keyPressed->code == sf::Keyboard::Key::F5) {
             if (SaveManager::saveProgress("savegame.txt", getSaveData())) {
                 Core::EventSystem::getInstance().broadcast({Core::EventType::GameSaved});
