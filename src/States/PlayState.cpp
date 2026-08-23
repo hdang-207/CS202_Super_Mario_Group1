@@ -151,6 +151,14 @@ void PlayState::init() {
         this->hud.setLives(this->lives);
     });
 
+    events.subscribe(Core::EventType::GameSaved, [this](const Core::Event&) {
+        this->hud.showToast("GAME SAVED!");
+    });
+
+    events.subscribe(Core::EventType::GameLoaded, [this](const Core::Event&) {
+        this->hud.showToast("GAME LOADED!");
+    });
+
     // Artwork for every character the map file uses. 'H' and '1' are left out
     // on purpose: hidden blocks stay invisible until they are struck.
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
@@ -271,12 +279,14 @@ void PlayState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Free look " << (freeLook ? "ON" : "OFF") << "\n";
         } else if (keyPressed->code == sf::Keyboard::Key::F5) {
             if (SaveManager::saveProgress("savegame.txt", getSaveData())) {
+                Core::EventSystem::getInstance().broadcast({Core::EventType::GameSaved});
                 std::cout << "[Core Engine] Quick Save successful (World "
                           << Config::worldNumber(currentLevel) << "-"
                           << Config::stageNumber(currentLevel) << ").\n";
             }
         } else if (keyPressed->code == sf::Keyboard::Key::F9) {
             if (quickLoad()) {
+                Core::EventSystem::getInstance().broadcast({Core::EventType::GameLoaded});
                 std::cout << "[Core Engine] Quick Load successful (World "
                           << Config::worldNumber(currentLevel) << "-"
                           << Config::stageNumber(currentLevel) << ").\n";

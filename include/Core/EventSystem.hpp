@@ -15,7 +15,9 @@ enum class EventType {
     PlayerJumped,
     PlayerDied,
     GameOver,
-    OneMoreLife
+    OneMoreLife,
+    GameSaved,
+    GameLoaded
 };
 
 /**

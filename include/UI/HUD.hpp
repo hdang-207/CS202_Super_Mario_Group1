@@ -79,6 +79,12 @@ public:
     int getCoins() const { return currentCoins; }
     int getLives() const { return currentLives; }
     float getTime() const { return timeRemaining; }
+
+    void showToast(const std::string& message);
+
+private:
+    std::optional<sf::Text> saveLoadNoticeText;
+    float noticeTimer{0.f};
 };
 
 } // namespace UI
