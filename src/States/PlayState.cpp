@@ -735,24 +735,30 @@ void PlayState::updateBullets(sf::Time dt) {
         }
 
         const sf::FloatRect bulletBounds = bullet.bounds();
+        bool hitEnemy = false;
+
+        auto hitEntities = m_entityManager.queryOverlapping(bulletBounds);
+        for (auto* ent : hitEntities) {
+            if (!ent || !ent->isAlive() || !ent->isActive()) continue;
+            if (dynamic_cast<entity::Character*>(ent)) {
+                ent->setAlive(false);
+                score += 200;
+                hud.setScore(score);
+                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
+                hitEnemy = true;
+                break;
+            }
+        }
+
+        if (hitEnemy) {
+            spawnExplosion(bullet.position());
+            bullet.deactivate();
+            continue;
+        }
+
         bool collided = tileMap.intersectsSolid(bulletBounds)
                      || bullet.position().x + entity::Bullet::kSize < cameraLeft
                      || bullet.position().x > cameraRight;
-
-        if (!collided) {
-            auto hitEntities = m_entityManager.queryOverlapping(bulletBounds);
-            for (auto* ent : hitEntities) {
-                if (!ent || !ent->isAlive() || !ent->isActive()) continue;
-                if (dynamic_cast<entity::Character*>(ent)) {
-                    ent->setAlive(false);
-                    score += 200;
-                    hud.setScore(score);
-                    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
-                    collided = true;
-                    break;
-                }
-            }
-        }
 
         if (collided) {
             spawnExplosion(bullet.position());
@@ -819,7 +825,11 @@ void PlayState::spawnBomb() {
 void PlayState::updateBomb(sf::Time dt) {
     if (activeBomb) {
         activeBomb->update(dt.asSeconds());
-        if (activeBomb->fuseExpired()) {
+
+        sf::FloatRect bombBounds = activeBomb->getBounds();
+        bool hitSolid = tileMap.intersectsSolid(bombBounds);
+
+        if (hitSolid || activeBomb->fuseExpired()) {
             explodeBomb(activeBomb->getPosition());
             activeBomb.reset();
         }

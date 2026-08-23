@@ -56,9 +56,6 @@ void CameraSystem::toggleFreeLook() {
 void CameraSystem::setFreeLook(bool enable) {
     m_freeLook = enable;
     m_freeLookCentre = m_view.getCenter();
-    if (!m_freeLook) {
-        m_maxCameraCenterX = std::max(m_maxCameraCenterX, m_view.getCenter().x);
-    }
     std::cout << "[Core Engine] Camera Free-look " << (m_freeLook ? "ON" : "OFF") << "\n";
 }
 
