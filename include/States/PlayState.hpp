@@ -169,6 +169,7 @@ private:
 
     bool moveAvatar(sf::Time dt);
 
+    void registerEvents();
 public:
     PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character);
     PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data);

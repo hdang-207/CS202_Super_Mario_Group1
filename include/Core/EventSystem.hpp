@@ -26,7 +26,9 @@ enum class EventType {
     BrickBroken,
     FireballShot,
     BombExploded,
-    LevelCompleted
+    LevelCompleted,
+    GameSaved,
+    GameLoaded
 };
 
 /**

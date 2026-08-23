@@ -69,9 +69,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->lives = data.lives;
 }
 
-PlayState::~PlayState() {
-    Core::EventSystem::getInstance().clearAllListeners();
-}
+PlayState::~PlayState() = default;
 
 void PlayState::init() {
     Core::EventSystem::getInstance().clearAllListeners();
@@ -85,49 +83,7 @@ void PlayState::init() {
     hud.setLives(this->lives);
     hud.setWorld(this->currentLevel);
 
-    // Setup SoundController and Data event listeners
-    auto& events = Core::EventSystem::getInstance();
-    
-    events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("CoinSound"));
-        this->coins += 1;
-        this->score += 200;
-        if (this->coins >= 100) {
-            this->coins -= 100;
-            Core::EventSystem::getInstance().broadcast(Core::Event(Core::EventType::OneMoreLife));
-        }
-        this->hud.setCoins(this->coins);
-        this->hud.setScore(this->score);
-    });
-    
-    events.subscribe(Core::EventType::MushroomCollected, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("PowerUpSound"));
-        this->score += 1000;
-        this->hud.setScore(this->score);
-    });
-    
-    events.subscribe(Core::EventType::PlayerJumped, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("JumpSound"));
-    });
-    
-    events.subscribe(Core::EventType::PlayerDied, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("DieSound"));
-        this->lives = std::max(0, this->lives - 1);
-        this->hud.setLives(this->lives);
-    });
-
-    events.subscribe(Core::EventType::OneMoreLife, [this](const Core::Event&) {
-        auto& sounds = Systems::SoundController::getInstance();
-        sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
-        this->lives += 1;
-        this->hud.setLives(this->lives);
-    });
-
-    // Artwork setup
+    registerEvents();
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
     tileMap.setTileTexture('C', assets.getTexture("CloudBlock"));
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
@@ -189,6 +145,57 @@ void PlayState::init() {
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll through the level with A/D (hold Shift to go faster).\n";
 }
 
+void PlayState::registerEvents() {
+    auto& events = Core::EventSystem::getInstance();
+    
+    events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("CoinSound"));
+        this->coins += 1;
+        this->score += 200;
+        if (this->coins >= 100) {
+            this->coins -= 100;
+            Core::EventSystem::getInstance().broadcast(Core::Event(Core::EventType::OneMoreLife));
+        }
+        this->hud.setCoins(this->coins);
+        this->hud.setScore(this->score);
+    });
+    
+    events.subscribe(Core::EventType::MushroomCollected, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("PowerUpSound"));
+        this->score += 1000;
+        this->hud.setScore(this->score);
+    });
+    
+    events.subscribe(Core::EventType::PlayerJumped, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("JumpSound"));
+    });
+    
+    events.subscribe(Core::EventType::PlayerDied, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("DieSound"));
+        this->lives = std::max(0, this->lives - 1);
+        this->hud.setLives(this->lives);
+    });
+
+    events.subscribe(Core::EventType::OneMoreLife, [this](const Core::Event&) {
+        auto& sounds = Systems::SoundController::getInstance();
+        sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
+        this->lives += 1;
+        this->hud.setLives(this->lives);
+    });
+
+    events.subscribe(Core::EventType::GameSaved, [this](const Core::Event&) {
+        this->hud.showToast("GAME SAVED!");
+    });
+
+    events.subscribe(Core::EventType::GameLoaded, [this](const Core::Event&) {
+        this->hud.showToast("GAME LOADED!");
+    });
+}
+
 void PlayState::handleInput(const sf::Event& event) {
     if (transitionPending) {
         return;
@@ -222,12 +229,14 @@ void PlayState::handleInput(const sf::Event& event) {
             m_cameraSystem.toggleFreeLook();
         } else if (keyPressed->scancode == sf::Keyboard::Scancode::F5) {
             if (SaveManager::saveProgress("savegame.txt", getSaveData())) {
+                Core::EventSystem::getInstance().broadcast({Core::EventType::GameSaved});
                 std::cout << "[Core Engine] Quick Save successful (World "
                           << Config::worldNumber(currentLevel) << "-"
                           << Config::stageNumber(currentLevel) << ").\n";
             }
         } else if (keyPressed->scancode == sf::Keyboard::Scancode::F9) {
             if (quickLoad()) {
+                Core::EventSystem::getInstance().broadcast({Core::EventType::GameLoaded});
                 std::cout << "[Core Engine] Quick Load successful (World "
                           << Config::worldNumber(currentLevel) << "-"
                           << Config::stageNumber(currentLevel) << ").\n";
@@ -393,6 +402,7 @@ void PlayState::resume() {
     isPaused = false;
     heldKeys.clear();
     inputHandler.reset();
+    registerEvents();
 }
 
 SaveData PlayState::getSaveData() const {
@@ -1419,3 +1429,4 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     return true;
 }
+

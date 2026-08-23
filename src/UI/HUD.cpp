@@ -68,6 +68,11 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     livesText->setFillColor(sf::Color::White);
     livesText->setPosition({1075.f, topMargin + 24.f});
     setLives(3);
+
+    // 6. Save/Load Toast
+    saveLoadNoticeText.emplace(font, "", fontSize);
+    saveLoadNoticeText->setFillColor(sf::Color::Yellow);
+    saveLoadNoticeText->setPosition({20.f, topMargin + 60.f}); // Display below score
 }
 
 void HUD::setCharacter(CharacterType charType) {
@@ -134,10 +139,21 @@ void HUD::addLives(int amount) {
     setLives(currentLives + amount);
 }
 
+void HUD::showToast(const std::string& message) {
+    if (saveLoadNoticeText) {
+        saveLoadNoticeText->setString(message);
+    }
+    noticeTimer = 1.5f;
+}
+
 void HUD::update(sf::Time dt) {
     if (timeRemaining > 0.f) {
         timeRemaining -= dt.asSeconds() * 2.5f; // Fast mario time
         setTime(timeRemaining);
+    }
+
+    if (noticeTimer > 0.f) {
+        noticeTimer -= dt.asSeconds();
     }
 }
 
@@ -156,6 +172,10 @@ void HUD::render(sf::RenderWindow& window) const {
     
     if (livesLabelText) window.draw(*livesLabelText);
     if (livesText) window.draw(*livesText);
+
+    if (saveLoadNoticeText && noticeTimer > 0.f) {
+        window.draw(*saveLoadNoticeText);
+    }
 }
 
 } // namespace UI
