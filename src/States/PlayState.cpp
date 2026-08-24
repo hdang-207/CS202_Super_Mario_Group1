@@ -71,7 +71,7 @@ namespace {
     constexpr int kWorld21BonusStartColumn = 293;
     constexpr int kWorld22EntrancePipeColumn = 15;
     constexpr int kWorld22WaterStartColumn = 37;
-    constexpr int kWorld22WaterEndColumn = 198;
+    constexpr int kWorld22WaterEndColumn = 197;
     constexpr int kWorld22WaterSurfaceRow = 2;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
