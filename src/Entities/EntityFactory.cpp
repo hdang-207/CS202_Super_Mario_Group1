@@ -6,7 +6,7 @@ WalkingData EntityFactory::createEnemyData(EnemyType type, const sf::Vector2f& s
     WalkingData data;
     data.type = type;
     data.position = spawnPos;
-    data.velocity = sf::Vector2f(-initialSpeed, 0.f);
+    data.velocity = {-initialSpeed, 0.f};
     return data;
 }
 
@@ -16,6 +16,38 @@ ItemData EntityFactory::createItemData(ItemType type, const sf::Vector2f& blockP
     data.blockPosition = blockPos;
     data.position = blockPos;
     return data;
+}
+
+std::unique_ptr<Goomba> EntityFactory::createGoomba(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* texture, GoombaType type, float initialSpeed) {
+    return std::make_unique<Goomba>(spawnPos, tileSize, texture, type, initialSpeed);
+}
+
+std::unique_ptr<Koopa> EntityFactory::createKoopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex, const sf::Texture* shellTex, KoopaKind kind, float initialSpeed) {
+    return std::make_unique<Koopa>(spawnPos, tileSize, walkTex, shellTex, kind, initialSpeed);
+}
+
+std::unique_ptr<Paratroopa> EntityFactory::createParatroopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex, const sf::Texture* shellTex, float initialSpeed, float bounceSpeed) {
+    return std::make_unique<Paratroopa>(spawnPos, tileSize, walkTex, shellTex, initialSpeed, bounceSpeed);
+}
+
+std::unique_ptr<PiranhaPlant> EntityFactory::createPiranhaPlant(const sf::Vector2f& basePos, float pipeTopY, const sf::Texture* texture, float scale) {
+    return std::make_unique<PiranhaPlant>(basePos, pipeTopY, texture, scale);
+}
+
+std::unique_ptr<CoinPop> EntityFactory::createCoinPop(const sf::Vector2f& blockPos, float tileSize, const sf::Texture* texture) {
+    return std::make_unique<CoinPop>(blockPos, tileSize, texture);
+}
+
+std::unique_ptr<items::Mushroom> EntityFactory::createMushroom(const sf::Vector2f& blockPos, items::MushroomKind kind, const sf::Texture* texture) {
+    return std::make_unique<items::Mushroom>(blockPos, kind, texture);
+}
+
+std::unique_ptr<items::FireFlower> EntityFactory::createFireFlower(const sf::Vector2f& blockPos, const sf::Texture* texture) {
+    return std::make_unique<items::FireFlower>(blockPos, texture);
+}
+
+std::unique_ptr<items::Star> EntityFactory::createStar(const sf::Vector2f& blockPos, const sf::Texture* texture) {
+    return std::make_unique<items::Star>(blockPos, texture);
 }
 
 } // namespace entity

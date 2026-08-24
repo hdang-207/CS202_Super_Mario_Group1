@@ -4,6 +4,7 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <vector>
 #include <string>
+#include <optional>
 
 class PlayState;
 
@@ -20,6 +21,10 @@ private:
     std::vector<sf::Text> menuTexts;
     std::vector<std::string> menuLabels;
     int selectedIndex{0};
+    
+    std::optional<sf::RectangleShape> saveNoticeBg;
+    std::optional<sf::Text> saveNoticeText;
+    float saveNoticeTimer{0.f};
 
     void updateMenuLabels();
 

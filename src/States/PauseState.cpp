@@ -5,6 +5,7 @@
 #include "Systems/SaveManager.hpp"
 #include "Systems/SoundController.hpp"
 #include "Core/Config.hpp"
+#include "Core/EventSystem.hpp"
 #include <iostream>
 #include <cmath>
 
@@ -54,6 +55,22 @@ void PauseState::init() {
     }
 
     updateMenuLabels();
+
+    saveNoticeText.emplace(assets.getFont("MarioFont"), "GAME SAVED!", 48);
+    saveNoticeText->setFillColor(sf::Color::Green);
+    saveNoticeText->setOutlineColor(sf::Color::Black);
+    saveNoticeText->setOutlineThickness(4.f);
+    sf::FloatRect sBounds = saveNoticeText->getLocalBounds();
+    saveNoticeText->setOrigin({sBounds.position.x + sBounds.size.x / 2.f, sBounds.position.y + sBounds.size.y / 2.f});
+    saveNoticeText->setPosition({Config::kViewWidth / 2.f, Config::kViewHeight / 2.f});
+
+    saveNoticeBg.emplace();
+    saveNoticeBg->setSize({sBounds.size.x + 80.f, sBounds.size.y + 60.f});
+    saveNoticeBg->setFillColor(sf::Color(0, 0, 0, 200));
+    saveNoticeBg->setOutlineColor(sf::Color::Green);
+    saveNoticeBg->setOutlineThickness(2.f);
+    saveNoticeBg->setOrigin({saveNoticeBg->getSize().x / 2.f, saveNoticeBg->getSize().y / 2.f});
+    saveNoticeBg->setPosition({Config::kViewWidth / 2.f, Config::kViewHeight / 2.f});
 }
 
 void PauseState::updateMenuLabels() {
@@ -88,22 +105,22 @@ void PauseState::handleInput(const sf::Event& event) {
         return;
     }
 
-    sf::Keyboard::Key key = keyPressed->code;
+    const auto key = keyPressed->scancode;
 
-    if (key == sf::Keyboard::Key::Escape || key == sf::Keyboard::Key::P) {
+    if (key == sf::Keyboard::Scancode::Escape || key == sf::Keyboard::Scancode::P) {
         gsm.popState();
         return;
     }
 
-    if (key == sf::Keyboard::Key::Up || key == sf::Keyboard::Key::W) {
+    if (key == sf::Keyboard::Scancode::Up || key == sf::Keyboard::Scancode::W) {
         selectedIndex = (selectedIndex - 1 + static_cast<int>(menuLabels.size())) % static_cast<int>(menuLabels.size());
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         updateMenuLabels();
-    } else if (key == sf::Keyboard::Key::Down || key == sf::Keyboard::Key::S) {
+    } else if (key == sf::Keyboard::Scancode::Down || key == sf::Keyboard::Scancode::S) {
         selectedIndex = (selectedIndex + 1) % static_cast<int>(menuLabels.size());
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         updateMenuLabels();
-    } else if (key == sf::Keyboard::Key::Left || key == sf::Keyboard::Key::A) {
+    } else if (key == sf::Keyboard::Scancode::Left || key == sf::Keyboard::Scancode::A) {
         if (selectedIndex == 1) { // BGM Volume
             float vol = std::max(0.f, Systems::SoundController::getInstance().getMusicVolume() - 10.f);
             Systems::SoundController::getInstance().setMusicVolume(vol);
@@ -115,7 +132,7 @@ void PauseState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
-    } else if (key == sf::Keyboard::Key::Right || key == sf::Keyboard::Key::D) {
+    } else if (key == sf::Keyboard::Scancode::Right || key == sf::Keyboard::Scancode::D) {
         if (selectedIndex == 1) { // BGM Volume
             float vol = std::min(100.f, Systems::SoundController::getInstance().getMusicVolume() + 10.f);
             Systems::SoundController::getInstance().setMusicVolume(vol);
@@ -127,7 +144,7 @@ void PauseState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
-    } else if (key == sf::Keyboard::Key::Enter) {
+    } else if (key == sf::Keyboard::Scancode::Enter) {
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         switch (selectedIndex) {
             case 0: // RESUME GAME
@@ -138,11 +155,13 @@ void PauseState::handleInput(const sf::Event& event) {
                 break;
             case 3: // SAVE PROGRESS
                 if (SaveManager::saveProgress("savegame.txt", playState.getSaveData())) {
+                    saveNoticeTimer = 1.5f;
                     std::cout << "[PauseState] Game progress saved successfully.\n";
                 }
                 break;
             case 4: // LOAD PROGRESS
                 if (playState.quickLoad()) {
+                    Core::EventSystem::getInstance().broadcast({Core::EventType::GameLoaded});
                     std::cout << "[PauseState] Game progress loaded successfully.\n";
                     gsm.popState();
                 }
@@ -155,6 +174,9 @@ void PauseState::handleInput(const sf::Event& event) {
 }
 
 void PauseState::update(sf::Time dt) {
+    if (saveNoticeTimer > 0.f) {
+        saveNoticeTimer -= dt.asSeconds();
+    }
 }
 
 void PauseState::render(sf::RenderWindow& window) {
@@ -164,5 +186,10 @@ void PauseState::render(sf::RenderWindow& window) {
 
     for (const auto& text : menuTexts) {
         window.draw(text);
+    }
+
+    if (saveNoticeTimer > 0.f) {
+        if (saveNoticeBg) window.draw(*saveNoticeBg);
+        if (saveNoticeText) window.draw(*saveNoticeText);
     }
 }

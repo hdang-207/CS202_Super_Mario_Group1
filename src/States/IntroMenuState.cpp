@@ -55,21 +55,21 @@ void IntroMenuState::handleInput(const sf::Event& event) {
         return;
     }
 
-    sf::Keyboard::Key key = keyPressed->code;
+    sf::Keyboard::Scancode key = keyPressed->scancode;
 
-    // Ignores system keys (Escape, Tab, CapsLock, F1-F12, Shift, Ctrl, Alt, System/Windows keys)
-    if (key == sf::Keyboard::Key::Escape || key == sf::Keyboard::Key::Tab ||
-        keyPressed->scancode == sf::Keyboard::Scancode::CapsLock ||
-        key == sf::Keyboard::Key::Backspace ||
-        key == sf::Keyboard::Key::LShift || key == sf::Keyboard::Key::RShift ||
-        key == sf::Keyboard::Key::LControl || key == sf::Keyboard::Key::RControl ||
-        key == sf::Keyboard::Key::LAlt || key == sf::Keyboard::Key::RAlt ||
-        key == sf::Keyboard::Key::LSystem || key == sf::Keyboard::Key::RSystem ||
-        (key >= sf::Keyboard::Key::F1 && key <= sf::Keyboard::Key::F12)) {
+    // Ignores system keys
+    if (key == sf::Keyboard::Scancode::Escape || key == sf::Keyboard::Scancode::Tab ||
+        key == sf::Keyboard::Scancode::CapsLock ||
+        key == sf::Keyboard::Scancode::Backspace ||
+        key == sf::Keyboard::Scancode::LShift || key == sf::Keyboard::Scancode::RShift ||
+        key == sf::Keyboard::Scancode::LControl || key == sf::Keyboard::Scancode::RControl ||
+        key == sf::Keyboard::Scancode::LAlt || key == sf::Keyboard::Scancode::RAlt ||
+        key == sf::Keyboard::Scancode::LSystem || key == sf::Keyboard::Scancode::RSystem ||
+        (key >= sf::Keyboard::Scancode::F1 && key <= sf::Keyboard::Scancode::F12)) {
         return;
     }
 
-    if (key == sf::Keyboard::Key::L) {
+    if (key == sf::Keyboard::Scancode::L) {
         Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         SaveData data;
         if (SaveManager::loadProgress("savegame.txt", data)) {

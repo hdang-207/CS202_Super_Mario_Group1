@@ -1,6 +1,5 @@
 #include "UI/HUD.hpp"
 #include "Core/Config.hpp"
-#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -41,17 +40,7 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     coinsText->setPosition({330.f, topMargin + 24.f});
     setCoins(0);
 
-    // 3. Ammo (between Coins and World, inside the existing HUD row)
-    ammoLabelText.emplace(font, "BULLET", fontSize);
-    ammoLabelText->setFillColor(sf::Color::White);
-    ammoLabelText->setPosition({430.f, topMargin});
-
-    ammoText.emplace(font, "", fontSize);
-    ammoText->setFillColor(sf::Color::White);
-    ammoText->setPosition({465.f, topMargin + 24.f});
-    setAmmo(3, 3);
-    
-    // 4. World (Center-Right)
+    // 3. World (Center-Right)
     worldLabelText.emplace(font, "WORLD", fontSize);
     worldLabelText->setFillColor(sf::Color::White);
     worldLabelText->setPosition({600.f, topMargin});
@@ -60,7 +49,7 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     worldText->setFillColor(sf::Color::White);
     worldText->setPosition({625.f, topMargin + 24.f});
     
-    // 5. Time (Center-Right to Right)
+    // 4. Time (Center-Right to Right)
     timeLabelText.emplace(font, "TIME", fontSize);
     timeLabelText->setFillColor(sf::Color::White);
     timeLabelText->setPosition({850.f, topMargin});
@@ -70,7 +59,7 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     timeText->setPosition({865.f, topMargin + 24.f});
     setTime(400.f);
     
-    // 6. Lives (Far Right)
+    // 5. Lives (Far Right)
     livesLabelText.emplace(font, "LIVES", fontSize);
     livesLabelText->setFillColor(sf::Color::White);
     livesLabelText->setPosition({1050.f, topMargin});
@@ -79,6 +68,11 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     livesText->setFillColor(sf::Color::White);
     livesText->setPosition({1075.f, topMargin + 24.f});
     setLives(3);
+
+    // 6. Save/Load Toast
+    saveLoadNoticeText.emplace(font, "", fontSize);
+    saveLoadNoticeText->setFillColor(sf::Color::Yellow);
+    saveLoadNoticeText->setPosition({20.f, topMargin + 60.f}); // Display below score
 }
 
 void HUD::setCharacter(CharacterType charType) {
@@ -145,19 +139,21 @@ void HUD::addLives(int amount) {
     setLives(currentLives + amount);
 }
 
-void HUD::setAmmo(int ammo, int maximum) {
-    maximumAmmo = std::max(0, maximum);
-    currentAmmo = std::clamp(ammo, 0, maximumAmmo);
-    if (ammoText) {
-        ammoText->setString(std::to_string(currentAmmo) + "/"
-                            + std::to_string(maximumAmmo));
+void HUD::showToast(const std::string& message) {
+    if (saveLoadNoticeText) {
+        saveLoadNoticeText->setString(message);
     }
+    noticeTimer = 1.5f;
 }
 
 void HUD::update(sf::Time dt) {
     if (timeRemaining > 0.f) {
         timeRemaining -= dt.asSeconds() * 2.5f; // Fast mario time
         setTime(timeRemaining);
+    }
+
+    if (noticeTimer > 0.f) {
+        noticeTimer -= dt.asSeconds();
     }
 }
 
@@ -168,9 +164,6 @@ void HUD::render(sf::RenderWindow& window) const {
     if (coinSprite) window.draw(*coinSprite);
     if (coinsText) window.draw(*coinsText);
 
-    if (ammoLabelText) window.draw(*ammoLabelText);
-    if (ammoText) window.draw(*ammoText);
-    
     if (worldLabelText) window.draw(*worldLabelText);
     if (worldText) window.draw(*worldText);
     
@@ -179,6 +172,10 @@ void HUD::render(sf::RenderWindow& window) const {
     
     if (livesLabelText) window.draw(*livesLabelText);
     if (livesText) window.draw(*livesText);
+
+    if (saveLoadNoticeText && noticeTimer > 0.f) {
+        window.draw(*saveLoadNoticeText);
+    }
 }
 
 } // namespace UI

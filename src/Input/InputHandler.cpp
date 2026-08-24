@@ -1,20 +1,20 @@
 #include "Input/InputHandler.hpp"
 
-void InputHandler::update(const std::set<sf::Keyboard::Key>& heldKeys) {
+void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
     reset();
 
-    const auto holding = [&heldKeys](sf::Keyboard::Key key) {
+    const auto holding = [&heldKeys](sf::Keyboard::Scancode key) {
         return heldKeys.count(key) > 0;
     };
-    const bool left = holding(sf::Keyboard::Key::A)
-                   || holding(sf::Keyboard::Key::Left);
-    const bool right = holding(sf::Keyboard::Key::D)
-                    || holding(sf::Keyboard::Key::Right);
-    const bool jump = holding(sf::Keyboard::Key::Space)
-                   || holding(sf::Keyboard::Key::W)
-                   || holding(sf::Keyboard::Key::Up);
-    const bool crouch = holding(sf::Keyboard::Key::S)
-                     || holding(sf::Keyboard::Key::Down);
+    const bool left = holding(sf::Keyboard::Scancode::A)
+                   || holding(sf::Keyboard::Scancode::Left);
+    const bool right = holding(sf::Keyboard::Scancode::D)
+                    || holding(sf::Keyboard::Scancode::Right);
+    const bool jump = holding(sf::Keyboard::Scancode::Space)
+                   || holding(sf::Keyboard::Scancode::W)
+                   || holding(sf::Keyboard::Scancode::Up);
+    const bool crouch = holding(sf::Keyboard::Scancode::S)
+                     || holding(sf::Keyboard::Scancode::Down);
 
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);

@@ -60,14 +60,15 @@ void VictoryState::init() {
 
 void VictoryState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
-        if (keyPressed->code == sf::Keyboard::Key::Enter) {
+        const auto code = keyPressed->scancode;
+        if (code == sf::Keyboard::Scancode::Enter) {
             if (progress.currentLevel >= Config::kFinalLevel) {
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
             } else {
                 progress.currentLevel++;
                 gsm.changeState(std::make_unique<PlayState>(gsm, assets, progress));
             }
-        } else if (keyPressed->code == sf::Keyboard::Key::S
+        } else if (code == sf::Keyboard::Scancode::S
                    && progress.currentLevel < Config::kFinalLevel) {
             // Save and return to menu
             progress.currentLevel++; // Save next level's progress

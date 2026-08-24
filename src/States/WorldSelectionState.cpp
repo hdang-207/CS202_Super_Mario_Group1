@@ -92,25 +92,25 @@ void WorldSelectionState::startSelectedWorld() {
 
 void WorldSelectionState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
-        const sf::Keyboard::Key key = keyPressed->code;
-        if (key == sf::Keyboard::Key::Up || key == sf::Keyboard::Key::W) {
+        const auto key = keyPressed->scancode;
+        if (key == sf::Keyboard::Scancode::Up || key == sf::Keyboard::Scancode::W) {
             chooseWorld(selectedWorld == 1 ? Config::kWorldCount : selectedWorld - 1);
-        } else if (key == sf::Keyboard::Key::Down || key == sf::Keyboard::Key::S) {
+        } else if (key == sf::Keyboard::Scancode::Down || key == sf::Keyboard::Scancode::S) {
             chooseWorld(selectedWorld == Config::kWorldCount ? 1 : selectedWorld + 1);
-        } else if (key == sf::Keyboard::Key::Num1
-                   || key == sf::Keyboard::Key::Numpad1) {
+        } else if (key == sf::Keyboard::Scancode::Num1
+                   || key == sf::Keyboard::Scancode::Numpad1) {
             chooseWorld(1);
-        } else if (key == sf::Keyboard::Key::Num2
-                   || key == sf::Keyboard::Key::Numpad2) {
+        } else if (key == sf::Keyboard::Scancode::Num2
+                   || key == sf::Keyboard::Scancode::Numpad2) {
             chooseWorld(2);
-        } else if (key == sf::Keyboard::Key::Num3
-                   || key == sf::Keyboard::Key::Numpad3) {
+        } else if (key == sf::Keyboard::Scancode::Num3
+                   || key == sf::Keyboard::Scancode::Numpad3) {
             chooseWorld(3);
-        } else if (key == sf::Keyboard::Key::Enter
-                   || key == sf::Keyboard::Key::Space) {
+        } else if (key == sf::Keyboard::Scancode::Enter
+                   || key == sf::Keyboard::Scancode::Space) {
             startSelectedWorld();
-        } else if (key == sf::Keyboard::Key::B
-                   || key == sf::Keyboard::Key::Escape) {
+        } else if (key == sf::Keyboard::Scancode::B
+                   || key == sf::Keyboard::Scancode::Escape) {
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("SelectSound"));
             gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));

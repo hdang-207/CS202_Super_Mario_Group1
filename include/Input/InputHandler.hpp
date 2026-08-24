@@ -13,7 +13,7 @@ public:
      * Using window events avoids macOS Input Monitoring permission requirements
      * that can make global sf::Keyboard polling report every key as released.
      */
-    void update(const std::set<sf::Keyboard::Key>& heldKeys);
+    void update(const std::set<sf::Keyboard::Scancode>& heldKeys);
 
     void reset();
 

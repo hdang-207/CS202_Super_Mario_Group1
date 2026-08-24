@@ -54,8 +54,10 @@ namespace Systems {
                 return true;
             }
 
+            _bgMusic.stop();
             if (!_bgMusic.openFromFile(filePath)) {
                 std::cerr << "[SoundController] Error: Could not load music file: " << filePath << "\n";
+                _currentMusicPath.clear();
                 return false;
             }
             _currentMusicPath = filePath;
