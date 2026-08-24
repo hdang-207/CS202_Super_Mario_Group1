@@ -81,14 +81,12 @@ namespace {
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
-      m_physicsSystem(kGravity, kMaxFallSpeed),
-      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {}
+      m_physicsSystem(kGravity, kMaxFallSpeed) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
       camera(sf::FloatRect({0.f, 0.f}, {Config::kViewWidth, Config::kViewHeight})),
-      m_physicsSystem(kGravity, kMaxFallSpeed),
-      avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"))
+      m_physicsSystem(kGravity, kMaxFallSpeed)
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
@@ -219,7 +217,7 @@ void PlayState::init() {
     float tile = tileMap.tileSize();
     avatar.setSize({tile * 0.7f, tile * 0.95f});
     avatar.setFillColor(sf::Color::Transparent);
-    avatarSprite.setTexture(assets.getTexture(selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"));
+    animator.init(assets, selectedCharacter);
     respawnAvatar();
     updateCamera();
 
@@ -296,6 +294,16 @@ void PlayState::update(sf::Time dt) {
 
     // Update the Input pressing from Command Pattern
     inputHandler.update(heldKeys);
+
+    // Growing takes the level out of the player's hands for a moment.
+    // Everything else stays frozen so the flash reads clearly, and so a
+    // mushroom taken under a low ceiling cannot shove Mario through it.
+    if (animator.isTransforming()) {
+        animator.update(dt);
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
 
     damageProtectionRemaining = std::max(
         0.f, damageProtectionRemaining - dt.asSeconds());
@@ -392,21 +400,80 @@ sf::FloatRect PlayState::avatarBounds() const {
 }
 
 void PlayState::syncAvatarPowerVisuals() {
-    auto& body = m_player->getPhysicsBody();
-    const sf::Vector2f position = body.getPosition();
-    const sf::Vector2f colliderSize = body.getColliderSize();
-    const float feetY = position.y + colliderSize.y;
-    avatar.setSize(colliderSize);
-    avatar.setPosition(position);
+    const auto& body = m_player->getPhysicsBody();
+    avatar.setSize(body.getColliderSize());
+    avatar.setPosition(body.getPosition());
+    // Starts the grow/shrink flash when the form actually changed, and does
+    // nothing at all when it did not.
+    animator.setForm(currentPlayerForm());
+}
 
-    // The available character art is shared between forms. Keep its existing
-    // bottom-centred convention and scale it to the new collider immediately.
-    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
-    const float scale = spriteBounds.size.y > 0.f
-        ? (colliderSize.y * 1.5f / spriteBounds.size.y)
-        : 1.f;
-    avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({position.x + colliderSize.x / 2.f, feetY});
+entity::PlayerForm PlayState::currentPlayerForm() const {
+    // Height is decided by the collider, never by Fire alone: the two-tile
+    // artwork may only be used while the body is the two-tile one.
+    if (!m_player->isSuper()) {
+        return entity::PlayerForm::Small;
+    }
+    return m_player->hasFirePower() ? entity::PlayerForm::Fire
+                                    : entity::PlayerForm::Super;
+}
+
+sf::Vector2f PlayState::avatarFeetCentre() const {
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return {bounds.left() + bounds.size.x / 2.f, bounds.bottom()};
+}
+
+void PlayState::updateAvatarAnimation(sf::Time dt, bool underwater) {
+    const physics::PhysicsBody& body = m_player->getPhysicsBody();
+    const sf::Vector2f velocity = body.getVelocity();
+    const PlayerInput& playerInput = inputHandler.getPlayerInput();
+    const float speed = std::abs(velocity.x);
+    const float topSpeed = m_player->getMovementConfig().moveSpeed;
+
+    // Steering hard against your own momentum is a skid, not a walk: the legs
+    // are still going one way while Mario already leans the other.
+    const bool skidding = body.isGrounded()
+        && playerInput.moveAxis != 0.f
+        && speed > topSpeed * 0.25f
+        && (playerInput.moveAxis > 0.f) != (velocity.x > 0.f);
+
+    if (skidding) {
+        facingRight = playerInput.moveAxis > 0.f;
+    } else if (speed > 10.f) {
+        facingRight = velocity.x > 0.f;
+    } else if (playerInput.moveAxis != 0.f) {
+        facingRight = playerInput.moveAxis > 0.f;
+    }
+
+    entity::PlayerAction action = entity::PlayerAction::Idle;
+    if (underwater) {
+        action = entity::PlayerAction::Swim;
+    } else if (!body.isGrounded()) {
+        action = velocity.y < 0.f ? entity::PlayerAction::Jump
+                                  : entity::PlayerAction::Fall;
+    } else if (m_player->isCrouching()) {
+        action = entity::PlayerAction::Crouch;
+    } else if (skidding) {
+        action = entity::PlayerAction::Skid;
+    } else if (speed > 10.f) {
+        action = entity::PlayerAction::Walk;
+    }
+
+    animator.setAction(action);
+    animator.setFacingRight(facingRight);
+    animator.setSpeedRatio(topSpeed > 0.f ? speed / topSpeed : 0.f);
+    animator.setForm(currentPlayerForm());
+    // A Starman already makes the avatar unmistakable, so the damage blink
+    // stays out of its way rather than fighting it for the same pixels.
+    animator.setStarPower(starPowerRemaining > 0.f);
+    animator.setBlinking(starPowerRemaining <= 0.f
+        && (damageProtectionRemaining > 0.f || invincibleTimer > 0.f));
+    animator.update(dt);
+
+    if (animator.consumeFootstep()) {
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("WalkingSound"));
+    }
 }
 
 void PlayState::playLevelMusic() {
@@ -1569,6 +1636,8 @@ void PlayState::respawnAvatar() {
     } else {
         m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
     }
+    facingRight = true;
+    animator.reset(entity::PlayerForm::Small);
     syncAvatarPowerVisuals();
 }
 
@@ -1927,57 +1996,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
     }
 
     avatar.setPosition(body.getPosition());
-
-    // --- Update Avatar Movement Animation & Facing Direction ---
-    if (body.getVelocity().x > 10.f) {
-        facingRight = true;
-    } else if (body.getVelocity().x < -10.f) {
-        facingRight = false;
-    }
-
-    std::string prefix = (m_player->hasFirePower() ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
-
-    if (!body.isGrounded()) {
-        // Jumping state
-        avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
-    }
-    else if (std::abs(body.getVelocity().x) > 10.f) {
-        // Running state (cycle Idle -> Run1 -> Run2 -> Run1)
-        runAnimTimer += dt.asSeconds();
-        if (runAnimTimer >= 0.08f) {
-            runAnimTimer = 0.0f;
-            currentRunStep = (currentRunStep + 1) % 4;
-            
-            // Play walking sound on specific steps when on the ground
-            if (currentRunStep == 1 || currentRunStep == 3) {
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("WalkingSound"));
-            }
-        }
-        const std::string runTexKeys[] = {prefix + "Idle", prefix + "Run1", prefix + "Run2", prefix + "Run1"};
-        avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
-    }
-    else {
-        // Idle state
-        runAnimTimer = 0.0f;
-        currentRunStep = 0;
-        avatarSprite.setTexture(assets.getTexture(prefix + "Idle"));
-    }
-
-    // Reset texture rect to full size of currently active texture
-    sf::Vector2u texSize = avatarSprite.getTexture().getSize();
-    avatarSprite.setTextureRect(sf::IntRect({0, 0}, {(int)texSize.x, (int)texSize.y}));
-
-    sf::FloatRect sb = avatarSprite.getLocalBounds();
-    // Align sprite origin at bottom-center so feet rest perfectly on top of ground tiles
-    avatarSprite.setOrigin({sb.position.x + sb.size.x / 2.f, sb.position.y + sb.size.y});
-
-    float targetHeight = avatar.getSize().y * 1.5f;
-    float scaleY = (sb.size.y > 0.f) ? (targetHeight / sb.size.y) : 1.f;
-    float scaleX = facingRight ? scaleY : -scaleY;
-
-    avatarSprite.setScale({scaleX, scaleY});
-    position = body.getPosition();
-    avatarSprite.setPosition({position.x + size.x / 2.f, position.y + size.y});
+    updateAvatarAnimation(dt, underwater);
     return true;
 }
 
@@ -2130,7 +2149,7 @@ void PlayState::render(sf::RenderWindow& window) {
     drawWalkingEnemies(window);
     drawDeadEnemies(window);
     drawBlocks(window);
-    window.draw(avatarSprite);
+    animator.draw(window, avatarFeetCentre());
     drawExplosions(window);
 
     window.setView(screenView);
@@ -2253,8 +2272,7 @@ bool PlayState::quickLoad() {
             hud.setScore(score);
             hud.setCoins(coins);
             hud.setLives(lives);
-            avatarSprite.setTexture(assets.getTexture(
-                selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"), true);
+            animator.init(assets, selectedCharacter);
             freeLook = false;
             isPaused = false;
             heldKeys.clear();

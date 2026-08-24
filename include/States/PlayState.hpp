@@ -16,6 +16,7 @@
 #include "Physics/PhysicsBody.hpp"
 #include "Player/Player.hpp"
 #include "Player/Mario.hpp"
+#include "Player/PlayerAnimator.hpp"
 #include "Player/Luigi.hpp"
 #include <cstddef>
 #include <random>
@@ -61,10 +62,11 @@ private:
     // meant to be deleted once that lands - TileMap below is the piece that
     // stays, and is what the real physics code should collide against.
     sf::RectangleShape avatar;
-    sf::Sprite avatarSprite;
+
+    /// Owns the avatar's artwork: which form, which pose, and every flash.
+    entity::PlayerAnimator animator;
+
     bool facingRight{true};
-    float runAnimTimer{0.f};
-    int currentRunStep{0};
     float invincibleTimer{0.f}; ///< Brief invincibility after Fire downgrade
     float starPowerRemaining{0.f}; ///< Starman duration; touching enemies defeats them.
 
@@ -212,6 +214,15 @@ private:
 
     /// @brief Syncs PlayState-owned visuals with Player-owned form and collider state.
     void syncAvatarPowerVisuals();
+
+    /// @brief Which sprite sheet the current power stack should be drawn from.
+    [[nodiscard]] entity::PlayerForm currentPlayerForm() const;
+
+    /// @brief World position the avatar's feet stand on, for the animator.
+    [[nodiscard]] sf::Vector2f avatarFeetCentre() const;
+
+    /// @brief Chooses this frame's pose from the physics body and surroundings.
+    void updateAvatarAnimation(sf::Time dt, bool underwater);
 
     /// @brief Applies one life loss and either restarts the level or opens Game Over.
     void handlePlayerDeath();
