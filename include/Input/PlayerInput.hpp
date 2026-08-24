@@ -7,5 +7,8 @@ struct PlayerInput {
 
     // True while the player holds the jump key
     bool jumpHeld{false};
+
+    // True while the player holds the crouch key (Super and Fire forms duck)
+    bool crouchHeld{false};
 };
 

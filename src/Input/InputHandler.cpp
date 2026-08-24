@@ -13,6 +13,8 @@ void InputHandler::update(const std::set<sf::Keyboard::Key>& heldKeys) {
     const bool jump = holding(sf::Keyboard::Key::Space)
                    || holding(sf::Keyboard::Key::W)
                    || holding(sf::Keyboard::Key::Up);
+    const bool crouch = holding(sf::Keyboard::Key::S)
+                     || holding(sf::Keyboard::Key::Down);
 
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);
@@ -24,6 +26,10 @@ void InputHandler::update(const std::set<sf::Keyboard::Key>& heldKeys) {
 
     if (jump) {
         m_jumpCommand.execute(m_playerInput);
+    }
+
+    if (crouch) {
+        m_crouchCommand.execute(m_playerInput);
     }
 }
 
