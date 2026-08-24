@@ -51,6 +51,11 @@ namespace {
     constexpr float kGoombaStompBounce = 550.f;
     constexpr float kDamageProtectionDuration = 0.75f;
 
+    /// Death animation: hold still, hop, then drop off the bottom of the screen.
+    constexpr float kDeathPauseDuration = 0.5f;
+    constexpr float kDeathHopSpeed = 900.f;
+    constexpr float kDeathSequenceTimeout = 3.5f;
+
     constexpr float kBulletSpeed = 500.f;
     constexpr float kBulletLifetime = 2.f;
     constexpr float kShootCooldown = 0.25f;
@@ -227,7 +232,7 @@ void PlayState::init() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
-    if (transitionPending) {
+    if (transitionPending || death.active) {
         return;
     }
 
@@ -295,9 +300,15 @@ void PlayState::update(sf::Time dt) {
     // Update the Input pressing from Command Pattern
     inputHandler.update(heldKeys);
 
-    // Growing takes the level out of the player's hands for a moment.
-    // Everything else stays frozen so the flash reads clearly, and so a
-    // mushroom taken under a low ceiling cannot shove Mario through it.
+    // Dying and growing both take the level out of the player's hands for a
+    // moment. Everything else stays frozen so the animation reads clearly and
+    // so a mushroom taken under a low ceiling cannot shove Mario through it.
+    if (death.active) {
+        updateDeathSequence(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
     if (animator.isTransforming()) {
         animator.update(dt);
         tileMap.update(dt);
@@ -483,15 +494,73 @@ void PlayState::playLevelMusic() {
 }
 
 void PlayState::handlePlayerDeath() {
-    Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
+    if (death.active) {
+        return;
+    }
 
-    SaveData data = getSaveData();
+    Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerDied});
+    Systems::SoundController::getInstance().stopMusic();
+
+    auto& body = m_player->getPhysicsBody();
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+
+    starPowerRemaining = 0.f;
+    damageProtectionRemaining = 0.f;
+    invincibleTimer = 0.f;
+    animator.setStarPower(false);
+    animator.setBlinking(false);
+    animator.setAction(entity::PlayerAction::Dead);
+
+    death.active = true;
+    death.elapsed = 0.f;
+    death.velocityY = 0.f;
+
+    // Falling into a pit is already the death fall, so it skips straight past
+    // the pause and the hop instead of bouncing Mario back up out of the hole.
+    if (body.getPosition().y >= tileMap.pixelHeight()) {
+        death.elapsed = kDeathPauseDuration;
+        death.velocityY = kMaxFallSpeed;
+    }
+
     std::cout << "[Core Engine] Player died in World "
               << Config::worldNumber(currentLevel) << "-"
               << Config::stageNumber(currentLevel)
-              << ". Transitioning to RespawnState. Lives remaining: " << lives << "\n";
-    transitionPending = true;
-    gsm.changeState(std::make_unique<RespawnState>(gsm, assets, data));
+              << ". Lives remaining: " << lives << "\n";
+}
+
+void PlayState::updateDeathSequence(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float previousElapsed = death.elapsed;
+    death.elapsed += seconds;
+
+    animator.setAction(entity::PlayerAction::Dead);
+    animator.update(dt);
+    tileMap.update(dt);
+
+    // A beat of stillness first: the sting is meant to be heard before Mario
+    // moves at all.
+    if (death.elapsed < kDeathPauseDuration) {
+        return;
+    }
+    if (previousElapsed < kDeathPauseDuration) {
+        death.velocityY = -kDeathHopSpeed;
+    }
+
+    death.velocityY = std::min(kMaxFallSpeed, death.velocityY + kGravity * seconds);
+    auto& body = m_player->getPhysicsBody();
+    sf::Vector2f position = body.getPosition();
+    position.y += death.velocityY * seconds;
+    body.setPosition(position);
+
+    // No collisions on the way down: Mario drops straight through the level.
+    const float cameraBottom = camera.getCenter().y + Config::kViewHeight / 2.f;
+    if (position.y > cameraBottom + tileMap.tileSize()
+        || death.elapsed > kDeathSequenceTimeout) {
+        transitionPending = true;
+        gsm.changeState(std::make_unique<RespawnState>(gsm, assets, getSaveData()));
+    }
 }
 
 bool PlayState::loadLevel(int level) {
@@ -1637,6 +1706,7 @@ void PlayState::respawnAvatar() {
         m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
     }
     facingRight = true;
+    death = DeathSequence{};
     animator.reset(entity::PlayerForm::Small);
     syncAvatarPowerVisuals();
 }

@@ -73,6 +73,18 @@ private:
     float damageProtectionRemaining{0.f};
     bool swimButtonHeld{false}; ///< Rising-edge latch for repeated World 2-2 swim strokes.
 
+    /**
+     * The original game does not cut away the instant Mario is hit: he stops,
+     * hangs there for a beat, hops, and only then drops off the bottom of the
+     * screen. Everything else is frozen while this plays.
+     */
+    struct DeathSequence {
+        bool active{false};
+        float elapsed{0.f};
+        float velocityY{0.f};
+    };
+    DeathSequence death;
+
     struct CoinPop {
         sf::Vector2f position;
         float velocityY;
@@ -224,8 +236,11 @@ private:
     /// @brief Chooses this frame's pose from the physics body and surroundings.
     void updateAvatarAnimation(sf::Time dt, bool underwater);
 
-    /// @brief Applies one life loss and either restarts the level or opens Game Over.
+    /// @brief Starts the death animation; the level keeps running until it ends.
     void handlePlayerDeath();
+
+    /// @brief Advances the death animation and leaves for RespawnState at its end.
+    void updateDeathSequence(sf::Time dt);
 
     /// @brief Starts the background theme matching the current level.
     void playLevelMusic();
