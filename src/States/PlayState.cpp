@@ -223,7 +223,7 @@ void PlayState::init() {
     respawnAvatar();
     updateCamera();
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Down/S to duck, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll "
                  "through the level with A/D (hold Shift to go faster).\n";
 }

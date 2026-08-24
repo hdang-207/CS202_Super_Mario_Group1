@@ -63,6 +63,16 @@ public:
     void applyPower(PowerType power);
     bool removeLatestPower();
 
+    /**
+     * @brief Ducks or stands the player back up.
+     *
+     * Only the Super and Fire forms can duck, and only with both feet on the
+     * ground - crouching mid-jump would freeze Mario in the air.
+     */
+    void setCrouching(bool crouching) noexcept;
+
+    [[nodiscard]] bool isCrouching() const noexcept;
+
     [[nodiscard]] bool hasPower(PowerType power) const noexcept;
     [[nodiscard]] bool isSuper() const noexcept;
     [[nodiscard]] bool hasFirePower() const noexcept;
@@ -78,6 +88,7 @@ private:
     PlayerMovementConfig m_movementConfig{};
     std::unique_ptr<PlayerState> m_currentState;
     bool m_jumpWasHeldLastFrame{false};
+    bool m_crouching{false};
     sf::Vector2f m_smallColliderSize{};
     std::vector<PowerType> m_powerStack;
 };
