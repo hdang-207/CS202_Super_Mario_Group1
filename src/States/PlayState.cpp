@@ -35,6 +35,11 @@ namespace {
     constexpr float kGoombaStompBounce = 550.f;
     constexpr float kDamageProtectionDuration = 0.75f;
 
+    /// Death animation: hold still, hop, then drop off the bottom of the screen.
+    constexpr float kDeathPauseDuration = 0.5f;
+    constexpr float kDeathHopSpeed = 900.f;
+    constexpr float kDeathSequenceTimeout = 3.5f;
+
     constexpr float kBombExplosionRadius = 72.f;
     constexpr float kBulletSpeed = 420.f;
     constexpr float kBulletLifetime = 1.2f;
@@ -47,7 +52,7 @@ namespace {
     constexpr int kWorld21BonusStartColumn = 293;
     constexpr int kWorld22EntrancePipeColumn = 15;
     constexpr int kWorld22WaterStartColumn = 37;
-    constexpr int kWorld22WaterEndColumn = 198;
+    constexpr int kWorld22WaterEndColumn = 197;
     constexpr int kWorld22WaterSurfaceRow = 2;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
@@ -55,13 +60,11 @@ namespace {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
-      m_physicsSystem(kGravity, kMaxFallSpeed),
-      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {}
+      m_physicsSystem(kGravity, kMaxFallSpeed) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
-      m_physicsSystem(kGravity, kMaxFallSpeed),
-      avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"))
+      m_physicsSystem(kGravity, kMaxFallSpeed)
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
@@ -137,11 +140,11 @@ void PlayState::init() {
     float tile = tileMap.tileSize();
     avatar.setSize({tile * 0.7f, tile * 0.95f});
     avatar.setFillColor(sf::Color::Transparent);
-    avatarSprite.setTexture(assets.getTexture(selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"));
+    animator.init(assets, selectedCharacter);
     respawnAvatar();
     m_cameraSystem.followTarget(m_player ? m_player->getPosition() : avatar.getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Down/S to duck, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll through the level with A/D (hold Shift to go faster).\n";
 }
 
@@ -197,7 +200,7 @@ void PlayState::registerEvents() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
-    if (transitionPending) {
+    if (transitionPending || death.active) {
         return;
     }
 
@@ -251,6 +254,22 @@ void PlayState::update(sf::Time dt) {
     }
 
     inputHandler.update(heldKeys);
+
+    // Dying and growing both take the level out of the player's hands for a
+    // moment. Everything else stays frozen so the animation reads clearly and
+    // so a mushroom taken under a low ceiling cannot shove Mario through it.
+    if (death.active) {
+        updateDeathSequence(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
+    if (animator.isTransforming()) {
+        animator.update(dt);
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
 
     damageProtectionRemaining = std::max(0.f, damageProtectionRemaining - dt.asSeconds());
     starPowerRemaining = std::max(0.f, starPowerRemaining - dt.asSeconds());
@@ -384,7 +403,7 @@ void PlayState::render(sf::RenderWindow& window) {
     drawBomb(window);
     drawBullets(window);
     drawBlocks(window);
-    window.draw(avatarSprite);
+    animator.draw(window, avatarFeetCentre());
     drawExplosions(window);
 
     window.setView(screenView);
@@ -428,8 +447,7 @@ bool PlayState::quickLoad() {
             hud.setScore(score);
             hud.setCoins(coins);
             hud.setLives(lives);
-            avatarSprite.setTexture(assets.getTexture(
-                selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"), true);
+            animator.init(assets, selectedCharacter);
             m_cameraSystem.setFreeLook(false);
             isPaused = false;
             heldKeys.clear();
@@ -456,29 +474,151 @@ sf::FloatRect PlayState::avatarBounds() const {
 
 void PlayState::syncAvatarPowerVisuals() {
     if (!m_player) return;
-    auto& body = m_player->getPhysicsBody();
-    const sf::Vector2f position = body.getPosition();
-    const sf::Vector2f colliderSize = body.getColliderSize();
-    const float feetY = position.y + colliderSize.y;
-    avatar.setSize(colliderSize);
-    avatar.setPosition(position);
+    const auto& body = m_player->getPhysicsBody();
+    avatar.setSize(body.getColliderSize());
+    avatar.setPosition(body.getPosition());
+    // Starts the grow/shrink flash when the form actually changed, and does
+    // nothing at all when it did not.
+    animator.setForm(currentPlayerForm());
+}
 
-    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
-    const float scale = spriteBounds.size.y > 0.f
-        ? (colliderSize.y * 1.5f / spriteBounds.size.y)
-        : 1.f;
-    avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({position.x + colliderSize.x / 2.f, feetY});
+entity::PlayerForm PlayState::currentPlayerForm() const {
+    // Height is decided by the collider, never by Fire alone: the two-tile
+    // artwork may only be used while the body is the two-tile one.
+    if (!m_player->isSuper()) {
+        return entity::PlayerForm::Small;
+    }
+    return m_player->hasFirePower() ? entity::PlayerForm::Fire
+                                    : entity::PlayerForm::Super;
+}
+
+sf::Vector2f PlayState::avatarFeetCentre() const {
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return {bounds.left() + bounds.size.x / 2.f, bounds.bottom()};
+}
+
+void PlayState::updateAvatarAnimation(sf::Time dt, bool underwater) {
+    const physics::PhysicsBody& body = m_player->getPhysicsBody();
+    const sf::Vector2f velocity = body.getVelocity();
+    const PlayerInput& playerInput = inputHandler.getPlayerInput();
+    const float speed = std::abs(velocity.x);
+    const float topSpeed = m_player->getMovementConfig().moveSpeed;
+
+    // Steering hard against your own momentum is a skid, not a walk: the legs
+    // are still going one way while Mario already leans the other.
+    const bool skidding = body.isGrounded()
+        && playerInput.moveAxis != 0.f
+        && speed > topSpeed * 0.25f
+        && (playerInput.moveAxis > 0.f) != (velocity.x > 0.f);
+
+    if (skidding) {
+        facingRight = playerInput.moveAxis > 0.f;
+    } else if (speed > 10.f) {
+        facingRight = velocity.x > 0.f;
+    } else if (playerInput.moveAxis != 0.f) {
+        facingRight = playerInput.moveAxis > 0.f;
+    }
+
+    entity::PlayerAction action = entity::PlayerAction::Idle;
+    if (underwater) {
+        action = entity::PlayerAction::Swim;
+    } else if (!body.isGrounded()) {
+        action = velocity.y < 0.f ? entity::PlayerAction::Jump
+                                  : entity::PlayerAction::Fall;
+    } else if (m_player->isCrouching()) {
+        action = entity::PlayerAction::Crouch;
+    } else if (skidding) {
+        action = entity::PlayerAction::Skid;
+    } else if (speed > 10.f) {
+        action = entity::PlayerAction::Walk;
+    }
+
+    animator.setAction(action);
+    animator.setFacingRight(facingRight);
+    animator.setSpeedRatio(topSpeed > 0.f ? speed / topSpeed : 0.f);
+    animator.setForm(currentPlayerForm());
+    // A Starman already makes the avatar unmistakable, so the damage blink
+    // stays out of its way rather than fighting it for the same pixels.
+    animator.setStarPower(starPowerRemaining > 0.f);
+    animator.setBlinking(starPowerRemaining <= 0.f
+        && (damageProtectionRemaining > 0.f || invincibleTimer > 0.f));
+    animator.update(dt);
+
+    if (animator.consumeFootstep()) {
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("WalkingSound"));
+    }
 }
 
 void PlayState::handlePlayerDeath() {
-    if (transitionPending) return;
-    transitionPending = true;
+    if (transitionPending || death.active) return;
+
     Core::EventSystem::getInstance().broadcast(Core::Event(Core::EventType::PlayerDied));
-    if (lives > 0) {
-        gsm.changeState(std::make_unique<RespawnState>(gsm, assets, getSaveData()));
-    } else {
-        gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+    Systems::SoundController::getInstance().stopMusic();
+
+    auto& body = m_player->getPhysicsBody();
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+
+    starPowerRemaining = 0.f;
+    damageProtectionRemaining = 0.f;
+    invincibleTimer = 0.f;
+    animator.setStarPower(false);
+    animator.setBlinking(false);
+    animator.setAction(entity::PlayerAction::Dead);
+
+    death.active = true;
+    death.elapsed = 0.f;
+    death.velocityY = 0.f;
+
+    // Falling into a pit is already the death fall, so it skips straight past
+    // the pause and the hop instead of bouncing Mario back up out of the hole.
+    if (body.getPosition().y >= tileMap.pixelHeight()) {
+        death.elapsed = kDeathPauseDuration;
+        death.velocityY = kMaxFallSpeed;
+    }
+
+    std::cout << "[Core Engine] Player died in World "
+              << Config::worldNumber(currentLevel) << "-"
+              << Config::stageNumber(currentLevel)
+              << ". Lives remaining: " << lives << "\n";
+}
+
+void PlayState::updateDeathSequence(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float previousElapsed = death.elapsed;
+    death.elapsed += seconds;
+
+    animator.setAction(entity::PlayerAction::Dead);
+    animator.update(dt);
+    tileMap.update(dt);
+
+    // A beat of stillness first: the sting is meant to be heard before Mario
+    // moves at all.
+    if (death.elapsed < kDeathPauseDuration) {
+        return;
+    }
+    if (previousElapsed < kDeathPauseDuration) {
+        death.velocityY = -kDeathHopSpeed;
+    }
+
+    death.velocityY = std::min(kMaxFallSpeed, death.velocityY + kGravity * seconds);
+    auto& body = m_player->getPhysicsBody();
+    sf::Vector2f position = body.getPosition();
+    position.y += death.velocityY * seconds;
+    body.setPosition(position);
+
+    // No collisions on the way down: Mario drops straight through the level.
+    const float cameraBottom = m_cameraSystem.getCenter().y + Config::kViewHeight / 2.f;
+    if (position.y > cameraBottom + tileMap.tileSize()
+        || death.elapsed > kDeathSequenceTimeout) {
+        transitionPending = true;
+        if (lives > 0) {
+            gsm.changeState(std::make_unique<RespawnState>(gsm, assets, getSaveData()));
+        } else {
+            gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+        }
     }
 }
 
@@ -500,6 +640,9 @@ void PlayState::respawnAvatar() {
     } else {
         m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
     }
+    facingRight = true;
+    death = DeathSequence{};
+    animator.reset(entity::PlayerForm::Small);
     syncAvatarPowerVisuals();
 }
 
@@ -1393,49 +1536,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
         }
     }
 
-    // --- Update Avatar Movement Animation & Facing Direction ---
-    if (body.getVelocity().x > 10.f) {
-        facingRight = true;
-    } else if (body.getVelocity().x < -10.f) {
-        facingRight = false;
-    }
-
-    std::string prefix = (m_player->hasFirePower() ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
-
-    if (!body.isGrounded()) {
-        avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
-    } else if (std::abs(body.getVelocity().x) > 10.f) {
-        runAnimTimer += dt.asSeconds();
-        if (runAnimTimer >= 0.08f) {
-            runAnimTimer = 0.0f;
-            currentRunStep = (currentRunStep + 1) % 4;
-            if (currentRunStep == 1 || currentRunStep == 3) {
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("WalkingSound"));
-            }
-        }
-        const std::string runTexKeys[] = {prefix + "Idle", prefix + "Run1", prefix + "Run2", prefix + "Run1"};
-        avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
-    } else {
-        runAnimTimer = 0.0f;
-        currentRunStep = 0;
-        avatarSprite.setTexture(assets.getTexture(prefix + "Idle"));
-    }
-
-    // Reset texture rect
-    sf::Vector2u texSize = avatarSprite.getTexture().getSize();
-    avatarSprite.setTextureRect(sf::IntRect({0, 0}, {(int)texSize.x, (int)texSize.y}));
-
-    sf::FloatRect sb = avatarSprite.getLocalBounds();
-    // Align sprite origin at bottom-center so feet rest perfectly on top of ground tiles
-    avatarSprite.setOrigin({sb.position.x + sb.size.x / 2.f, sb.position.y + sb.size.y});
-
-    float targetHeight = avatar.getSize().y * 1.5f;
-    float scaleY = (sb.size.y > 0.f) ? (targetHeight / sb.size.y) : 1.f;
-    float scaleX = facingRight ? scaleY : -scaleY;
-
-    avatarSprite.setScale({scaleX, scaleY});
-    sf::Vector2f pos = body.getPosition();
-    avatarSprite.setPosition({pos.x + size.x / 2.f, pos.y + size.y});
+    updateAvatarAnimation(dt, underwater);
 
     return true;
 }

@@ -76,6 +76,17 @@ Game::Game()
     assets.loadTexture("FireLuigiRun1", Systems::resourcePath("assets/character/FireLuigiRun1.png"));
     assets.loadTexture("FireLuigiRun2", Systems::resourcePath("assets/character/FireLuigiRun2.png"));
 
+    // Normalised gameplay sheets: five equal cells (idle, walk 1, walk 2, jump,
+    // crouch) per character and form, so PlayerAnimator can draw them at the
+    // project's whole-number zoom. Rebuild them with
+    // `python3 tools/build_character_sheets.py` after touching the art above.
+    assets.loadTexture("MarioSmallSheet", Systems::resourcePath("assets/character/mario_small.png"));
+    assets.loadTexture("MarioSuperSheet", Systems::resourcePath("assets/character/mario_super.png"));
+    assets.loadTexture("MarioFireSheet", Systems::resourcePath("assets/character/mario_fire.png"));
+    assets.loadTexture("LuigiSmallSheet", Systems::resourcePath("assets/character/luigi_small.png"));
+    assets.loadTexture("LuigiSuperSheet", Systems::resourcePath("assets/character/luigi_super.png"));
+    assets.loadTexture("LuigiFireSheet", Systems::resourcePath("assets/character/luigi_fire.png"));
+
     assets.loadTexture("MusicSymbol", Systems::resourcePath("assets/textures/music_symbol.png"));
     assets.loadTexture("SoundSymbol", Systems::resourcePath("assets/textures/sound_symbol.png"));
 

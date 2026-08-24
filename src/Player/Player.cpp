@@ -25,6 +25,8 @@ void Player::setInput(const PlayerInput& input) noexcept {
 }
 
 void Player::update(float deltaTime) {
+    setCrouching(m_input.crouchHeld);
+
     if (m_currentState) {
         m_currentState->handleInput(*this);
         m_currentState->update(*this, deltaTime);
@@ -50,11 +52,11 @@ const PlayerState* Player::getCurrentState() const noexcept {
 }
 
 void Player::processHorizontalMovement(float deltaTime) {
-    const float moveAxis = std::clamp(
-        m_input.moveAxis,
-        -1.0f,
-        1.0f
-    );
+    // A crouching player digs his heels in: he keeps whatever momentum he had
+    // and slides to a stop, but steering does nothing until he stands up.
+    const float moveAxis = (m_crouching && m_physicsBody.isGrounded())
+        ? 0.0f
+        : std::clamp(m_input.moveAxis, -1.0f, 1.0f);
 
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
@@ -112,11 +114,14 @@ Player::getMovementConfig() const noexcept {
 
 void Player::applyPower(PowerType power) {
     const bool wasSuper = isSuper();
-    const auto existing = std::find(m_powerStack.begin(), m_powerStack.end(), power);
-    if (existing != m_powerStack.end()) {
-        m_powerStack.erase(existing);
+    // A power already held stays where it is. Moving it back to the top would
+    // reorder the stack - a Super mushroom taken as Fire Mario would sit above
+    // Fire, and the next hit would then shrink the collider while the Fire
+    // artwork stayed two tiles tall.
+    if (std::find(m_powerStack.begin(), m_powerStack.end(), power)
+        == m_powerStack.end()) {
+        m_powerStack.push_back(power);
     }
-    m_powerStack.push_back(power);
 
     if (!wasSuper && power == PowerType::Super) {
         setSuperCollider(true);
@@ -133,6 +138,14 @@ bool Player::removeLatestPower() {
         setSuperCollider(false);
     }
     return true;
+}
+
+void Player::setCrouching(bool crouching) noexcept {
+    m_crouching = crouching && isSuper() && m_physicsBody.isGrounded();
+}
+
+bool Player::isCrouching() const noexcept {
+    return m_crouching;
 }
 
 bool Player::hasPower(PowerType power) const noexcept {

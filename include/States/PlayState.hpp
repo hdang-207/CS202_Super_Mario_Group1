@@ -15,6 +15,7 @@
 #include "Physics/PhysicsBody.hpp"
 #include "Player/Player.hpp"
 #include "Player/Mario.hpp"
+#include "Player/PlayerAnimator.hpp"
 #include "Player/Luigi.hpp"
 #include "UI/HUD.hpp"
 #include <cstddef>
@@ -49,14 +50,27 @@ private:
     std::unique_ptr<entity::Player> m_player;
 
     sf::RectangleShape avatar;
-    sf::Sprite avatarSprite;
+
+    /// Owns the avatar's artwork: which form, which pose, and every flash.
+    entity::PlayerAnimator animator;
+
     bool facingRight{true};
-    float runAnimTimer{0.f};
-    int currentRunStep{0};
     float invincibleTimer{0.f};
     float starPowerRemaining{0.f};
     float damageProtectionRemaining{0.f};
     bool swimButtonHeld{false};
+
+    /**
+     * The original game does not cut away the instant Mario is hit: he stops,
+     * hangs there for a beat, hops, and only then drops off the bottom of the
+     * screen. Everything else is frozen while this plays.
+     */
+    struct DeathSequence {
+        bool active{false};
+        float elapsed{0.f};
+        float velocityY{0.f};
+    };
+    DeathSequence death;
 
     std::optional<combat::Bomb> activeBomb;
 
@@ -118,7 +132,22 @@ private:
     std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
     sf::FloatRect avatarBounds() const;
     void syncAvatarPowerVisuals();
+
+    /// @brief Which sprite sheet the current power stack should be drawn from.
+    [[nodiscard]] entity::PlayerForm currentPlayerForm() const;
+
+    /// @brief World position the avatar's feet stand on, for the animator.
+    [[nodiscard]] sf::Vector2f avatarFeetCentre() const;
+
+    /// @brief Chooses this frame's pose from the physics body and surroundings.
+    void updateAvatarAnimation(sf::Time dt, bool underwater);
+
+    /// @brief Starts the death animation; the level keeps running until it ends.
     void handlePlayerDeath();
+
+    /// @brief Advances the death animation and leaves the level at its end.
+    void updateDeathSequence(sf::Time dt);
+
     void playLevelMusic();
     void respawnAvatar();
     bool loadLevel(int level);

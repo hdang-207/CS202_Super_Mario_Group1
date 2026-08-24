@@ -13,6 +13,8 @@ void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
     const bool jump = holding(sf::Keyboard::Scancode::Space)
                    || holding(sf::Keyboard::Scancode::W)
                    || holding(sf::Keyboard::Scancode::Up);
+    const bool crouch = holding(sf::Keyboard::Scancode::S)
+                     || holding(sf::Keyboard::Scancode::Down);
 
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);
@@ -24,6 +26,10 @@ void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
 
     if (jump) {
         m_jumpCommand.execute(m_playerInput);
+    }
+
+    if (crouch) {
+        m_crouchCommand.execute(m_playerInput);
     }
 }
 
