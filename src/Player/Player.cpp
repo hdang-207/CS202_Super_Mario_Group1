@@ -114,11 +114,14 @@ Player::getMovementConfig() const noexcept {
 
 void Player::applyPower(PowerType power) {
     const bool wasSuper = isSuper();
-    const auto existing = std::find(m_powerStack.begin(), m_powerStack.end(), power);
-    if (existing != m_powerStack.end()) {
-        m_powerStack.erase(existing);
+    // A power already held stays where it is. Moving it back to the top would
+    // reorder the stack - a Super mushroom taken as Fire Mario would sit above
+    // Fire, and the next hit would then shrink the collider while the Fire
+    // artwork stayed two tiles tall.
+    if (std::find(m_powerStack.begin(), m_powerStack.end(), power)
+        == m_powerStack.end()) {
+        m_powerStack.push_back(power);
     }
-    m_powerStack.push_back(power);
 
     if (!wasSuper && power == PowerType::Super) {
         setSuperCollider(true);

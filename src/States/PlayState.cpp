@@ -746,7 +746,12 @@ void PlayState::updateFireFlowers(sf::Time dt) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("PowerUpSound"));
             score += 1000;
             hud.setScore(score);
+            // A Fire Flower taken as Small Mario grows him first, so the
+            // artwork and the collider both switch to the two-tile form and a
+            // later hit steps down to Super rather than straight to dead.
+            m_player->applyPower(entity::PowerType::Super);
             m_player->applyPower(entity::PowerType::Fire);
+            syncAvatarPowerVisuals();
             it = fireFlowers.erase(it);
         } else {
             ++it;
