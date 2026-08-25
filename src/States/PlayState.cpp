@@ -24,6 +24,8 @@ namespace {
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
+    constexpr float kWaterFrameDuration = 0.18f;
+    constexpr int kWaterFrameCount = 4;
 
     constexpr float kVineGrowDuration = 2.25f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
@@ -253,6 +255,12 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    waterAnimationElapsed += dt;
+    while (waterAnimationElapsed.asSeconds() >= kWaterFrameDuration) {
+        waterAnimationElapsed -= sf::seconds(kWaterFrameDuration);
+        waterAnimationFrame = (waterAnimationFrame + 1) % kWaterFrameCount;
+    }
+
     inputHandler.update(heldKeys);
 
     // Dying and growing both take the level out of the player's hands for a
@@ -354,29 +362,22 @@ void PlayState::render(sf::RenderWindow& window) {
         const float waterLeft = kWorld22WaterStartColumn * tileMap.tileSize();
         const float waterRight = kWorld22WaterEndColumn * tileMap.tileSize();
         const float waterTop = kWorld22WaterSurfaceRow * tileMap.tileSize();
-        const float waterHeight = tileMap.pixelHeight() - waterTop;
-        const float bandHeight = waterHeight / 4.f;
-        const sf::Color depthColours[] = {
-            sf::Color(66, 64, 255),
-            sf::Color(59, 68, 244),
-            sf::Color(51, 73, 230),
-            sf::Color(43, 79, 214)
-        };
-
-        for (int band = 0; band < 4; ++band) {
-            const float top = waterTop + band * bandHeight;
-            const float bottom = band == 3 ? tileMap.pixelHeight() : waterTop + (band + 1) * bandHeight;
-            sf::RectangleShape waterBand({waterRight - waterLeft, bottom - top});
-            waterBand.setPosition({waterLeft, top});
-            waterBand.setFillColor(depthColours[band]);
-            window.draw(waterBand);
-        }
+        sf::RectangleShape waterBody(
+            {waterRight - waterLeft, tileMap.pixelHeight() - waterTop});
+        waterBody.setPosition({waterLeft, waterTop});
+        // Matches the flat underwater palette in the supplied NES sheet and
+        // avoids visible artificial depth bands behind the surface tiles.
+        waterBody.setFillColor(sf::Color(66, 66, 255));
+        window.draw(waterBody);
 
         sf::Sprite waterSurface(assets.getTexture("UnderwaterTiles"));
         waterSurface.setScale({Config::kZoom, Config::kZoom});
-        for (int column = kWorld22WaterStartColumn; column < kWorld22WaterEndColumn; column += 4) {
-            const int tileCount = std::min(4, kWorld22WaterEndColumn - column);
-            waterSurface.setTextureRect(sf::IntRect({0, 0}, {tileCount * TileMap::kSourceTileSize, 32}));
+        waterSurface.setTextureRect(sf::IntRect(
+            {waterAnimationFrame * TileMap::kSourceTileSize, 0},
+            {TileMap::kSourceTileSize, 32}
+        ));
+        for (int column = kWorld22WaterStartColumn;
+             column < kWorld22WaterEndColumn; ++column) {
             waterSurface.setPosition({column * tileMap.tileSize(), waterTop});
             window.draw(waterSurface);
         }
@@ -693,6 +694,8 @@ bool PlayState::loadLevel(int level) {
     m_cameraSystem.reset();
     growingVines.clear();
     swimButtonHeld = false;
+    waterAnimationElapsed = sf::Time::Zero;
+    waterAnimationFrame = 0;
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
@@ -1544,4 +1547,3 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     return true;
 }
-
