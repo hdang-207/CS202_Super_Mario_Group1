@@ -133,6 +133,7 @@ Game::Game()
     assets.loadTexture("GreenKoopa", Systems::resourcePath("assets/textures/green_koopa.png"));
     assets.loadTexture("GreenParatroopa", Systems::resourcePath("assets/textures/green_paratroopa.png"));
     assets.loadTexture("GreenShell", Systems::resourcePath("assets/textures/green_shell.png"));
+    assets.loadTexture("BlueShell", Systems::resourcePath("assets/textures/blue_shell.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));

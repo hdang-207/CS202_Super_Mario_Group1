@@ -1107,6 +1107,7 @@ void PlayState::spawnWalkingEnemies() {
     const bool underground = Config::stageNumber(currentLevel) == 2 && Config::worldNumber(currentLevel) != 2;
     const auto& goombaTex = assets.getTexture(underground ? "GoombaUnderground" : "Goomba");
     const auto& blueKoopaTex = assets.getTexture("BlueKoopaUnderground");
+    const auto& blueShellTex = assets.getTexture("BlueShell");
     const auto& greenKoopaTex = assets.getTexture("GreenKoopa");
     const auto& shellTex = assets.getTexture("GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
@@ -1117,7 +1118,9 @@ void PlayState::spawnWalkingEnemies() {
     const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &blueKoopaTex, &shellTex, entity::KoopaKind::BlueUnderground));
+        m_entityManager.addEntity(entity::EntityFactory::createKoopa(
+            spawn, tileMap.tileSize(), &blueKoopaTex, &blueShellTex,
+            entity::KoopaKind::BlueUnderground));
     }
     for (sf::Vector2f spawn : tileMap.greenKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
@@ -1134,7 +1137,8 @@ void PlayState::spawnPiranhas() {
     const auto& piranhaTex = assets.getTexture("PiranhaPlant");
     for (const sf::Vector2f marker : tileMap.piranhaSpawns()) {
         const float pipeTopY = marker.y + tileMap.tileSize() * 2.f;
-        const sf::Vector2f shownPosition(marker.x + 7.f * scale, pipeTopY - 23.f * scale);
+        const sf::Vector2f shownPosition(marker.x + 8.f * scale,
+                                         pipeTopY - 23.f * scale);
         m_entityManager.addEntity(entity::EntityFactory::createPiranhaPlant(shownPosition, pipeTopY, &piranhaTex, scale));
     }
 }
