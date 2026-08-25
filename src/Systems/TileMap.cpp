@@ -21,7 +21,8 @@ namespace {
      *   w underwater rock collider   O outdoor ground
      *   s outdoor staircase
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
-     * G Green Koopa, J Green Paratroopa, R Piranha Plant, D trampoline,
+     * G Green Koopa, J Green Paratroopa, j Blooper, h Cheep-Cheep,
+     * R Piranha Plant, D trampoline,
      * L horizontal lift, and . empty sky.
      * Scenery characters (M m V v l c F X W Q I Y Z T t f q N) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
@@ -180,6 +181,8 @@ bool TileMap::build(const MapParser& parser, float scale) {
     blueKoopas.clear();
     greenKoopas.clear();
     greenParatroopas.clear();
+    bloopers.clear();
+    cheepCheeps.clear();
     piranhas.clear();
     trampolines.clear();
     movingPlatforms.clear();
@@ -225,6 +228,14 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'J') {
                 greenParatroopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'j') {
+                bloopers.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'h') {
+                cheepCheeps.push_back(worldPos);
                 continue;
             }
             if (symbol == 'R') {

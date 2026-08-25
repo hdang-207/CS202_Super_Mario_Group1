@@ -146,6 +146,12 @@ public:
         return greenParatroopas;
     }
 
+    /// @brief Fixed World 2-2 Blooper markers ('j').
+    const std::vector<sf::Vector2f>& blooperSpawns() const { return bloopers; }
+
+    /// @brief World 2-2 Cheep-Cheep markers ('h').
+    const std::vector<sf::Vector2f>& cheepCheepSpawns() const { return cheepCheeps; }
+
     /// @brief Markers two rows above pipes containing Piranha Plants ('R').
     const std::vector<sf::Vector2f>& piranhaSpawns() const { return piranhas; }
 
@@ -207,6 +213,8 @@ private:
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
     std::vector<sf::Vector2f> greenKoopas; ///< Green Koopa spawn markers ('G').
     std::vector<sf::Vector2f> greenParatroopas; ///< Green Paratroopa markers ('J').
+    std::vector<sf::Vector2f> bloopers; ///< Underwater Blooper markers ('j').
+    std::vector<sf::Vector2f> cheepCheeps; ///< Underwater Cheep-Cheep markers ('h').
     std::vector<sf::Vector2f> piranhas; ///< Piranha Plant markers ('R').
     std::vector<sf::Vector2f> trampolines; ///< Trampoline markers ('D').
     std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').

@@ -56,6 +56,7 @@ namespace {
     constexpr int kWorld22WaterStartColumn = 37;
     constexpr int kWorld22WaterEndColumn = 197;
     constexpr int kWorld22WaterSurfaceRow = 2;
+    constexpr int kWorld22WaterFloorRow = 13;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
 }
@@ -314,6 +315,7 @@ void PlayState::update(sf::Time dt) {
     }
 
     // Update all managed entities (Enemies, Items, CoinPops) with full Physics & Wall Collision
+    updateAquaticEnemyTargets();
     m_entityManager.update(
         dt,
         m_physicsSystem,
@@ -702,6 +704,7 @@ bool PlayState::loadLevel(int level) {
     brickDebris.clear();
 
     spawnWalkingEnemies();
+    spawnAquaticEnemies();
     spawnPiranhas();
     spawnMovingPlatforms();
     spawnTrampolines();
@@ -713,6 +716,8 @@ bool PlayState::loadLevel(int level) {
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
               << tileMap.greenKoopaSpawns().size() << " Green Koopas, "
               << tileMap.greenParatroopaSpawns().size() << " Green Paratroopas, "
+              << tileMap.blooperSpawns().size() << " Bloopers, "
+              << tileMap.cheepCheepSpawns().size() << " Cheep-Cheeps, "
               << tileMap.piranhaSpawns().size() << " Piranha Plants, "
               << tileMap.trampolineSpawns().size() << " trampolines, "
               << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
@@ -1135,6 +1140,47 @@ void PlayState::spawnWalkingEnemies() {
     }
 }
 
+void PlayState::spawnAquaticEnemies() {
+    if (tileMap.blooperSpawns().empty() && tileMap.cheepCheepSpawns().empty()) {
+        return;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect swimBounds(
+        {kWorld22WaterStartColumn * tile, kWorld22WaterSurfaceRow * tile},
+        {(kWorld22WaterEndColumn - kWorld22WaterStartColumn) * tile,
+         (kWorld22WaterFloorRow - kWorld22WaterSurfaceRow) * tile}
+    );
+    const auto& blooperTexture = assets.getTexture("Blooper");
+    const auto& cheepCheepTexture = assets.getTexture("CheepCheep");
+
+    for (const sf::Vector2f spawn : tileMap.blooperSpawns()) {
+        m_entityManager.addEntity(entity::EntityFactory::createBlooper(
+            spawn, tile, swimBounds, &blooperTexture));
+    }
+    for (const sf::Vector2f spawn : tileMap.cheepCheepSpawns()) {
+        m_entityManager.addEntity(entity::EntityFactory::createCheepCheep(
+            spawn, tile, swimBounds, &cheepCheepTexture));
+    }
+}
+
+void PlayState::updateAquaticEnemyTargets() {
+    if (!m_player) {
+        return;
+    }
+
+    const physics::AABB playerBounds = m_player->getPhysicsBody().getAABB();
+    const sf::Vector2f target(
+        playerBounds.position.x + playerBounds.size.x * 0.5f,
+        playerBounds.position.y + playerBounds.size.y * 0.5f
+    );
+    m_entityManager.forEach([target](entity::Entity& managed) {
+        if (auto* blooper = dynamic_cast<entity::Blooper*>(&managed)) {
+            blooper->setTarget(target);
+        }
+    });
+}
+
 void PlayState::spawnPiranhas() {
     const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
     const auto& piranhaTex = assets.getTexture("PiranhaPlant");
@@ -1498,7 +1544,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
         }
 
         // Stomp check for Goomba / Koopa
-        if (body.getVelocity().y > 0.f && (body.getAABB().bottom() <= ent->getPosition().y + 24.f)) {
+        if (!underwater && body.getVelocity().y > 0.f
+            && (body.getAABB().bottom() <= ent->getPosition().y + 24.f)) {
             if (auto* paratroopa = dynamic_cast<entity::Paratroopa*>(ent)) {
                 paratroopa->stomp();
                 score += 200;

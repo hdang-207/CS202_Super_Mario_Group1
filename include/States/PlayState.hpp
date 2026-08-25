@@ -193,6 +193,8 @@ private:
     void drawBlocks(sf::RenderWindow& window) const;
 
     void spawnWalkingEnemies();
+    void spawnAquaticEnemies();
+    void updateAquaticEnemyTargets();
     void spawnPiranhas();
     void spawnMovingPlatforms();
     void updateMovingPlatforms(sf::Time dt);
