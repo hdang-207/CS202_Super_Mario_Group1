@@ -285,6 +285,17 @@ bool TileMap::build(const MapParser& parser, float scale) {
                             static_cast<std::size_t>(row) * columns + col + offset;
                         types[topIndex] = TileType::Ground;
                     }
+                } else if (symbol == 'a') {
+                    // Coral is solid for Mario, while aquatic enemies ignore
+                    // TileMap physics and may swim through it like in SMB.
+                    const int solidRows = std::max(
+                        1, static_cast<int>(std::ceil(artSize.y / kSourceTileSize)));
+                    for (int offset = 0; offset < solidRows && row + offset < rows;
+                         ++offset) {
+                        const std::size_t coralIndex =
+                            static_cast<std::size_t>(row + offset) * columns + col;
+                        types[coralIndex] = TileType::Ground;
+                    }
                 } else if (symbol == 'W') {
                     levelExitAvailable = true;
                     levelExitTrigger = sf::FloatRect(worldPos, drawSize);

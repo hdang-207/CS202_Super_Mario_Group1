@@ -65,8 +65,9 @@ public:
      *        tiles wide and tall; it is anchored at the top-left corner of the cell
      *        holding @p symbol and keeps its own proportions.
      *
-     * Scenery never collides and is always drawn behind the level, so one character
-     * places a whole object and the cells it covers stay free for anything else.
+     * Scenery is drawn behind the level. Most of it is non-colliding; the map
+     * builder gives the floating island top and underwater coral their intended
+     * solid cells after placing the artwork.
      */
     void setDecorationTexture(char symbol, const sf::Texture& texture);
 
