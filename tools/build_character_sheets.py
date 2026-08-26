@@ -18,7 +18,8 @@ whole-number zoom with no per-frame scaling.
 
     python3 tools/build_character_sheets.py
 
-Frame order in every sheet: idle, walk1, walk2, jump, crouch.
+Frame order in every sheet: idle, walk1, walk2, jump, crouch, then the six
+authentic NES swimming frames.
 """
 
 from pathlib import Path
@@ -27,6 +28,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 ART = ROOT / "assets" / "character"
+NES_CHARACTER_SHEET = ART / "nes_mario_luigi_source.png"
 
 # Source artwork per character and form, in frame order (crouch is synthesised).
 POSES = ("idle", "run1", "run2", "jump")
@@ -44,10 +46,49 @@ CELL_HEIGHT = {"small": 16, "super": 32, "fire": 32}
 FIRE_CONTENT_HEIGHT = 30
 ALPHA_CUTOFF = 110
 
+# Coordinates in the user-supplied NES Mario & Luigi sheet. The Small row has
+# no crouch pose, so its six-frame swimming cycle starts one cell earlier than
+# the Big and Fire rows. Luigi's half of the sheet is offset by 288 pixels.
+SWIM_X = {
+    "small": (154, 174, 192, 210, 228, 246),
+    "super": (174, 192, 210, 228, 246, 264),
+    "fire": (174, 192, 210, 228, 246, 264),
+}
+SWIM_Y = {"small": 8, "super": 31, "fire": 140}
+SWIM_HEIGHT = {"small": 16, "super": 32, "fire": 32}
+SWIM_FRAME_COUNT = 6
+FRAME_COUNT = len(POSES) + 1 + SWIM_FRAME_COUNT
+SHEET_CHARACTER_X = {"mario": 0, "luigi": 288}
+SHEET_BACKGROUNDS = {
+    (146, 144, 255),  # lavender cell background
+    (0, 41, 140),     # blue separator at the bottom of the Fire row
+}
+
 
 def load(name):
     image = Image.open(ART / f"{name}.png").convert("RGBA")
     return image.crop(image.getbbox())
+
+
+def load_swim_frames(character, form):
+    """Extracts one exact six-frame swim cycle from the NES source sheet."""
+    source = Image.open(NES_CHARACTER_SHEET).convert("RGBA")
+    # Fire Mario and Fire Luigi share the same artwork in SMB; the active
+    # player palette decides which character it represents.
+    character_offset = 0 if form == "fire" else SHEET_CHARACTER_X[character]
+    y = SWIM_Y[form]
+    height = SWIM_HEIGHT[form]
+    frames = []
+    for x in SWIM_X[form]:
+        frame = source.crop((x + character_offset, y,
+                             x + character_offset + 16, y + height))
+        pixels = frame.load()
+        for py in range(frame.height):
+            for px in range(frame.width):
+                if pixels[px, py][:3] in SHEET_BACKGROUNDS:
+                    pixels[px, py] = (0, 0, 0, 0)
+        frames.append(frame.crop(frame.getbbox()))
+    return frames
 
 
 def palette_of(image):
@@ -165,6 +206,7 @@ def main():
         }
         for form, frames in forms.items():
             frames.append(make_crouch(frames[0]))
+            frames.extend(load_swim_frames(character, form))
             path = ART / f"{character}_{form}.png"
             build_sheet(frames, CELL_HEIGHT[form]).save(path)
             written.append(path)
@@ -172,7 +214,7 @@ def main():
     for path in written:
         image = Image.open(path)
         print(f"{path.relative_to(ROOT)}  {image.width}x{image.height} "
-              f"({image.width // 5}x{image.height} per frame)")
+              f"({image.width // FRAME_COUNT}x{image.height} per frame)")
 
 
 if __name__ == "__main__":

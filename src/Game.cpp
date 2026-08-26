@@ -76,9 +76,9 @@ Game::Game()
     assets.loadTexture("FireLuigiRun1", Systems::resourcePath("assets/character/FireLuigiRun1.png"));
     assets.loadTexture("FireLuigiRun2", Systems::resourcePath("assets/character/FireLuigiRun2.png"));
 
-    // Normalised gameplay sheets: five equal cells (idle, walk 1, walk 2, jump,
-    // crouch) per character and form, so PlayerAnimator can draw them at the
-    // project's whole-number zoom. Rebuild them with
+    // Normalised gameplay sheets: five land poses followed by the six authentic
+    // NES swimming poses, all in equal cells so PlayerAnimator can draw them at
+    // the project's whole-number zoom. Rebuild them with
     // `python3 tools/build_character_sheets.py` after touching the art above.
     assets.loadTexture("MarioSmallSheet", Systems::resourcePath("assets/character/mario_small.png"));
     assets.loadTexture("MarioSuperSheet", Systems::resourcePath("assets/character/mario_super.png"));
