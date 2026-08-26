@@ -6,6 +6,10 @@
 namespace entity {
 
 namespace {
+    constexpr int kPiranhaFrameWidth = 16;
+    constexpr int kPiranhaFrameHeight = 24;
+    constexpr int kPiranhaFrameCount = 2;
+    constexpr float kPiranhaFrameDuration = 0.22f;
     constexpr float kPiranhaVisibleDuration = 2.0f;
     constexpr float kPiranhaMoveDuration = 0.6f;
     constexpr float kPiranhaHiddenDuration = 1.5f;
@@ -27,6 +31,12 @@ void PiranhaPlant::update(sf::Time dt) {
 void PiranhaPlant::update(float deltaTime) {
     if (!m_alive) {
         return;
+    }
+
+    m_animElapsed += deltaTime;
+    while (m_animElapsed >= kPiranhaFrameDuration) {
+        m_animElapsed -= kPiranhaFrameDuration;
+        m_animationFrame = (m_animationFrame + 1) % kPiranhaFrameCount;
     }
 
     m_elapsed = std::fmod(m_elapsed + deltaTime, kPiranhaCycleDuration);
@@ -51,6 +61,10 @@ void PiranhaPlant::render(sf::RenderWindow& window) const {
     }
 
     sf::Sprite sprite(*m_texture);
+    sprite.setTextureRect(sf::IntRect(
+        {m_animationFrame * kPiranhaFrameWidth, 0},
+        {kPiranhaFrameWidth, kPiranhaFrameHeight}
+    ));
     sprite.setScale({m_scale, m_scale});
     sprite.setPosition(m_position);
     window.draw(sprite);
@@ -62,6 +76,10 @@ void PiranhaPlant::renderWithTexture(sf::RenderWindow& window, const sf::Texture
     }
 
     sf::Sprite sprite(texture);
+    sprite.setTextureRect(sf::IntRect(
+        {m_animationFrame * kPiranhaFrameWidth, 0},
+        {kPiranhaFrameWidth, kPiranhaFrameHeight}
+    ));
     sprite.setScale({scale, scale});
     sprite.setPosition(m_position);
     window.draw(sprite);

@@ -60,6 +60,11 @@ private:
     float damageProtectionRemaining{0.f};
     bool swimButtonHeld{false};
 
+    /// Four source frames make the World 2-2 surface ripple instead of being
+    /// displayed side-by-side as four different neighbouring water tiles.
+    sf::Time waterAnimationElapsed{sf::Time::Zero};
+    int waterAnimationFrame{0};
+
     /**
      * The original game does not cut away the instant Mario is hit: he stops,
      * hangs there for a beat, hops, and only then drops off the bottom of the
@@ -188,6 +193,8 @@ private:
     void drawBlocks(sf::RenderWindow& window) const;
 
     void spawnWalkingEnemies();
+    void spawnAquaticEnemies();
+    void updateAquaticEnemyTargets();
     void spawnPiranhas();
     void spawnMovingPlatforms();
     void updateMovingPlatforms(sf::Time dt);

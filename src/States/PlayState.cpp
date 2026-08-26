@@ -24,6 +24,8 @@ namespace {
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
+    constexpr float kWaterFrameDuration = 0.18f;
+    constexpr int kWaterFrameCount = 4;
 
     constexpr float kVineGrowDuration = 2.25f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
@@ -54,6 +56,7 @@ namespace {
     constexpr int kWorld22WaterStartColumn = 37;
     constexpr int kWorld22WaterEndColumn = 197;
     constexpr int kWorld22WaterSurfaceRow = 2;
+    constexpr int kWorld22WaterFloorRow = 13;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
 }
@@ -253,6 +256,12 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    waterAnimationElapsed += dt;
+    while (waterAnimationElapsed.asSeconds() >= kWaterFrameDuration) {
+        waterAnimationElapsed -= sf::seconds(kWaterFrameDuration);
+        waterAnimationFrame = (waterAnimationFrame + 1) % kWaterFrameCount;
+    }
+
     inputHandler.update(heldKeys);
 
     // Dying and growing both take the level out of the player's hands for a
@@ -306,6 +315,7 @@ void PlayState::update(sf::Time dt) {
     }
 
     // Update all managed entities (Enemies, Items, CoinPops) with full Physics & Wall Collision
+    updateAquaticEnemyTargets();
     m_entityManager.update(
         dt,
         m_physicsSystem,
@@ -354,29 +364,22 @@ void PlayState::render(sf::RenderWindow& window) {
         const float waterLeft = kWorld22WaterStartColumn * tileMap.tileSize();
         const float waterRight = kWorld22WaterEndColumn * tileMap.tileSize();
         const float waterTop = kWorld22WaterSurfaceRow * tileMap.tileSize();
-        const float waterHeight = tileMap.pixelHeight() - waterTop;
-        const float bandHeight = waterHeight / 4.f;
-        const sf::Color depthColours[] = {
-            sf::Color(66, 64, 255),
-            sf::Color(59, 68, 244),
-            sf::Color(51, 73, 230),
-            sf::Color(43, 79, 214)
-        };
-
-        for (int band = 0; band < 4; ++band) {
-            const float top = waterTop + band * bandHeight;
-            const float bottom = band == 3 ? tileMap.pixelHeight() : waterTop + (band + 1) * bandHeight;
-            sf::RectangleShape waterBand({waterRight - waterLeft, bottom - top});
-            waterBand.setPosition({waterLeft, top});
-            waterBand.setFillColor(depthColours[band]);
-            window.draw(waterBand);
-        }
+        sf::RectangleShape waterBody(
+            {waterRight - waterLeft, tileMap.pixelHeight() - waterTop});
+        waterBody.setPosition({waterLeft, waterTop});
+        // Matches the flat underwater palette in the supplied NES sheet and
+        // avoids visible artificial depth bands behind the surface tiles.
+        waterBody.setFillColor(sf::Color(66, 66, 255));
+        window.draw(waterBody);
 
         sf::Sprite waterSurface(assets.getTexture("UnderwaterTiles"));
         waterSurface.setScale({Config::kZoom, Config::kZoom});
-        for (int column = kWorld22WaterStartColumn; column < kWorld22WaterEndColumn; column += 4) {
-            const int tileCount = std::min(4, kWorld22WaterEndColumn - column);
-            waterSurface.setTextureRect(sf::IntRect({0, 0}, {tileCount * TileMap::kSourceTileSize, 32}));
+        waterSurface.setTextureRect(sf::IntRect(
+            {waterAnimationFrame * TileMap::kSourceTileSize, 0},
+            {TileMap::kSourceTileSize, 32}
+        ));
+        for (int column = kWorld22WaterStartColumn;
+             column < kWorld22WaterEndColumn; ++column) {
             waterSurface.setPosition({column * tileMap.tileSize(), waterTop});
             window.draw(waterSurface);
         }
@@ -693,12 +696,15 @@ bool PlayState::loadLevel(int level) {
     m_cameraSystem.reset();
     growingVines.clear();
     swimButtonHeld = false;
+    waterAnimationElapsed = sf::Time::Zero;
+    waterAnimationFrame = 0;
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
     brickDebris.clear();
 
     spawnWalkingEnemies();
+    spawnAquaticEnemies();
     spawnPiranhas();
     spawnMovingPlatforms();
     spawnTrampolines();
@@ -710,6 +716,8 @@ bool PlayState::loadLevel(int level) {
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
               << tileMap.greenKoopaSpawns().size() << " Green Koopas, "
               << tileMap.greenParatroopaSpawns().size() << " Green Paratroopas, "
+              << tileMap.blooperSpawns().size() << " Bloopers, "
+              << tileMap.cheepCheepSpawns().size() << " Cheep-Cheeps, "
               << tileMap.piranhaSpawns().size() << " Piranha Plants, "
               << tileMap.trampolineSpawns().size() << " trampolines, "
               << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
@@ -1107,6 +1115,7 @@ void PlayState::spawnWalkingEnemies() {
     const bool underground = Config::stageNumber(currentLevel) == 2 && Config::worldNumber(currentLevel) != 2;
     const auto& goombaTex = assets.getTexture(underground ? "GoombaUnderground" : "Goomba");
     const auto& blueKoopaTex = assets.getTexture("BlueKoopaUnderground");
+    const auto& blueShellTex = assets.getTexture("BlueShell");
     const auto& greenKoopaTex = assets.getTexture("GreenKoopa");
     const auto& shellTex = assets.getTexture("GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
@@ -1117,7 +1126,9 @@ void PlayState::spawnWalkingEnemies() {
     const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &blueKoopaTex, &shellTex, entity::KoopaKind::BlueUnderground));
+        m_entityManager.addEntity(entity::EntityFactory::createKoopa(
+            spawn, tileMap.tileSize(), &blueKoopaTex, &blueShellTex,
+            entity::KoopaKind::BlueUnderground));
     }
     for (sf::Vector2f spawn : tileMap.greenKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
@@ -1129,12 +1140,54 @@ void PlayState::spawnWalkingEnemies() {
     }
 }
 
+void PlayState::spawnAquaticEnemies() {
+    if (tileMap.blooperSpawns().empty() && tileMap.cheepCheepSpawns().empty()) {
+        return;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect swimBounds(
+        {kWorld22WaterStartColumn * tile, kWorld22WaterSurfaceRow * tile},
+        {(kWorld22WaterEndColumn - kWorld22WaterStartColumn) * tile,
+         (kWorld22WaterFloorRow - kWorld22WaterSurfaceRow) * tile}
+    );
+    const auto& blooperTexture = assets.getTexture("Blooper");
+    const auto& cheepCheepTexture = assets.getTexture("CheepCheep");
+
+    for (const sf::Vector2f spawn : tileMap.blooperSpawns()) {
+        m_entityManager.addEntity(entity::EntityFactory::createBlooper(
+            spawn, tile, swimBounds, &blooperTexture));
+    }
+    for (const sf::Vector2f spawn : tileMap.cheepCheepSpawns()) {
+        m_entityManager.addEntity(entity::EntityFactory::createCheepCheep(
+            spawn, tile, swimBounds, &cheepCheepTexture));
+    }
+}
+
+void PlayState::updateAquaticEnemyTargets() {
+    if (!m_player) {
+        return;
+    }
+
+    const physics::AABB playerBounds = m_player->getPhysicsBody().getAABB();
+    const sf::Vector2f target(
+        playerBounds.position.x + playerBounds.size.x * 0.5f,
+        playerBounds.position.y + playerBounds.size.y * 0.5f
+    );
+    m_entityManager.forEach([target](entity::Entity& managed) {
+        if (auto* blooper = dynamic_cast<entity::Blooper*>(&managed)) {
+            blooper->setTarget(target);
+        }
+    });
+}
+
 void PlayState::spawnPiranhas() {
     const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
     const auto& piranhaTex = assets.getTexture("PiranhaPlant");
     for (const sf::Vector2f marker : tileMap.piranhaSpawns()) {
         const float pipeTopY = marker.y + tileMap.tileSize() * 2.f;
-        const sf::Vector2f shownPosition(marker.x + 7.f * scale, pipeTopY - 23.f * scale);
+        const sf::Vector2f shownPosition(marker.x + 8.f * scale,
+                                         pipeTopY - 23.f * scale);
         m_entityManager.addEntity(entity::EntityFactory::createPiranhaPlant(shownPosition, pipeTopY, &piranhaTex, scale));
     }
 }
@@ -1491,7 +1544,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
         }
 
         // Stomp check for Goomba / Koopa
-        if (body.getVelocity().y > 0.f && (body.getAABB().bottom() <= ent->getPosition().y + 24.f)) {
+        if (!underwater && body.getVelocity().y > 0.f
+            && (body.getAABB().bottom() <= ent->getPosition().y + 24.f)) {
             if (auto* paratroopa = dynamic_cast<entity::Paratroopa*>(ent)) {
                 paratroopa->stomp();
                 score += 200;
@@ -1540,4 +1594,3 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     return true;
 }
-

@@ -21,7 +21,8 @@ namespace {
      *   w underwater rock collider   O outdoor ground
      *   s outdoor staircase
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
-     * G Green Koopa, J Green Paratroopa, R Piranha Plant, D trampoline,
+     * G Green Koopa, J Green Paratroopa, j Blooper, h Cheep-Cheep,
+     * R Piranha Plant, D trampoline,
      * L horizontal lift, and . empty sky.
      * Scenery characters (M m V v l c F X W Q I Y Z T t f q N) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
@@ -180,6 +181,8 @@ bool TileMap::build(const MapParser& parser, float scale) {
     blueKoopas.clear();
     greenKoopas.clear();
     greenParatroopas.clear();
+    bloopers.clear();
+    cheepCheeps.clear();
     piranhas.clear();
     trampolines.clear();
     movingPlatforms.clear();
@@ -225,6 +228,14 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'J') {
                 greenParatroopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'j') {
+                bloopers.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'h') {
+                cheepCheeps.push_back(worldPos);
                 continue;
             }
             if (symbol == 'R') {
@@ -273,6 +284,17 @@ bool TileMap::build(const MapParser& parser, float scale) {
                         const std::size_t topIndex =
                             static_cast<std::size_t>(row) * columns + col + offset;
                         types[topIndex] = TileType::Ground;
+                    }
+                } else if (symbol == 'a') {
+                    // Coral is solid for Mario, while aquatic enemies ignore
+                    // TileMap physics and may swim through it like in SMB.
+                    const int solidRows = std::max(
+                        1, static_cast<int>(std::ceil(artSize.y / kSourceTileSize)));
+                    for (int offset = 0; offset < solidRows && row + offset < rows;
+                         ++offset) {
+                        const std::size_t coralIndex =
+                            static_cast<std::size_t>(row + offset) * columns + col;
+                        types[coralIndex] = TileType::Ground;
                     }
                 } else if (symbol == 'W') {
                     levelExitAvailable = true;

@@ -108,15 +108,19 @@ void Koopa::render(sf::RenderTarget& target) const {
         const float scaleX = m_facingRight ? -scale : scale;
         sprite.setScale({scaleX, scale});
         
-        const int sourceHeight = (m_kind == KoopaKind::Green) ? 23 : 24;
-        const int frame = (m_kind == KoopaKind::BlueUnderground) ? m_animationFrame : 0;
-        const float verticalOffset = (m_kind == KoopaKind::Green) ? scale : 0.f;
+        // Both supplied Koopa strips contain two 16x24 walking frames.  The
+        // previous green asset was cropped to one 16x23 frame, which made both
+        // Green Koopas and Paratroopas appear frozen even though update() was
+        // advancing m_animationFrame.
+        constexpr int sourceHeight = 24;
+        const int frame = m_animationFrame;
 
         sprite.setTextureRect(sf::IntRect(
             {frame * kSourceTileSize, 0},
             {kSourceTileSize, sourceHeight}
         ));
-        sprite.setPosition({m_facingRight ? m_position.x + m_tileSize : m_position.x, m_position.y + verticalOffset});
+        sprite.setPosition({m_facingRight ? m_position.x + m_tileSize : m_position.x,
+                            m_position.y});
         target.draw(sprite);
     }
 }
