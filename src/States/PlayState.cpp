@@ -59,6 +59,8 @@ namespace {
     constexpr int kWorld22WaterFloorRow = 13;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
+    constexpr int kWorld23FishStartColumn = 13;
+    constexpr int kWorld23FishEndColumn = 208;
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
@@ -113,6 +115,7 @@ void PlayState::init() {
     tileMap.setTileTexture('O', assets.getTexture("GroundTile"));
     tileMap.setTileTexture('w', assets.getTexture("UnderwaterRock"));
     tileMap.setTileTexture('s', assets.getTexture("HardBlockTile"));
+    tileMap.setTileTexture('=', assets.getTexture("World23BridgeDeck"));
 
     tileMap.setDecorationTexture('M', assets.getTexture("HillBig"));
     tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
@@ -133,6 +136,7 @@ void PlayState::init() {
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
     tileMap.setDecorationTexture('Q', assets.getTexture("WarpPipeForked"));
+    tileMap.setDecorationTexture('~', assets.getTexture("World23BridgeRail"));
 
     if (!loadLevel(currentLevel)) {
         return;
@@ -316,6 +320,7 @@ void PlayState::update(sf::Time dt) {
 
     // Update all managed entities (Enemies, Items, CoinPops) with full Physics & Wall Collision
     updateAquaticEnemyTargets();
+    updateFlyingCheepSpawner(dt);
     m_entityManager.update(
         dt,
         m_physicsSystem,
@@ -664,10 +669,13 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
-    // The middle stage of each world uses the cyan underground artwork.
+    // The middle stage of each world uses the cyan underground artwork. World
+    // 2-3 has a dedicated palette cropped from its supplied guide image.
     const bool underground = stage == 2;
+    const bool world23 = world == 2 && stage == 3;
     tileMap.setTileTexture('#', assets.getTexture(
-        underground ? "GroundUndergroundTile" : "GroundTile"));
+        world23 ? "World23Ground"
+                : (underground ? "GroundUndergroundTile" : "GroundTile")));
     tileMap.setTileTexture('B', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('A', assets.getTexture(
@@ -677,10 +685,34 @@ bool PlayState::loadLevel(int level) {
     tileMap.setTileTexture('b', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
-        underground ? "HardBlockUndergroundTile" : "HardBlockTile"));
+        world23 ? "World23HardBlock"
+                : (underground ? "HardBlockUndergroundTile" : "HardBlockTile")));
     tileMap.setTileTexture('?', assets.getTexture(
-        underground ? "QuestionBlockUnderground" : "QuestionBlock"),
-        underground ? 6 : 4, sf::seconds(0.15f));
+        world23 ? "World23QuestionBlock"
+                : (underground ? "QuestionBlockUnderground" : "QuestionBlock")),
+        underground && !world23 ? 6 : 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('o', assets.getTexture(world23 ? "World23Coin" : "Coin"),
+                           4, sf::seconds(0.12f));
+    tileMap.setTileTexture('U', assets.getTexture(
+        world23 ? "World23EmptyBlock" : "EmptyBlock"));
+    tileMap.setTileTexture('(', assets.getTexture(
+        world23 ? "World23IslandLeft" : "IslandTopLeft"));
+    tileMap.setTileTexture('-', assets.getTexture(
+        world23 ? "World23IslandMiddle" : "IslandTopMiddle"));
+    tileMap.setTileTexture(')', assets.getTexture(
+        world23 ? "World23IslandRight" : "IslandTopRight"));
+    tileMap.setTileTexture('|', assets.getTexture(
+        world23 ? "World23IslandTrunk" : "IslandTrunk"));
+    tileMap.setDecorationTexture('l', assets.getTexture(
+        world23 ? "World23CloudBig" : "CloudBig"));
+    tileMap.setDecorationTexture('c', assets.getTexture(
+        world23 ? "World23CloudSmall" : "CloudSmall"));
+    tileMap.setDecorationTexture('X', assets.getTexture(
+        world23 ? "World23StartCastle" : "Castle"));
+    tileMap.setDecorationTexture('Z', assets.getTexture(
+        world23 ? "World23EndCastle" : "CastleWorld2_1"));
+    tileMap.setDecorationTexture('F', assets.getTexture(
+        world23 ? "World23GoalPole" : "Flagpole"));
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: World " << world << "-" << stage
@@ -698,6 +730,7 @@ bool PlayState::loadLevel(int level) {
     swimButtonHeld = false;
     waterAnimationElapsed = sf::Time::Zero;
     waterAnimationFrame = 0;
+    flyingCheepSpawnTimer = 0.8f;
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
@@ -783,7 +816,11 @@ bool PlayState::tryEnterNextLevel() {
 }
 
 void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
-    m_entityManager.addEntity(entity::EntityFactory::createCoinPop(blockPosition, tileMap.tileSize(), &assets.getTexture("Coin")));
+    const bool world23 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 3;
+    m_entityManager.addEntity(entity::EntityFactory::createCoinPop(
+        blockPosition, tileMap.tileSize(),
+        &assets.getTexture(world23 ? "World23Coin" : "Coin")));
 }
 
 void PlayState::prepareItemBlockRewards() {
@@ -1064,6 +1101,8 @@ void PlayState::updateBlocks(sf::Time dt) {
 
 void PlayState::drawBlocks(sf::RenderWindow& window) const {
     const bool underground = Config::stageNumber(currentLevel) == 2;
+    const bool world23 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 3;
 
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
@@ -1078,10 +1117,12 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
         if (drawSymbol == 'B' || drawSymbol == '^') {
             tex = &assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile");
         } else if (drawSymbol == '?') {
-            tex = &assets.getTexture(underground ? "QuestionBlockUnderground" : "QuestionBlock");
+            tex = &assets.getTexture(
+                world23 ? "World23QuestionBlock"
+                        : (underground ? "QuestionBlockUnderground" : "QuestionBlock"));
             rect = sf::IntRect({0, 0}, {16, 16});
         } else if (drawSymbol == 'U') {
-            tex = &assets.getTexture("EmptyBlock");
+            tex = &assets.getTexture(world23 ? "World23EmptyBlock" : "EmptyBlock");
         }
         
         if (tex) {
@@ -1179,6 +1220,46 @@ void PlayState::updateAquaticEnemyTargets() {
             blooper->setTarget(target);
         }
     });
+}
+
+void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
+    if (Config::worldNumber(currentLevel) != 2
+        || Config::stageNumber(currentLevel) != 3 || !m_player) {
+        return;
+    }
+
+    flyingCheepSpawnTimer -= dt.asSeconds();
+    const float tile = tileMap.tileSize();
+    const auto& body = m_player->getPhysicsBody().getAABB();
+    const float playerCenterX = body.position.x + body.size.x * 0.5f;
+    if (playerCenterX < kWorld23FishStartColumn * tile
+        || playerCenterX > kWorld23FishEndColumn * tile
+        || flyingCheepSpawnTimer > 0.f) {
+        return;
+    }
+
+    const bool spawnAhead = (rewardRandom() & 1U) != 0U;
+    const float horizontalSpeed = 135.f
+        + static_cast<float>(rewardRandom() % 91U);
+    const float horizontalOffset = (spawnAhead ? 5.f : -3.f) * tile;
+    const float jitter = static_cast<float>(static_cast<int>(rewardRandom() % 5U) - 2)
+                       * tile * 0.5f;
+    const float spawnX = std::clamp(
+        playerCenterX + horizontalOffset + jitter,
+        tile, tileMap.pixelWidth() - tile * 2.f);
+    const sf::Vector2f spawnPosition(
+        spawnX, tileMap.pixelHeight() + tile * 0.25f);
+    const sf::Vector2f launchVelocity(
+        spawnAhead ? -horizontalSpeed : horizontalSpeed,
+        -920.f - static_cast<float>(rewardRandom() % 121U));
+    const sf::FloatRect flightBounds(
+        {0.f, 0.f}, {tileMap.pixelWidth(), tileMap.pixelHeight()});
+
+    m_entityManager.addEntity(entity::EntityFactory::createFlyingCheepCheep(
+        spawnPosition, launchVelocity, tile, flightBounds,
+        &assets.getTexture("FlyingCheepCheep")));
+    flyingCheepSpawnTimer = 0.7f
+        + static_cast<float>(rewardRandom() % 61U) / 100.f;
 }
 
 void PlayState::spawnPiranhas() {

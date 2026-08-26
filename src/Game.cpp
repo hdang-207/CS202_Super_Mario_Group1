@@ -136,6 +136,8 @@ Game::Game()
     assets.loadTexture("BlueShell", Systems::resourcePath("assets/textures/blue_shell.png"));
     assets.loadTexture("Blooper", Systems::resourcePath("assets/textures/blooper.png"));
     assets.loadTexture("CheepCheep", Systems::resourcePath("assets/textures/cheep_cheep.png"));
+    assets.loadTexture("FlyingCheepCheep",
+                       Systems::resourcePath("assets/textures/flying_cheep_cheep.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
@@ -163,6 +165,42 @@ Game::Game()
     assets.loadTexture("TrampolineNormal", Systems::resourcePath("assets/textures/trampoline_normal.png"));
     assets.loadTexture("TrampolineCompressed", Systems::resourcePath("assets/textures/trampoline_compressed.png"));
     assets.loadTexture("TrampolineLaunch", Systems::resourcePath("assets/textures/trampoline_launch.png"));
+
+    // World 2-3 is reconstructed from the supplied 237x15 NES guide. These
+    // exact crops keep its orange bridge/castle palette separate from the
+    // reusable overworld tiles used by the other stages.
+    assets.loadTexture("World23Ground",
+                       Systems::resourcePath("assets/textures/world23_ground.png"));
+    assets.loadTexture("World23HardBlock",
+                       Systems::resourcePath("assets/textures/world23_hard_block.png"));
+    assets.loadTexture("World23BridgeRail",
+                       Systems::resourcePath("assets/textures/world23_bridge_rail.png"));
+    assets.loadTexture("World23BridgeDeck",
+                       Systems::resourcePath("assets/textures/world23_bridge_deck.png"));
+    assets.loadTexture("World23IslandLeft",
+                       Systems::resourcePath("assets/textures/world23_island_left.png"));
+    assets.loadTexture("World23IslandMiddle",
+                       Systems::resourcePath("assets/textures/world23_island_middle.png"));
+    assets.loadTexture("World23IslandRight",
+                       Systems::resourcePath("assets/textures/world23_island_right.png"));
+    assets.loadTexture("World23IslandTrunk",
+                       Systems::resourcePath("assets/textures/world23_island_trunk.png"));
+    assets.loadTexture("World23CloudBig",
+                       Systems::resourcePath("assets/textures/world23_cloud_big.png"));
+    assets.loadTexture("World23CloudSmall",
+                       Systems::resourcePath("assets/textures/world23_cloud_small.png"));
+    assets.loadTexture("World23StartCastle",
+                       Systems::resourcePath("assets/textures/world23_start_castle.png"));
+    assets.loadTexture("World23EndCastle",
+                       Systems::resourcePath("assets/textures/world23_end_castle.png"));
+    assets.loadTexture("World23GoalPole",
+                       Systems::resourcePath("assets/textures/world23_goal_pole.png"));
+    assets.loadTexture("World23Coin",
+                       Systems::resourcePath("assets/textures/world23_coin.png"));
+    assets.loadTexture("World23QuestionBlock",
+                       Systems::resourcePath("assets/textures/world23_question_block.png"));
+    assets.loadTexture("World23EmptyBlock",
+                       Systems::resourcePath("assets/textures/world23_empty_block.png"));
 
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));

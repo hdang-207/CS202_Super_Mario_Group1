@@ -65,6 +65,10 @@ private:
     sf::Time waterAnimationElapsed{sf::Time::Zero};
     int waterAnimationFrame{0};
 
+    /// World 2-3 launches red fish from below the bridge instead of placing
+    /// static enemy markers in the map file.
+    float flyingCheepSpawnTimer{0.8f};
+
     /**
      * The original game does not cut away the instant Mario is hit: he stops,
      * hangs there for a beat, hops, and only then drops off the bottom of the
@@ -195,6 +199,7 @@ private:
     void spawnWalkingEnemies();
     void spawnAquaticEnemies();
     void updateAquaticEnemyTargets();
+    void updateFlyingCheepSpawner(sf::Time dt);
     void spawnPiranhas();
     void spawnMovingPlatforms();
     void updateMovingPlatforms(sf::Time dt);

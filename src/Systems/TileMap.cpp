@@ -19,12 +19,12 @@ namespace {
      *   H hidden block    1 hidden 1-Up block    o coin
      *   g underground ground   r underground brick   p invisible pipe collider
      *   w underwater rock collider   O outdoor ground
-     *   s outdoor staircase
+     *   s outdoor staircase   = World 2-3 bridge deck
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * G Green Koopa, J Green Paratroopa, j Blooper, h Cheep-Cheep,
      * R Piranha Plant, D trampoline,
      * L horizontal lift, and . empty sky.
-     * Scenery characters (M m V v l c F X W Q I Y Z T t f q N) carry no entry here - they are
+     * Scenery characters (M m V v l c F X W Q I Y Z T t f q N ~) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
@@ -54,6 +54,7 @@ namespace {
         { 'w', TileType::Ground        },
         { 'O', TileType::Ground        },
         { 's', TileType::StairBlock    },
+        { '=', TileType::Ground        },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
