@@ -138,6 +138,8 @@ Game::Game()
     assets.loadTexture("CheepCheep", Systems::resourcePath("assets/textures/cheep_cheep.png"));
     assets.loadTexture("FlyingCheepCheep",
                        Systems::resourcePath("assets/textures/flying_cheep_cheep.png"));
+    assets.loadTexture("HammerBro", Systems::resourcePath("assets/textures/hammer_bro.png"));
+    assets.loadTexture("Hammer", Systems::resourcePath("assets/textures/hammer.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));

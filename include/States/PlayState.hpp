@@ -2,6 +2,7 @@
 #include "Core/CharacterType.hpp"
 #include "Combat/Bomb.hpp"
 #include "Entities/Bullet.hpp"
+#include "Entities/Hammer.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Entities/EntityManager.hpp"
@@ -193,6 +194,10 @@ private:
         int currentFrame;
     };
     std::vector<entity::Bullet> bullets;
+
+    /// Hammers in flight. They are the Bros' half of the fight, so the level
+    /// owns them beside the fireballs rather than as entities.
+    std::vector<entity::Hammer> hammers;
     std::vector<ExplosionEntity> explosions;
 
     void spawnBullet();
@@ -209,6 +214,14 @@ private:
 
     void updateBlocks(sf::Time dt);
     void drawBlocks(sf::RenderWindow& window) const;
+
+    /// @brief Enemies that react to where the avatar is: Piranha Plants stay
+    ///        down while he stands on their pipe, Hammer Bros turn to face him
+    ///        and hand the level a hammer to throw.
+    void updateEnemyReactions();
+
+    void updateHammers(sf::Time dt);
+    void drawHammers(sf::RenderWindow& window) const;
 
     void spawnWalkingEnemies();
     void spawnAquaticEnemies();

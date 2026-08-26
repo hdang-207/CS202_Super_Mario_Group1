@@ -22,7 +22,7 @@ namespace {
      *   s outdoor staircase   = World 2-3 bridge deck
      *   _ water surface   , water body (both drawn, neither solid)
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
-     * G Green Koopa, J Green Paratroopa, j Blooper, h Cheep-Cheep,
+     * G Green Koopa, J Green Paratroopa, k Hammer Bro, j Blooper, h Cheep-Cheep,
      * R Piranha Plant, D trampoline,
      * L horizontal lift, d/e/x/i the hidden-room pipes, and . empty sky.
      * Scenery characters (M m V v l c F X W Q I Y Z T t f q N ~) carry no entry here - they are
@@ -187,6 +187,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
     greenParatroopas.clear();
     bloopers.clear();
     cheepCheeps.clear();
+    hammerBros.clear();
     piranhas.clear();
     trampolines.clear();
     movingPlatforms.clear();
@@ -245,6 +246,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'h') {
                 cheepCheeps.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'k') {
+                hammerBros.push_back(worldPos);
                 continue;
             }
             if (symbol == 'R') {

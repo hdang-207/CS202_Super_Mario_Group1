@@ -7,6 +7,7 @@
 #include "Entities/Blooper.hpp"
 #include "Entities/CheepCheep.hpp"
 #include "Entities/FlyingCheepCheep.hpp"
+#include "Entities/HammerBro.hpp"
 #include "Entities/PiranhaPlant.hpp"
 #include "Entities/CoinPop.hpp"
 #include "Items/Mushroom.hpp"
@@ -61,6 +62,7 @@ public:
         const sf::Vector2f& spawnPos, const sf::Vector2f& velocity,
         float tileSize, const sf::FloatRect& flightBounds,
         const sf::Texture* texture = nullptr);
+    static std::unique_ptr<HammerBro> createHammerBro(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* texture = nullptr);
     static std::unique_ptr<PiranhaPlant> createPiranhaPlant(const sf::Vector2f& basePos, float pipeTopY, const sf::Texture* texture = nullptr, float scale = 3.f);
     static std::unique_ptr<CoinPop> createCoinPop(const sf::Vector2f& blockPos, float tileSize, const sf::Texture* texture = nullptr);
     static std::unique_ptr<items::Mushroom> createMushroom(const sf::Vector2f& blockPos, items::MushroomKind kind = items::MushroomKind::Super, const sf::Texture* texture = nullptr);

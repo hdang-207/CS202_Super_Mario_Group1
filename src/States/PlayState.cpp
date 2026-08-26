@@ -1,4 +1,6 @@
 #include "States/PlayState.hpp"
+#include "Entities/HammerBro.hpp"
+#include "Entities/PiranhaPlant.hpp"
 #include "Core/Config.hpp"
 #include "Core/EventSystem.hpp"
 #include "States/GameStateManager.hpp"
@@ -35,6 +37,12 @@ namespace {
     constexpr float kTrampolineLaunchDuration = 0.18f;
     constexpr float kTrampolineLaunchSpeed = 1400.f;
     constexpr float kGoombaStompBounce = 550.f;
+    // A thrown hammer goes up and over: high enough to clear a Super Mario,
+    // slow enough forward that standing still is not a safe answer.
+    constexpr float kHammerThrowSpeedX = 260.f;
+    constexpr float kHammerThrowSpeedY = -880.f;
+    /// Piranha Plants hold still while the avatar is this close to their pipe.
+    constexpr float kPiranhaSafeTiles = 1.5f;
     constexpr float kDamageProtectionDuration = 0.75f;
 
     /// Death animation: hold still, hop, then drop off the bottom of the screen.
@@ -321,6 +329,7 @@ void PlayState::update(sf::Time dt) {
     }
 
     // Update all managed entities (Enemies, Items, CoinPops) with full Physics & Wall Collision
+    updateEnemyReactions();
     updateAquaticEnemyTargets();
     updateFlyingCheepSpawner(dt);
     m_entityManager.update(
@@ -336,6 +345,7 @@ void PlayState::update(sf::Time dt) {
     m_cameraSystem.followTarget(m_player->getPhysicsBody().getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
 
     updateGrowingVines(dt);
+    updateHammers(dt);
     updateBomb(dt);
     updateBullets(dt);
     updateExplosions(dt);
@@ -414,6 +424,7 @@ void PlayState::render(sf::RenderWindow& window) {
     m_entityManager.render(window);
 
     drawBomb(window);
+    drawHammers(window);
     drawBullets(window);
     drawBlocks(window);
     animator.draw(window, avatarFeetCentre());
@@ -778,6 +789,7 @@ bool PlayState::loadLevel(int level) {
     activeBomb.reset();
     bouncingBlocks.clear();
     brickDebris.clear();
+    hammers.clear();
 
     spawnWalkingEnemies();
     spawnAquaticEnemies();
@@ -1282,9 +1294,93 @@ void PlayState::spawnWalkingEnemies() {
         spawn.y -= koopaHeightOffset;
         m_entityManager.addEntity(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &greenKoopaTex, &shellTex, entity::KoopaKind::Green));
     }
+    const float hammerBroHeightOffset = tileMap.tileSize() * 0.5f;
+    for (sf::Vector2f spawn : tileMap.hammerBroSpawns()) {
+        // The marker is a floor cell but a Bro is a tile and a half tall.
+        spawn.y -= hammerBroHeightOffset;
+        m_entityManager.addEntity(entity::EntityFactory::createHammerBro(
+            spawn, tileMap.tileSize(), &assets.getTexture("HammerBro")));
+    }
     for (sf::Vector2f spawn : tileMap.greenParatroopaSpawns()) {
         spawn.y -= koopaHeightOffset;
         m_entityManager.addEntity(entity::EntityFactory::createParatroopa(spawn, tileMap.tileSize(), &paratroopaTex, &shellTex));
+    }
+}
+
+void PlayState::updateEnemyReactions() {
+    if (!m_player) {
+        return;
+    }
+
+    const sf::FloatRect player = avatarBounds();
+    const float playerCentreX = player.position.x + player.size.x * 0.5f;
+    const float safeDistance = kPiranhaSafeTiles * tileMap.tileSize();
+
+    m_entityManager.forEach([&](entity::Entity& target) {
+        if (!target.isAlive()) {
+            return;
+        }
+        if (auto* piranha = dynamic_cast<entity::PiranhaPlant*>(&target)) {
+            // Standing on a pipe is how the avatar reaches the warp below, so
+            // the plant inside waits underground until he has moved off it.
+            const float pipeCentreX = piranha->getPosition().x + tileMap.tileSize() * 0.5f;
+            piranha->setPlayerNearby(std::abs(playerCentreX - pipeCentreX) < safeDistance);
+            return;
+        }
+        if (auto* bro = dynamic_cast<entity::HammerBro*>(&target)) {
+            if (!bro->isActive()) {
+                return;
+            }
+            bro->faceTowards(playerCentreX);
+            if (bro->takePendingThrow()) {
+                const float direction = bro->isFacingRight() ? 1.f : -1.f;
+                hammers.emplace_back(
+                    assets.getTexture("Hammer"), bro->hammerSpawnPoint(),
+                    sf::Vector2f{kHammerThrowSpeedX * direction, kHammerThrowSpeedY},
+                    Config::kZoom);
+            }
+        }
+    });
+}
+
+void PlayState::updateHammers(sf::Time dt) {
+    const bool shielded = starPowerRemaining > 0.f || damageProtectionRemaining > 0.f
+                       || invincibleTimer > 0.f;
+    const sf::FloatRect player = avatarBounds();
+
+    for (auto& hammer : hammers) {
+        hammer.update(dt, kGravity);
+        if (shielded || death.active) {
+            continue;
+        }
+        if (!hammer.bounds().findIntersection(player).has_value()) {
+            continue;
+        }
+        // Hammers cannot be jumped on, only avoided: contact always costs a form.
+        if (m_player->removeLatestPower()) {
+            syncAvatarPowerVisuals();
+            damageProtectionRemaining = kDamageProtectionDuration;
+            invincibleTimer = 1.5f;
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("DowngradeSound"));
+        } else {
+            handlePlayerDeath();
+        }
+        break;
+    }
+
+    const float dropOut = tileMap.pixelHeight() + tileMap.tileSize();
+    const float behindCamera = m_cameraSystem.getCenter().x - Config::kViewWidth;
+    hammers.erase(
+        std::remove_if(hammers.begin(), hammers.end(), [&](const entity::Hammer& hammer) {
+            return hammer.position().y > dropOut || hammer.position().x < behindCamera;
+        }),
+        hammers.end());
+}
+
+void PlayState::drawHammers(sf::RenderWindow& window) const {
+    for (const auto& hammer : hammers) {
+        hammer.draw(window);
     }
 }
 

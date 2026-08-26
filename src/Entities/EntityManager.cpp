@@ -1,5 +1,6 @@
 #include "Entities/EntityManager.hpp"
 #include "Entities/Goomba.hpp"
+#include "Entities/HammerBro.hpp"
 #include "Entities/Koopa.hpp"
 #include "Entities/Paratroopa.hpp"
 #include "Entities/PiranhaPlant.hpp"
@@ -79,6 +80,12 @@ void EntityManager::update(
                 {tileSize * 3.f, tileSize * 3.5f});
             std::vector<physics::AABB> solids = broadphaseSolidQuery(broadBounds);
             paratroopa->update(seconds, physicsSystem, solids, mapWidth, mapHeight);
+        } else if (auto* hammerBro = dynamic_cast<HammerBro*>(entity.get())) {
+            sf::FloatRect broadBounds(
+                {hammerBro->getPosition().x - tileSize, hammerBro->getPosition().y - tileSize},
+                {tileSize * 3.f, tileSize * 4.f});
+            std::vector<physics::AABB> solids = broadphaseSolidQuery(broadBounds);
+            hammerBro->update(seconds, physicsSystem, solids, mapWidth, mapHeight);
         } else if (auto* koopa = dynamic_cast<Koopa*>(entity.get())) {
             sf::FloatRect broadBounds(
                 {koopa->getPosition().x - tileSize, koopa->getPosition().y - tileSize},

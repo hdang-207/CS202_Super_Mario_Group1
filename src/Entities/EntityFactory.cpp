@@ -45,6 +45,10 @@ std::unique_ptr<FlyingCheepCheep> EntityFactory::createFlyingCheepCheep(
         spawnPos, velocity, tileSize, flightBounds, texture);
 }
 
+std::unique_ptr<HammerBro> EntityFactory::createHammerBro(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* texture) {
+    return std::make_unique<HammerBro>(spawnPos, tileSize, texture);
+}
+
 std::unique_ptr<PiranhaPlant> EntityFactory::createPiranhaPlant(const sf::Vector2f& basePos, float pipeTopY, const sf::Texture* texture, float scale) {
     return std::make_unique<PiranhaPlant>(basePos, pipeTopY, texture, scale);
 }
