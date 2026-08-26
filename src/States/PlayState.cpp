@@ -1466,11 +1466,28 @@ void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
 }
 
 void PlayState::spawnPiranhas() {
-    const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
+    const float tile = tileMap.tileSize();
+    const float scale = tile / TileMap::kSourceTileSize;
     const auto& piranhaTex = assets.getTexture("PiranhaPlant");
     for (const sf::Vector2f marker : tileMap.piranhaSpawns()) {
-        const float pipeTopY = marker.y + tileMap.tileSize() * 2.f;
-        const sf::Vector2f shownPosition(marker.x + 8.f * scale,
+        const int markerColumn = static_cast<int>(marker.x / tile);
+        const int pipeRow = static_cast<int>(marker.y / tile) + 2;
+
+        // The marker only names one column of the pipe, so measure the whole
+        // mouth and grow the plant out of its middle. Marking either column of
+        // a two-tile pipe - or a wider one - then lands in the same place.
+        int firstColumn = markerColumn;
+        int lastColumn = markerColumn;
+        while (tileMap.symbolAt(firstColumn - 1, pipeRow) == '[') {
+            --firstColumn;
+        }
+        while (tileMap.symbolAt(lastColumn + 1, pipeRow) == ']') {
+            ++lastColumn;
+        }
+        const float mouthCentreX = (firstColumn + lastColumn + 1) * 0.5f * tile;
+
+        const float pipeTopY = marker.y + tile * 2.f;
+        const sf::Vector2f shownPosition(mouthCentreX - 8.f * scale,
                                          pipeTopY - 23.f * scale);
         m_entityManager.addEntity(entity::EntityFactory::createPiranhaPlant(shownPosition, pipeTopY, &piranhaTex, scale));
     }
