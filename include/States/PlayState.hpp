@@ -136,6 +136,10 @@ private:
 
     bool isPaused{false};
     bool transitionPending{false};
+
+    /// True while the avatar is inside the stage's hidden room, which swaps the
+    /// music and decides which of the two warp pipes is listening for input.
+    bool insideSecretRoom{false};
     std::set<sf::Keyboard::Scancode> heldKeys;
 
     std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
@@ -161,6 +165,16 @@ private:
     void respawnAvatar();
     bool loadLevel(int level);
     bool tryEnterWorld22WaterPipe();
+
+    /// @brief Ducking on the marked pipe drops the avatar into the hidden room.
+    bool tryEnterSecretRoom();
+
+    /// @brief Walking into the hidden room's side pipe returns to the stage.
+    bool tryLeaveSecretRoom();
+
+    /// @brief Drops the avatar into a map cell and takes the camera with it.
+    void warpAvatarTo(sf::Vector2f cell);
+
     bool tryEnterNextLevel();
 
     void spawnCoinPop(sf::Vector2f blockPosition);

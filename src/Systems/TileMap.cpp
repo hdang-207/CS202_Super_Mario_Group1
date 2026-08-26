@@ -23,7 +23,7 @@ namespace {
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * G Green Koopa, J Green Paratroopa, j Blooper, h Cheep-Cheep,
      * R Piranha Plant, D trampoline,
-     * L horizontal lift, and . empty sky.
+     * L horizontal lift, d/e/x/i the hidden-room pipes, and . empty sky.
      * Scenery characters (M m V v l c F X W Q I Y Z T t f q N ~) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
@@ -188,6 +188,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
     trampolines.clear();
     movingPlatforms.clear();
     spawn = {0.f, 0.f};
+    secret = SecretRoomWarp{};
     levelExitAvailable = false;
     levelExitTrigger = sf::FloatRect();
     goalAvailable = false;
@@ -203,6 +204,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
     for (TileBatch& batch : decorations) {
         batch.vertices.clear();
     }
+
+    // The four hidden-room markers only count once every one of them is found,
+    // so a map holding half a warp simply has none.
+    int secretMarkers = 0;
 
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < static_cast<int>(grid[row].size()); ++col) {
@@ -249,6 +254,26 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'L') {
                 movingPlatforms.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'd') {
+                secret.entrance = sf::FloatRect(worldPos, {tileSizePx * 2.f, tileSizePx});
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == 'e') {
+                secret.arrival = worldPos;
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == 'x') {
+                secret.exitMouth = sf::FloatRect(worldPos, {tileSizePx, tileSizePx * 2.f});
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == 'i') {
+                secret.returnCell = worldPos;
+                ++secretMarkers;
                 continue;
             }
 
@@ -329,6 +354,8 @@ bool TileMap::build(const MapParser& parser, float scale) {
                                       static_cast<float>(batch->texture->getSize().y)}));
         }
     }
+
+    secret.available = secretMarkers == 4;
 
     return true;
 }

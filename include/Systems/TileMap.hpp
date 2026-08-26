@@ -162,6 +162,26 @@ public:
     /// @brief Top-left world positions of horizontal moving-platform markers ('L').
     const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
 
+    /**
+     * @struct SecretRoomWarp
+     * @brief The pair of pipes that links a stage to a hidden room.
+     *
+     * Both halves are written into the map file: 'd' marks the mouth of the
+     * pipe the player ducks into, 'e' the cell they drop out at inside the
+     * room, 'x' the cell in front of the room's side pipe and 'i' the cell they
+     * climb back out on. A map missing any of the four has no warp at all.
+     */
+    struct SecretRoomWarp {
+        bool available{false};
+        sf::FloatRect entrance;   ///< Pipe mouth in the stage, two tiles wide.
+        sf::Vector2f arrival;     ///< Cell the player drops into.
+        sf::FloatRect exitMouth;  ///< Room's side pipe, two tiles tall.
+        sf::Vector2f returnCell;  ///< Cell the player comes back out on.
+    };
+
+    /// @brief The hidden room this map links to, if it declares one.
+    const SecretRoomWarp& secretRoom() const { return secret; }
+
     /// @brief True when the map contains a level-exit decoration marker ('W').
     bool hasLevelExit() const { return levelExitAvailable; }
 
@@ -219,6 +239,7 @@ private:
     std::vector<sf::Vector2f> piranhas; ///< Piranha Plant markers ('R').
     std::vector<sf::Vector2f> trampolines; ///< Trampoline markers ('D').
     std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
+    SecretRoomWarp secret;              ///< Hidden-room pipes ('d', 'e', 'x', 'i').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
     bool goalAvailable{false};

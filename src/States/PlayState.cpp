@@ -302,7 +302,7 @@ void PlayState::update(sf::Time dt) {
     }
 
     updateMovingPlatforms(dt);
-    if (tryEnterWorld22WaterPipe()) {
+    if (tryEnterWorld22WaterPipe() || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
         return;
@@ -632,7 +632,7 @@ void PlayState::updateDeathSequence(sf::Time dt) {
 
 void PlayState::playLevelMusic() {
     auto& sounds = Systems::SoundController::getInstance();
-    const bool isUnderground = Config::stageNumber(currentLevel) == 2;
+    const bool isUnderground = Config::stageNumber(currentLevel) == 2 || insideSecretRoom;
     const std::string theme = isUnderground ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
     sounds.playMusic(Systems::resourcePath(theme));
 }
@@ -727,6 +727,7 @@ bool PlayState::loadLevel(int level) {
     m_entityManager.clear();
     m_cameraSystem.reset();
     growingVines.clear();
+    insideSecretRoom = false;
     swimButtonHeld = false;
     waterAnimationElapsed = sf::Time::Zero;
     waterAnimationFrame = 0;
@@ -786,6 +787,68 @@ bool PlayState::tryEnterWorld22WaterPipe() {
     m_cameraSystem.centreCamera({m_cameraSystem.getMaxCameraCenterX(), Config::kViewHeight / 2.f}, tileMap.pixelWidth(), tileMap.pixelHeight());
 
     std::cout << "[Core Engine] World 2-2 entrance pipe: entered underwater room.\n";
+    return true;
+}
+
+void PlayState::warpAvatarTo(sf::Vector2f cell) {
+    auto& body = m_player->getPhysicsBody();
+    const sf::Vector2f size = body.getColliderSize();
+    const sf::Vector2f position{cell.x + (tileMap.tileSize() - size.x) * 0.5f,
+                                cell.y + tileMap.tileSize() - size.y};
+
+    body.setPosition(position);
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+    facingRight = true;
+    syncAvatarPowerVisuals();
+
+    // The camera lock only ever moves forwards during play, so a warp has to
+    // hand it its new anchor itself - otherwise coming back from a room far to
+    // the right would leave the stage stuck off-screen.
+    m_cameraSystem.setMaxCameraCenterX(position.x);
+    m_cameraSystem.centreCamera({position.x, Config::kViewHeight / 2.f},
+                                tileMap.pixelWidth(), tileMap.pixelHeight());
+}
+
+bool PlayState::tryEnterSecretRoom() {
+    const TileMap::SecretRoomWarp& warp = tileMap.secretRoom();
+    if (!warp.available || insideSecretRoom || m_player == nullptr) {
+        return false;
+    }
+    if (!inputHandler.getPlayerInput().crouchHeld
+        || !m_player->getPhysicsBody().isGrounded()) {
+        return false;
+    }
+    if (!avatarBounds().findIntersection(warp.entrance).has_value()) {
+        return false;
+    }
+
+    insideSecretRoom = true;
+    warpAvatarTo(warp.arrival);
+    playLevelMusic();
+
+    std::cout << "[Core Engine] Warp pipe: dropped into the hidden room.\n";
+    return true;
+}
+
+bool PlayState::tryLeaveSecretRoom() {
+    const TileMap::SecretRoomWarp& warp = tileMap.secretRoom();
+    if (!warp.available || !insideSecretRoom || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f) {
+        return false;
+    }
+    if (!avatarBounds().findIntersection(warp.exitMouth).has_value()) {
+        return false;
+    }
+
+    insideSecretRoom = false;
+    warpAvatarTo(warp.returnCell);
+    playLevelMusic();
+
+    std::cout << "[Core Engine] Warp pipe: back above ground.\n";
     return true;
 }
 
