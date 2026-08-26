@@ -25,4 +25,5 @@ private:
     MoveCommand m_moveLeftCommand{-1.0f};
     MoveCommand m_moveRightCommand{1.0f};
     JumpCommand m_jumpCommand{};
+    CrouchCommand m_crouchCommand{};
 };

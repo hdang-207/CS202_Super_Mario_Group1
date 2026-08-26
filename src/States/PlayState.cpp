@@ -24,6 +24,8 @@ namespace {
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
+    constexpr float kWaterFrameDuration = 0.18f;
+    constexpr int kWaterFrameCount = 4;
 
     constexpr float kVineGrowDuration = 2.25f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
@@ -34,6 +36,11 @@ namespace {
     constexpr float kTrampolineLaunchSpeed = 1400.f;
     constexpr float kGoombaStompBounce = 550.f;
     constexpr float kDamageProtectionDuration = 0.75f;
+
+    /// Death animation: hold still, hop, then drop off the bottom of the screen.
+    constexpr float kDeathPauseDuration = 0.5f;
+    constexpr float kDeathHopSpeed = 900.f;
+    constexpr float kDeathSequenceTimeout = 3.5f;
 
     constexpr float kBombExplosionRadius = 72.f;
     constexpr float kBulletSpeed = 420.f;
@@ -47,21 +54,22 @@ namespace {
     constexpr int kWorld21BonusStartColumn = 293;
     constexpr int kWorld22EntrancePipeColumn = 15;
     constexpr int kWorld22WaterStartColumn = 37;
-    constexpr int kWorld22WaterEndColumn = 198;
+    constexpr int kWorld22WaterEndColumn = 197;
     constexpr int kWorld22WaterSurfaceRow = 2;
+    constexpr int kWorld22WaterFloorRow = 13;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
+    constexpr int kWorld23FishStartColumn = 13;
+    constexpr int kWorld23FishEndColumn = 208;
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
-      m_physicsSystem(kGravity, kMaxFallSpeed),
-      avatarSprite(assets.getTexture(character == CharacterType::Mario ? "MarioIdle" : "LuigiIdle")) {}
+      m_physicsSystem(kGravity, kMaxFallSpeed) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
-      m_physicsSystem(kGravity, kMaxFallSpeed),
-      avatarSprite(assets.getTexture(data.selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"))
+      m_physicsSystem(kGravity, kMaxFallSpeed)
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
@@ -107,6 +115,9 @@ void PlayState::init() {
     tileMap.setTileTexture('O', assets.getTexture("GroundTile"));
     tileMap.setTileTexture('w', assets.getTexture("UnderwaterRock"));
     tileMap.setTileTexture('s', assets.getTexture("HardBlockTile"));
+    tileMap.setTileTexture('=', assets.getTexture("World23BridgeDeck"));
+    tileMap.setTileTexture('_', assets.getTexture("World31WaterSurface"));
+    tileMap.setTileTexture(',', assets.getTexture("World31Water"));
 
     tileMap.setDecorationTexture('M', assets.getTexture("HillBig"));
     tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
@@ -127,6 +138,7 @@ void PlayState::init() {
     tileMap.setDecorationTexture('X', assets.getTexture("Castle"));
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
     tileMap.setDecorationTexture('Q', assets.getTexture("WarpPipeForked"));
+    tileMap.setDecorationTexture('~', assets.getTexture("World23BridgeRail"));
 
     if (!loadLevel(currentLevel)) {
         return;
@@ -137,11 +149,11 @@ void PlayState::init() {
     float tile = tileMap.tileSize();
     avatar.setSize({tile * 0.7f, tile * 0.95f});
     avatar.setFillColor(sf::Color::Transparent);
-    avatarSprite.setTexture(assets.getTexture(selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"));
+    animator.init(assets, selectedCharacter);
     respawnAvatar();
     m_cameraSystem.followTarget(m_player ? m_player->getPosition() : avatar.getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
 
-    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
+    std::cout << "[Core Engine] Controls: Left/Right (or A/D) to move, Space/Up/W to jump, Down/S to duck, X to shoot, C to throw a Fire bomb, Esc to pause.\n";
     std::cout << "[Core Engine] Press F for free look: the camera detaches so you can scroll through the level with A/D (hold Shift to go faster).\n";
 }
 
@@ -197,7 +209,7 @@ void PlayState::registerEvents() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
-    if (transitionPending) {
+    if (transitionPending || death.active) {
         return;
     }
 
@@ -253,7 +265,29 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    waterAnimationElapsed += dt;
+    while (waterAnimationElapsed.asSeconds() >= kWaterFrameDuration) {
+        waterAnimationElapsed -= sf::seconds(kWaterFrameDuration);
+        waterAnimationFrame = (waterAnimationFrame + 1) % kWaterFrameCount;
+    }
+
     inputHandler.update(heldKeys);
+
+    // Dying and growing both take the level out of the player's hands for a
+    // moment. Everything else stays frozen so the animation reads clearly and
+    // so a mushroom taken under a low ceiling cannot shove Mario through it.
+    if (death.active) {
+        updateDeathSequence(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
+    if (animator.isTransforming()) {
+        animator.update(dt);
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
 
     damageProtectionRemaining = std::max(0.f, damageProtectionRemaining - dt.asSeconds());
     starPowerRemaining = std::max(0.f, starPowerRemaining - dt.asSeconds());
@@ -273,7 +307,7 @@ void PlayState::update(sf::Time dt) {
     }
 
     updateMovingPlatforms(dt);
-    if (tryEnterWorld22WaterPipe()) {
+    if (tryEnterWorld22WaterPipe() || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
         return;
@@ -290,6 +324,8 @@ void PlayState::update(sf::Time dt) {
     }
 
     // Update all managed entities (Enemies, Items, CoinPops) with full Physics & Wall Collision
+    updateAquaticEnemyTargets();
+    updateFlyingCheepSpawner(dt);
     m_entityManager.update(
         dt,
         m_physicsSystem,
@@ -329,8 +365,11 @@ void PlayState::render(sf::RenderWindow& window) {
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
     bool underground = Config::stageNumber(currentLevel) == 2 && !world22
                     && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
+    // World 3-1 is played at night, so its sky stays black from the castle all
+    // the way to the flagpole - and through the hidden room behind it.
+    const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
     const sf::Color outdoorSky = (world21 || world22) ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
-    sky.setFillColor(underground ? sf::Color(0, 0, 0) : outdoorSky);
+    sky.setFillColor(underground || world31 ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
     window.setView(m_cameraSystem.getView());
@@ -338,29 +377,22 @@ void PlayState::render(sf::RenderWindow& window) {
         const float waterLeft = kWorld22WaterStartColumn * tileMap.tileSize();
         const float waterRight = kWorld22WaterEndColumn * tileMap.tileSize();
         const float waterTop = kWorld22WaterSurfaceRow * tileMap.tileSize();
-        const float waterHeight = tileMap.pixelHeight() - waterTop;
-        const float bandHeight = waterHeight / 4.f;
-        const sf::Color depthColours[] = {
-            sf::Color(66, 64, 255),
-            sf::Color(59, 68, 244),
-            sf::Color(51, 73, 230),
-            sf::Color(43, 79, 214)
-        };
-
-        for (int band = 0; band < 4; ++band) {
-            const float top = waterTop + band * bandHeight;
-            const float bottom = band == 3 ? tileMap.pixelHeight() : waterTop + (band + 1) * bandHeight;
-            sf::RectangleShape waterBand({waterRight - waterLeft, bottom - top});
-            waterBand.setPosition({waterLeft, top});
-            waterBand.setFillColor(depthColours[band]);
-            window.draw(waterBand);
-        }
+        sf::RectangleShape waterBody(
+            {waterRight - waterLeft, tileMap.pixelHeight() - waterTop});
+        waterBody.setPosition({waterLeft, waterTop});
+        // Matches the flat underwater palette in the supplied NES sheet and
+        // avoids visible artificial depth bands behind the surface tiles.
+        waterBody.setFillColor(sf::Color(66, 66, 255));
+        window.draw(waterBody);
 
         sf::Sprite waterSurface(assets.getTexture("UnderwaterTiles"));
         waterSurface.setScale({Config::kZoom, Config::kZoom});
-        for (int column = kWorld22WaterStartColumn; column < kWorld22WaterEndColumn; column += 4) {
-            const int tileCount = std::min(4, kWorld22WaterEndColumn - column);
-            waterSurface.setTextureRect(sf::IntRect({0, 0}, {tileCount * TileMap::kSourceTileSize, 32}));
+        waterSurface.setTextureRect(sf::IntRect(
+            {waterAnimationFrame * TileMap::kSourceTileSize, 0},
+            {TileMap::kSourceTileSize, 32}
+        ));
+        for (int column = kWorld22WaterStartColumn;
+             column < kWorld22WaterEndColumn; ++column) {
             waterSurface.setPosition({column * tileMap.tileSize(), waterTop});
             window.draw(waterSurface);
         }
@@ -387,7 +419,7 @@ void PlayState::render(sf::RenderWindow& window) {
     drawBomb(window);
     drawBullets(window);
     drawBlocks(window);
-    window.draw(avatarSprite);
+    animator.draw(window, avatarFeetCentre());
     drawExplosions(window);
 
     window.setView(screenView);
@@ -431,8 +463,7 @@ bool PlayState::quickLoad() {
             hud.setScore(score);
             hud.setCoins(coins);
             hud.setLives(lives);
-            avatarSprite.setTexture(assets.getTexture(
-                selectedCharacter == CharacterType::Mario ? "MarioIdle" : "LuigiIdle"), true);
+            animator.init(assets, selectedCharacter);
             m_cameraSystem.setFreeLook(false);
             isPaused = false;
             heldKeys.clear();
@@ -459,35 +490,157 @@ sf::FloatRect PlayState::avatarBounds() const {
 
 void PlayState::syncAvatarPowerVisuals() {
     if (!m_player) return;
-    auto& body = m_player->getPhysicsBody();
-    const sf::Vector2f position = body.getPosition();
-    const sf::Vector2f colliderSize = body.getColliderSize();
-    const float feetY = position.y + colliderSize.y;
-    avatar.setSize(colliderSize);
-    avatar.setPosition(position);
+    const auto& body = m_player->getPhysicsBody();
+    avatar.setSize(body.getColliderSize());
+    avatar.setPosition(body.getPosition());
+    // Starts the grow/shrink flash when the form actually changed, and does
+    // nothing at all when it did not.
+    animator.setForm(currentPlayerForm());
+}
 
-    const sf::FloatRect spriteBounds = avatarSprite.getLocalBounds();
-    const float scale = spriteBounds.size.y > 0.f
-        ? (colliderSize.y * 1.5f / spriteBounds.size.y)
-        : 1.f;
-    avatarSprite.setScale({facingRight ? scale : -scale, scale});
-    avatarSprite.setPosition({position.x + colliderSize.x / 2.f, feetY});
+entity::PlayerForm PlayState::currentPlayerForm() const {
+    // Height is decided by the collider, never by Fire alone: the two-tile
+    // artwork may only be used while the body is the two-tile one.
+    if (!m_player->isSuper()) {
+        return entity::PlayerForm::Small;
+    }
+    return m_player->hasFirePower() ? entity::PlayerForm::Fire
+                                    : entity::PlayerForm::Super;
+}
+
+sf::Vector2f PlayState::avatarFeetCentre() const {
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return {bounds.left() + bounds.size.x / 2.f, bounds.bottom()};
+}
+
+void PlayState::updateAvatarAnimation(sf::Time dt, bool underwater) {
+    const physics::PhysicsBody& body = m_player->getPhysicsBody();
+    const sf::Vector2f velocity = body.getVelocity();
+    const PlayerInput& playerInput = inputHandler.getPlayerInput();
+    const float speed = std::abs(velocity.x);
+    const float topSpeed = m_player->getMovementConfig().moveSpeed;
+
+    // Steering hard against your own momentum is a skid, not a walk: the legs
+    // are still going one way while Mario already leans the other.
+    const bool skidding = body.isGrounded()
+        && playerInput.moveAxis != 0.f
+        && speed > topSpeed * 0.25f
+        && (playerInput.moveAxis > 0.f) != (velocity.x > 0.f);
+
+    if (skidding) {
+        facingRight = playerInput.moveAxis > 0.f;
+    } else if (speed > 10.f) {
+        facingRight = velocity.x > 0.f;
+    } else if (playerInput.moveAxis != 0.f) {
+        facingRight = playerInput.moveAxis > 0.f;
+    }
+
+    entity::PlayerAction action = entity::PlayerAction::Idle;
+    if (underwater) {
+        action = entity::PlayerAction::Swim;
+    } else if (!body.isGrounded()) {
+        action = velocity.y < 0.f ? entity::PlayerAction::Jump
+                                  : entity::PlayerAction::Fall;
+    } else if (m_player->isCrouching()) {
+        action = entity::PlayerAction::Crouch;
+    } else if (skidding) {
+        action = entity::PlayerAction::Skid;
+    } else if (speed > 10.f) {
+        action = entity::PlayerAction::Walk;
+    }
+
+    animator.setAction(action);
+    animator.setFacingRight(facingRight);
+    animator.setSpeedRatio(topSpeed > 0.f ? speed / topSpeed : 0.f);
+    animator.setForm(currentPlayerForm());
+    // A Starman already makes the avatar unmistakable, so the damage blink
+    // stays out of its way rather than fighting it for the same pixels.
+    animator.setStarPower(starPowerRemaining > 0.f);
+    animator.setBlinking(starPowerRemaining <= 0.f
+        && (damageProtectionRemaining > 0.f || invincibleTimer > 0.f));
+    animator.update(dt);
+
+    if (animator.consumeFootstep()) {
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("WalkingSound"));
+    }
 }
 
 void PlayState::handlePlayerDeath() {
-    if (transitionPending) return;
-    transitionPending = true;
+    if (transitionPending || death.active) return;
+
     Core::EventSystem::getInstance().broadcast(Core::Event(Core::EventType::PlayerDied));
-    if (lives > 0) {
-        gsm.changeState(std::make_unique<RespawnState>(gsm, assets, getSaveData()));
-    } else {
-        gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+    Systems::SoundController::getInstance().stopMusic();
+
+    auto& body = m_player->getPhysicsBody();
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+
+    starPowerRemaining = 0.f;
+    damageProtectionRemaining = 0.f;
+    invincibleTimer = 0.f;
+    animator.setStarPower(false);
+    animator.setBlinking(false);
+    animator.setAction(entity::PlayerAction::Dead);
+
+    death.active = true;
+    death.elapsed = 0.f;
+    death.velocityY = 0.f;
+
+    // Falling into a pit is already the death fall, so it skips straight past
+    // the pause and the hop instead of bouncing Mario back up out of the hole.
+    if (body.getPosition().y >= tileMap.pixelHeight()) {
+        death.elapsed = kDeathPauseDuration;
+        death.velocityY = kMaxFallSpeed;
+    }
+
+    std::cout << "[Core Engine] Player died in World "
+              << Config::worldNumber(currentLevel) << "-"
+              << Config::stageNumber(currentLevel)
+              << ". Lives remaining: " << lives << "\n";
+}
+
+void PlayState::updateDeathSequence(sf::Time dt) {
+    const float seconds = dt.asSeconds();
+    const float previousElapsed = death.elapsed;
+    death.elapsed += seconds;
+
+    animator.setAction(entity::PlayerAction::Dead);
+    animator.update(dt);
+    tileMap.update(dt);
+
+    // A beat of stillness first: the sting is meant to be heard before Mario
+    // moves at all.
+    if (death.elapsed < kDeathPauseDuration) {
+        return;
+    }
+    if (previousElapsed < kDeathPauseDuration) {
+        death.velocityY = -kDeathHopSpeed;
+    }
+
+    death.velocityY = std::min(kMaxFallSpeed, death.velocityY + kGravity * seconds);
+    auto& body = m_player->getPhysicsBody();
+    sf::Vector2f position = body.getPosition();
+    position.y += death.velocityY * seconds;
+    body.setPosition(position);
+
+    // No collisions on the way down: Mario drops straight through the level.
+    const float cameraBottom = m_cameraSystem.getCenter().y + Config::kViewHeight / 2.f;
+    if (position.y > cameraBottom + tileMap.tileSize()
+        || death.elapsed > kDeathSequenceTimeout) {
+        transitionPending = true;
+        if (lives > 0) {
+            gsm.changeState(std::make_unique<RespawnState>(gsm, assets, getSaveData()));
+        } else {
+            gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+        }
     }
 }
 
 void PlayState::playLevelMusic() {
     auto& sounds = Systems::SoundController::getInstance();
-    const bool isUnderground = Config::stageNumber(currentLevel) == 2;
+    const bool isUnderground = Config::stageNumber(currentLevel) == 2 || insideSecretRoom;
     const std::string theme = isUnderground ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
     sounds.playMusic(Systems::resourcePath(theme));
 }
@@ -503,6 +656,9 @@ void PlayState::respawnAvatar() {
     } else {
         m_player = std::make_unique<entity::Mario>(position, avatar.getSize());
     }
+    facingRight = true;
+    death = DeathSequence{};
+    animator.reset(entity::PlayerForm::Small);
     syncAvatarPowerVisuals();
 }
 
@@ -521,10 +677,13 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
-    // The middle stage of each world uses the cyan underground artwork.
+    // The middle stage of each world uses the cyan underground artwork. World
+    // 2-3 has a dedicated palette cropped from its supplied guide image.
     const bool underground = stage == 2;
+    const bool world23 = world == 2 && stage == 3;
     tileMap.setTileTexture('#', assets.getTexture(
-        underground ? "GroundUndergroundTile" : "GroundTile"));
+        world23 ? "World23Ground"
+                : (underground ? "GroundUndergroundTile" : "GroundTile")));
     tileMap.setTileTexture('B', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('A', assets.getTexture(
@@ -534,10 +693,71 @@ bool PlayState::loadLevel(int level) {
     tileMap.setTileTexture('b', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
-        underground ? "HardBlockUndergroundTile" : "HardBlockTile"));
+        world23 ? "World23HardBlock"
+                : (underground ? "HardBlockUndergroundTile" : "HardBlockTile")));
     tileMap.setTileTexture('?', assets.getTexture(
-        underground ? "QuestionBlockUnderground" : "QuestionBlock"),
-        underground ? 6 : 4, sf::seconds(0.15f));
+        world23 ? "World23QuestionBlock"
+                : (underground ? "QuestionBlockUnderground" : "QuestionBlock")),
+        underground && !world23 ? 6 : 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('o', assets.getTexture(world23 ? "World23Coin" : "Coin"),
+                           4, sf::seconds(0.12f));
+    tileMap.setTileTexture('U', assets.getTexture(
+        world23 ? "World23EmptyBlock" : "EmptyBlock"));
+    tileMap.setTileTexture('(', assets.getTexture(
+        world23 ? "World23IslandLeft" : "IslandTopLeft"));
+    tileMap.setTileTexture('-', assets.getTexture(
+        world23 ? "World23IslandMiddle" : "IslandTopMiddle"));
+    tileMap.setTileTexture(')', assets.getTexture(
+        world23 ? "World23IslandRight" : "IslandTopRight"));
+    tileMap.setTileTexture('|', assets.getTexture(
+        world23 ? "World23IslandTrunk" : "IslandTrunk"));
+    tileMap.setDecorationTexture('l', assets.getTexture(
+        world23 ? "World23CloudBig" : "CloudBig"));
+    tileMap.setDecorationTexture('c', assets.getTexture(
+        world23 ? "World23CloudSmall" : "CloudSmall"));
+    tileMap.setDecorationTexture('X', assets.getTexture(
+        world23 ? "World23StartCastle" : "Castle"));
+    tileMap.setDecorationTexture('Z', assets.getTexture(
+        world23 ? "World23EndCastle" : "CastleWorld2_1"));
+    tileMap.setDecorationTexture('F', assets.getTexture(
+        world23 ? "World23GoalPole" : "Flagpole"));
+
+    // World 3-1 is the night stage. Almost nothing it draws is shared with the
+    // daylight stages - white pipes, white trees, pink stone, a black sky - so
+    // its whole legend is repointed at the crops taken from its own guide.
+    const bool world31 = world == 3 && stage == 1;
+    if (world31) {
+        tileMap.setTileTexture('#', assets.getTexture("World31Ground"));
+        tileMap.setTileTexture('B', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('A', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('^', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('b', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('S', assets.getTexture("World31HardBlock"));
+        tileMap.setTileTexture('s', assets.getTexture("World31HardBlock"));
+        tileMap.setTileTexture('?', assets.getTexture("World31QuestionBlock"),
+                               4, sf::seconds(0.15f));
+        tileMap.setTileTexture('U', assets.getTexture("World31EmptyBlock"));
+        tileMap.setTileTexture('[', assets.getTexture("World31PipeTopLeft"));
+        tileMap.setTileTexture(']', assets.getTexture("World31PipeTopRight"));
+        tileMap.setTileTexture('{', assets.getTexture("World31PipeBodyLeft"));
+        tileMap.setTileTexture('}', assets.getTexture("World31PipeBodyRight"));
+        tileMap.setTileTexture('=', assets.getTexture("World31BridgeDeck"));
+        // Only the hidden room uses map coins, so they take its teal palette.
+        tileMap.setTileTexture('o', assets.getTexture("World31RoomCoin"),
+                               4, sf::seconds(0.12f));
+        tileMap.setTileTexture('g', assets.getTexture("World31RoomGround"));
+        tileMap.setTileTexture('r', assets.getTexture("World31RoomBrick"));
+        tileMap.setDecorationTexture('~', assets.getTexture("World31BridgeRail"));
+        tileMap.setDecorationTexture('T', assets.getTexture("World31TreeTall"));
+        tileMap.setDecorationTexture('t', assets.getTexture("World31TreeShort"));
+        tileMap.setDecorationTexture('q', assets.getTexture("World31Fence"));
+        tileMap.setDecorationTexture('l', assets.getTexture("World31CloudBig"));
+        tileMap.setDecorationTexture('c', assets.getTexture("World31CloudSmall"));
+        tileMap.setDecorationTexture('Z', assets.getTexture("World31StartCastle"));
+        tileMap.setDecorationTexture('X', assets.getTexture("World31EndCastle"));
+        tileMap.setDecorationTexture('F', assets.getTexture("World31GoalPole"));
+        tileMap.setDecorationTexture('Q', assets.getTexture("World31RoomPipe"));
+    }
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: World " << world << "-" << stage
@@ -552,13 +772,18 @@ bool PlayState::loadLevel(int level) {
     m_entityManager.clear();
     m_cameraSystem.reset();
     growingVines.clear();
+    insideSecretRoom = false;
     swimButtonHeld = false;
+    waterAnimationElapsed = sf::Time::Zero;
+    waterAnimationFrame = 0;
+    flyingCheepSpawnTimer = 0.8f;
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
     brickDebris.clear();
 
     spawnWalkingEnemies();
+    spawnAquaticEnemies();
     spawnPiranhas();
     spawnMovingPlatforms();
     spawnTrampolines();
@@ -570,6 +795,8 @@ bool PlayState::loadLevel(int level) {
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
               << tileMap.greenKoopaSpawns().size() << " Green Koopas, "
               << tileMap.greenParatroopaSpawns().size() << " Green Paratroopas, "
+              << tileMap.blooperSpawns().size() << " Bloopers, "
+              << tileMap.cheepCheepSpawns().size() << " Cheep-Cheeps, "
               << tileMap.piranhaSpawns().size() << " Piranha Plants, "
               << tileMap.trampolineSpawns().size() << " trampolines, "
               << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
@@ -608,6 +835,68 @@ bool PlayState::tryEnterWorld22WaterPipe() {
     return true;
 }
 
+void PlayState::warpAvatarTo(sf::Vector2f cell) {
+    auto& body = m_player->getPhysicsBody();
+    const sf::Vector2f size = body.getColliderSize();
+    const sf::Vector2f position{cell.x + (tileMap.tileSize() - size.x) * 0.5f,
+                                cell.y + tileMap.tileSize() - size.y};
+
+    body.setPosition(position);
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+    facingRight = true;
+    syncAvatarPowerVisuals();
+
+    // The camera lock only ever moves forwards during play, so a warp has to
+    // hand it its new anchor itself - otherwise coming back from a room far to
+    // the right would leave the stage stuck off-screen.
+    m_cameraSystem.setMaxCameraCenterX(position.x);
+    m_cameraSystem.centreCamera({position.x, Config::kViewHeight / 2.f},
+                                tileMap.pixelWidth(), tileMap.pixelHeight());
+}
+
+bool PlayState::tryEnterSecretRoom() {
+    const TileMap::SecretRoomWarp& warp = tileMap.secretRoom();
+    if (!warp.available || insideSecretRoom || m_player == nullptr) {
+        return false;
+    }
+    if (!inputHandler.getPlayerInput().crouchHeld
+        || !m_player->getPhysicsBody().isGrounded()) {
+        return false;
+    }
+    if (!avatarBounds().findIntersection(warp.entrance).has_value()) {
+        return false;
+    }
+
+    insideSecretRoom = true;
+    warpAvatarTo(warp.arrival);
+    playLevelMusic();
+
+    std::cout << "[Core Engine] Warp pipe: dropped into the hidden room.\n";
+    return true;
+}
+
+bool PlayState::tryLeaveSecretRoom() {
+    const TileMap::SecretRoomWarp& warp = tileMap.secretRoom();
+    if (!warp.available || !insideSecretRoom || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f) {
+        return false;
+    }
+    if (!avatarBounds().findIntersection(warp.exitMouth).has_value()) {
+        return false;
+    }
+
+    insideSecretRoom = false;
+    warpAvatarTo(warp.returnCell);
+    playLevelMusic();
+
+    std::cout << "[Core Engine] Warp pipe: back above ground.\n";
+    return true;
+}
+
 bool PlayState::tryEnterNextLevel() {
     if (!m_player) return false;
     const sf::FloatRect player = avatarBounds();
@@ -635,7 +924,13 @@ bool PlayState::tryEnterNextLevel() {
 }
 
 void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
-    m_entityManager.addEntity(entity::EntityFactory::createCoinPop(blockPosition, tileMap.tileSize(), &assets.getTexture("Coin")));
+    const bool world23 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 3;
+    const bool world31 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 1;
+    const char* coinArt = world23 ? "World23Coin" : (world31 ? "World31Coin" : "Coin");
+    m_entityManager.addEntity(entity::EntityFactory::createCoinPop(
+        blockPosition, tileMap.tileSize(), &assets.getTexture(coinArt)));
 }
 
 void PlayState::prepareItemBlockRewards() {
@@ -916,6 +1211,8 @@ void PlayState::updateBlocks(sf::Time dt) {
 
 void PlayState::drawBlocks(sf::RenderWindow& window) const {
     const bool underground = Config::stageNumber(currentLevel) == 2;
+    const bool world23 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 3;
 
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
@@ -930,10 +1227,12 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
         if (drawSymbol == 'B' || drawSymbol == '^') {
             tex = &assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile");
         } else if (drawSymbol == '?') {
-            tex = &assets.getTexture(underground ? "QuestionBlockUnderground" : "QuestionBlock");
+            tex = &assets.getTexture(
+                world23 ? "World23QuestionBlock"
+                        : (underground ? "QuestionBlockUnderground" : "QuestionBlock"));
             rect = sf::IntRect({0, 0}, {16, 16});
         } else if (drawSymbol == 'U') {
-            tex = &assets.getTexture("EmptyBlock");
+            tex = &assets.getTexture(world23 ? "World23EmptyBlock" : "EmptyBlock");
         }
         
         if (tex) {
@@ -967,6 +1266,7 @@ void PlayState::spawnWalkingEnemies() {
     const bool underground = Config::stageNumber(currentLevel) == 2 && Config::worldNumber(currentLevel) != 2;
     const auto& goombaTex = assets.getTexture(underground ? "GoombaUnderground" : "Goomba");
     const auto& blueKoopaTex = assets.getTexture("BlueKoopaUnderground");
+    const auto& blueShellTex = assets.getTexture("BlueShell");
     const auto& greenKoopaTex = assets.getTexture("GreenKoopa");
     const auto& shellTex = assets.getTexture("GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
@@ -977,7 +1277,9 @@ void PlayState::spawnWalkingEnemies() {
     const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &blueKoopaTex, &shellTex, entity::KoopaKind::BlueUnderground));
+        m_entityManager.addEntity(entity::EntityFactory::createKoopa(
+            spawn, tileMap.tileSize(), &blueKoopaTex, &blueShellTex,
+            entity::KoopaKind::BlueUnderground));
     }
     for (sf::Vector2f spawn : tileMap.greenKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
@@ -989,12 +1291,94 @@ void PlayState::spawnWalkingEnemies() {
     }
 }
 
+void PlayState::spawnAquaticEnemies() {
+    if (tileMap.blooperSpawns().empty() && tileMap.cheepCheepSpawns().empty()) {
+        return;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect swimBounds(
+        {kWorld22WaterStartColumn * tile, kWorld22WaterSurfaceRow * tile},
+        {(kWorld22WaterEndColumn - kWorld22WaterStartColumn) * tile,
+         (kWorld22WaterFloorRow - kWorld22WaterSurfaceRow) * tile}
+    );
+    const auto& blooperTexture = assets.getTexture("Blooper");
+    const auto& cheepCheepTexture = assets.getTexture("CheepCheep");
+
+    for (const sf::Vector2f spawn : tileMap.blooperSpawns()) {
+        m_entityManager.addEntity(entity::EntityFactory::createBlooper(
+            spawn, tile, swimBounds, &blooperTexture));
+    }
+    for (const sf::Vector2f spawn : tileMap.cheepCheepSpawns()) {
+        m_entityManager.addEntity(entity::EntityFactory::createCheepCheep(
+            spawn, tile, swimBounds, &cheepCheepTexture));
+    }
+}
+
+void PlayState::updateAquaticEnemyTargets() {
+    if (!m_player) {
+        return;
+    }
+
+    const physics::AABB playerBounds = m_player->getPhysicsBody().getAABB();
+    const sf::Vector2f target(
+        playerBounds.position.x + playerBounds.size.x * 0.5f,
+        playerBounds.position.y + playerBounds.size.y * 0.5f
+    );
+    m_entityManager.forEach([target](entity::Entity& managed) {
+        if (auto* blooper = dynamic_cast<entity::Blooper*>(&managed)) {
+            blooper->setTarget(target);
+        }
+    });
+}
+
+void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
+    if (Config::worldNumber(currentLevel) != 2
+        || Config::stageNumber(currentLevel) != 3 || !m_player) {
+        return;
+    }
+
+    flyingCheepSpawnTimer -= dt.asSeconds();
+    const float tile = tileMap.tileSize();
+    const auto& body = m_player->getPhysicsBody().getAABB();
+    const float playerCenterX = body.position.x + body.size.x * 0.5f;
+    if (playerCenterX < kWorld23FishStartColumn * tile
+        || playerCenterX > kWorld23FishEndColumn * tile
+        || flyingCheepSpawnTimer > 0.f) {
+        return;
+    }
+
+    const bool spawnAhead = (rewardRandom() & 1U) != 0U;
+    const float horizontalSpeed = 135.f
+        + static_cast<float>(rewardRandom() % 91U);
+    const float horizontalOffset = (spawnAhead ? 5.f : -3.f) * tile;
+    const float jitter = static_cast<float>(static_cast<int>(rewardRandom() % 5U) - 2)
+                       * tile * 0.5f;
+    const float spawnX = std::clamp(
+        playerCenterX + horizontalOffset + jitter,
+        tile, tileMap.pixelWidth() - tile * 2.f);
+    const sf::Vector2f spawnPosition(
+        spawnX, tileMap.pixelHeight() + tile * 0.25f);
+    const sf::Vector2f launchVelocity(
+        spawnAhead ? -horizontalSpeed : horizontalSpeed,
+        -920.f - static_cast<float>(rewardRandom() % 121U));
+    const sf::FloatRect flightBounds(
+        {0.f, 0.f}, {tileMap.pixelWidth(), tileMap.pixelHeight()});
+
+    m_entityManager.addEntity(entity::EntityFactory::createFlyingCheepCheep(
+        spawnPosition, launchVelocity, tile, flightBounds,
+        &assets.getTexture("FlyingCheepCheep")));
+    flyingCheepSpawnTimer = 0.7f
+        + static_cast<float>(rewardRandom() % 61U) / 100.f;
+}
+
 void PlayState::spawnPiranhas() {
     const float scale = tileMap.tileSize() / TileMap::kSourceTileSize;
     const auto& piranhaTex = assets.getTexture("PiranhaPlant");
     for (const sf::Vector2f marker : tileMap.piranhaSpawns()) {
         const float pipeTopY = marker.y + tileMap.tileSize() * 2.f;
-        const sf::Vector2f shownPosition(marker.x + 7.f * scale, pipeTopY - 23.f * scale);
+        const sf::Vector2f shownPosition(marker.x + 8.f * scale,
+                                         pipeTopY - 23.f * scale);
         m_entityManager.addEntity(entity::EntityFactory::createPiranhaPlant(shownPosition, pipeTopY, &piranhaTex, scale));
     }
 }
@@ -1351,7 +1735,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
         }
 
         // Stomp check for Goomba / Koopa
-        if (body.getVelocity().y > 0.f && (body.getAABB().bottom() <= ent->getPosition().y + 24.f)) {
+        if (!underwater && body.getVelocity().y > 0.f
+            && (body.getAABB().bottom() <= ent->getPosition().y + 24.f)) {
             if (auto* paratroopa = dynamic_cast<entity::Paratroopa*>(ent)) {
                 paratroopa->stomp();
                 score += 200;
@@ -1396,50 +1781,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
         }
     }
 
-    // --- Update Avatar Movement Animation & Facing Direction ---
-    if (body.getVelocity().x > 10.f) {
-        facingRight = true;
-    } else if (body.getVelocity().x < -10.f) {
-        facingRight = false;
-    }
-
-    std::string prefix = (m_player->hasFirePower() ? "Fire" : "") + std::string(selectedCharacter == CharacterType::Mario ? "Mario" : "Luigi");
-
-    if (!body.isGrounded()) {
-        avatarSprite.setTexture(assets.getTexture(prefix + "Jump"));
-    } else if (std::abs(body.getVelocity().x) > 10.f) {
-        runAnimTimer += dt.asSeconds();
-        if (runAnimTimer >= 0.08f) {
-            runAnimTimer = 0.0f;
-            currentRunStep = (currentRunStep + 1) % 4;
-            if (currentRunStep == 1 || currentRunStep == 3) {
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("WalkingSound"));
-            }
-        }
-        const std::string runTexKeys[] = {prefix + "Idle", prefix + "Run1", prefix + "Run2", prefix + "Run1"};
-        avatarSprite.setTexture(assets.getTexture(runTexKeys[currentRunStep]));
-    } else {
-        runAnimTimer = 0.0f;
-        currentRunStep = 0;
-        avatarSprite.setTexture(assets.getTexture(prefix + "Idle"));
-    }
-
-    // Reset texture rect
-    sf::Vector2u texSize = avatarSprite.getTexture().getSize();
-    avatarSprite.setTextureRect(sf::IntRect({0, 0}, {(int)texSize.x, (int)texSize.y}));
-
-    sf::FloatRect sb = avatarSprite.getLocalBounds();
-    // Align sprite origin at bottom-center so feet rest perfectly on top of ground tiles
-    avatarSprite.setOrigin({sb.position.x + sb.size.x / 2.f, sb.position.y + sb.size.y});
-
-    float targetHeight = avatar.getSize().y * 1.5f;
-    float scaleY = (sb.size.y > 0.f) ? (targetHeight / sb.size.y) : 1.f;
-    float scaleX = facingRight ? scaleY : -scaleY;
-
-    avatarSprite.setScale({scaleX, scaleY});
-    sf::Vector2f pos = body.getPosition();
-    avatarSprite.setPosition({pos.x + size.x / 2.f, pos.y + size.y});
+    updateAvatarAnimation(dt, underwater);
 
     return true;
 }
-

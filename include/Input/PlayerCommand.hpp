@@ -31,3 +31,10 @@ public:
         input.jumpHeld = true;
     }
 };
+
+class CrouchCommand final : public PlayerCommand {
+public:
+    void execute(PlayerInput& input) const override {
+        input.crouchHeld = true;
+    }
+};
