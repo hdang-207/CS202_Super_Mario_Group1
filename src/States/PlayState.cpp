@@ -227,6 +227,9 @@ void PlayState::handleInput(const sf::Event& event) {
             return;
         } else if (keyPressed->scancode == sf::Keyboard::Scancode::F) {
             m_cameraSystem.toggleFreeLook();
+            if (!m_cameraSystem.isFreeLook() && m_player) {
+                m_cameraSystem.followTarget(m_player->getPhysicsBody().getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
+            }
         } else if (keyPressed->scancode == sf::Keyboard::Scancode::F5) {
             if (SaveManager::saveProgress("savegame.txt", getSaveData())) {
                 Core::EventSystem::getInstance().broadcast({Core::EventType::GameSaved});
