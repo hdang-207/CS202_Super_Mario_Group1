@@ -6,6 +6,7 @@
 #include "Entities/Paratroopa.hpp"
 #include "Entities/Blooper.hpp"
 #include "Entities/CheepCheep.hpp"
+#include "Entities/FlyingCheepCheep.hpp"
 #include "Entities/PiranhaPlant.hpp"
 #include "Entities/CoinPop.hpp"
 #include "Items/Mushroom.hpp"
@@ -56,6 +57,10 @@ public:
     static std::unique_ptr<Paratroopa> createParatroopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex = nullptr, const sf::Texture* shellTex = nullptr, float initialSpeed = 60.f, float bounceSpeed = 600.f);
     static std::unique_ptr<Blooper> createBlooper(const sf::Vector2f& spawnPos, float tileSize, const sf::FloatRect& swimBounds, const sf::Texture* texture = nullptr);
     static std::unique_ptr<CheepCheep> createCheepCheep(const sf::Vector2f& spawnPos, float tileSize, const sf::FloatRect& swimBounds, const sf::Texture* texture = nullptr, float swimSpeed = 96.f);
+    static std::unique_ptr<FlyingCheepCheep> createFlyingCheepCheep(
+        const sf::Vector2f& spawnPos, const sf::Vector2f& velocity,
+        float tileSize, const sf::FloatRect& flightBounds,
+        const sf::Texture* texture = nullptr);
     static std::unique_ptr<PiranhaPlant> createPiranhaPlant(const sf::Vector2f& basePos, float pipeTopY, const sf::Texture* texture = nullptr, float scale = 3.f);
     static std::unique_ptr<CoinPop> createCoinPop(const sf::Vector2f& blockPos, float tileSize, const sf::Texture* texture = nullptr);
     static std::unique_ptr<items::Mushroom> createMushroom(const sf::Vector2f& blockPos, items::MushroomKind kind = items::MushroomKind::Super, const sf::Texture* texture = nullptr);

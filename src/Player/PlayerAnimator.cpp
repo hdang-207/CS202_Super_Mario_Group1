@@ -26,9 +26,9 @@ namespace {
     constexpr int kWalkCycle[] = {kFrameIdle, kFrameWalk1, kFrameIdle, kFrameWalk2};
     constexpr int kWalkCycleLength = 4;
 
-    /// Swimming rolls the arm over: up, neutral, then the two stride frames.
-    constexpr int kSwimCycle[] = {kFrameJump, kFrameIdle, kFrameWalk1, kFrameWalk2};
-    constexpr int kSwimCycleLength = 4;
+    /// Exact six-pose swimming cycle from the original NES character sheet.
+    constexpr int kFrameSwimStart = 5;
+    constexpr int kSwimCycleLength = 6;
     constexpr float kSwimFrameDuration = 0.16f;
 
     /// Legs move with the character: a slow shuffle, then a sprint.
@@ -204,7 +204,7 @@ int PlayerAnimator::frameIndex() const noexcept {
         case PlayerAction::Walk:
             return kWalkCycle[m_walkStep];
         case PlayerAction::Swim:
-            return kSwimCycle[m_swimStep];
+            return kFrameSwimStart + m_swimStep;
         case PlayerAction::Crouch:
             return kFrameCrouch;
         // The arm-up pose doubles as the skid and the death frame, which is how
