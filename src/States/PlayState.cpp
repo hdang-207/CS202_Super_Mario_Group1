@@ -116,6 +116,8 @@ void PlayState::init() {
     tileMap.setTileTexture('w', assets.getTexture("UnderwaterRock"));
     tileMap.setTileTexture('s', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('=', assets.getTexture("World23BridgeDeck"));
+    tileMap.setTileTexture('_', assets.getTexture("World31WaterSurface"));
+    tileMap.setTileTexture(',', assets.getTexture("World31Water"));
 
     tileMap.setDecorationTexture('M', assets.getTexture("HillBig"));
     tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
@@ -360,8 +362,11 @@ void PlayState::render(sf::RenderWindow& window) {
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
     bool underground = Config::stageNumber(currentLevel) == 2 && !world22
                     && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
+    // World 3-1 is played at night, so its sky stays black from the castle all
+    // the way to the flagpole - and through the hidden room behind it.
+    const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
     const sf::Color outdoorSky = (world21 || world22) ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
-    sky.setFillColor(underground ? sf::Color(0, 0, 0) : outdoorSky);
+    sky.setFillColor(underground || world31 ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
     window.setView(m_cameraSystem.getView());
@@ -714,6 +719,43 @@ bool PlayState::loadLevel(int level) {
     tileMap.setDecorationTexture('F', assets.getTexture(
         world23 ? "World23GoalPole" : "Flagpole"));
 
+    // World 3-1 is the night stage. Almost nothing it draws is shared with the
+    // daylight stages - white pipes, white trees, pink stone, a black sky - so
+    // its whole legend is repointed at the crops taken from its own guide.
+    const bool world31 = world == 3 && stage == 1;
+    if (world31) {
+        tileMap.setTileTexture('#', assets.getTexture("World31Ground"));
+        tileMap.setTileTexture('B', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('A', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('^', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('b', assets.getTexture("World31Brick"));
+        tileMap.setTileTexture('S', assets.getTexture("World31HardBlock"));
+        tileMap.setTileTexture('s', assets.getTexture("World31HardBlock"));
+        tileMap.setTileTexture('?', assets.getTexture("World31QuestionBlock"),
+                               4, sf::seconds(0.15f));
+        tileMap.setTileTexture('U', assets.getTexture("World31EmptyBlock"));
+        tileMap.setTileTexture('[', assets.getTexture("World31PipeTopLeft"));
+        tileMap.setTileTexture(']', assets.getTexture("World31PipeTopRight"));
+        tileMap.setTileTexture('{', assets.getTexture("World31PipeBodyLeft"));
+        tileMap.setTileTexture('}', assets.getTexture("World31PipeBodyRight"));
+        tileMap.setTileTexture('=', assets.getTexture("World31BridgeDeck"));
+        // Only the hidden room uses map coins, so they take its teal palette.
+        tileMap.setTileTexture('o', assets.getTexture("World31RoomCoin"),
+                               4, sf::seconds(0.12f));
+        tileMap.setTileTexture('g', assets.getTexture("World31RoomGround"));
+        tileMap.setTileTexture('r', assets.getTexture("World31RoomBrick"));
+        tileMap.setDecorationTexture('~', assets.getTexture("World31BridgeRail"));
+        tileMap.setDecorationTexture('T', assets.getTexture("World31TreeTall"));
+        tileMap.setDecorationTexture('t', assets.getTexture("World31TreeShort"));
+        tileMap.setDecorationTexture('q', assets.getTexture("World31Fence"));
+        tileMap.setDecorationTexture('l', assets.getTexture("World31CloudBig"));
+        tileMap.setDecorationTexture('c', assets.getTexture("World31CloudSmall"));
+        tileMap.setDecorationTexture('Z', assets.getTexture("World31StartCastle"));
+        tileMap.setDecorationTexture('X', assets.getTexture("World31EndCastle"));
+        tileMap.setDecorationTexture('F', assets.getTexture("World31GoalPole"));
+        tileMap.setDecorationTexture('Q', assets.getTexture("World31RoomPipe"));
+    }
+
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: World " << world << "-" << stage
                   << " map is empty, nothing to play!\n";
@@ -881,9 +923,11 @@ bool PlayState::tryEnterNextLevel() {
 void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
     const bool world23 = Config::worldNumber(currentLevel) == 2
                       && Config::stageNumber(currentLevel) == 3;
+    const bool world31 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 1;
+    const char* coinArt = world23 ? "World23Coin" : (world31 ? "World31Coin" : "Coin");
     m_entityManager.addEntity(entity::EntityFactory::createCoinPop(
-        blockPosition, tileMap.tileSize(),
-        &assets.getTexture(world23 ? "World23Coin" : "Coin")));
+        blockPosition, tileMap.tileSize(), &assets.getTexture(coinArt)));
 }
 
 void PlayState::prepareItemBlockRewards() {

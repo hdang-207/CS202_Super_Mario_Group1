@@ -202,6 +202,62 @@ Game::Game()
     assets.loadTexture("World23EmptyBlock",
                        Systems::resourcePath("assets/textures/world23_empty_block.png"));
 
+    // World 3-1 is the night stage, rebuilt from its own 213x45 NES guide: it
+    // shares almost no artwork with the daylight stages, and the last three
+    // entries furnish the hidden coin room behind its warp pipe.
+    assets.loadTexture("World31Ground",
+                       Systems::resourcePath("assets/textures/world31_ground.png"));
+    assets.loadTexture("World31Brick",
+                       Systems::resourcePath("assets/textures/world31_brick.png"));
+    assets.loadTexture("World31HardBlock",
+                       Systems::resourcePath("assets/textures/world31_hard_block.png"));
+    assets.loadTexture("World31QuestionBlock",
+                       Systems::resourcePath("assets/textures/world31_question_block.png"));
+    assets.loadTexture("World31EmptyBlock",
+                       Systems::resourcePath("assets/textures/world31_empty_block.png"));
+    assets.loadTexture("World31Coin",
+                       Systems::resourcePath("assets/textures/world31_coin.png"));
+    assets.loadTexture("World31PipeTopLeft",
+                       Systems::resourcePath("assets/textures/world31_pipe_top_left.png"));
+    assets.loadTexture("World31PipeTopRight",
+                       Systems::resourcePath("assets/textures/world31_pipe_top_right.png"));
+    assets.loadTexture("World31PipeBodyLeft",
+                       Systems::resourcePath("assets/textures/world31_pipe_body_left.png"));
+    assets.loadTexture("World31PipeBodyRight",
+                       Systems::resourcePath("assets/textures/world31_pipe_body_right.png"));
+    assets.loadTexture("World31BridgeDeck",
+                       Systems::resourcePath("assets/textures/world31_bridge_deck.png"));
+    assets.loadTexture("World31BridgeRail",
+                       Systems::resourcePath("assets/textures/world31_bridge_rail.png"));
+    assets.loadTexture("World31Water",
+                       Systems::resourcePath("assets/textures/world31_water.png"));
+    assets.loadTexture("World31WaterSurface",
+                       Systems::resourcePath("assets/textures/world31_water_surface.png"));
+    assets.loadTexture("World31TreeTall",
+                       Systems::resourcePath("assets/textures/world31_tree_tall.png"));
+    assets.loadTexture("World31TreeShort",
+                       Systems::resourcePath("assets/textures/world31_tree_short.png"));
+    assets.loadTexture("World31Fence",
+                       Systems::resourcePath("assets/textures/world31_fence.png"));
+    assets.loadTexture("World31CloudBig",
+                       Systems::resourcePath("assets/textures/world31_cloud_big.png"));
+    assets.loadTexture("World31CloudSmall",
+                       Systems::resourcePath("assets/textures/world31_cloud_small.png"));
+    assets.loadTexture("World31StartCastle",
+                       Systems::resourcePath("assets/textures/world31_start_castle.png"));
+    assets.loadTexture("World31EndCastle",
+                       Systems::resourcePath("assets/textures/world31_end_castle.png"));
+    assets.loadTexture("World31GoalPole",
+                       Systems::resourcePath("assets/textures/world31_goal_pole.png"));
+    assets.loadTexture("World31RoomGround",
+                       Systems::resourcePath("assets/textures/world31_room_ground.png"));
+    assets.loadTexture("World31RoomBrick",
+                       Systems::resourcePath("assets/textures/world31_room_brick.png"));
+    assets.loadTexture("World31RoomCoin",
+                       Systems::resourcePath("assets/textures/world31_room_coin.png"));
+    assets.loadTexture("World31RoomPipe",
+                       Systems::resourcePath("assets/textures/world31_room_pipe.png"));
+
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));
     assets.loadTexture("Castle", Systems::resourcePath("assets/textures/Fortress.png"));

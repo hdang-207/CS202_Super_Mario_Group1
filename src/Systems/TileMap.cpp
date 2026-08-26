@@ -20,6 +20,7 @@ namespace {
      *   g underground ground   r underground brick   p invisible pipe collider
      *   w underwater rock collider   O outdoor ground
      *   s outdoor staircase   = World 2-3 bridge deck
+     *   _ water surface   , water body (both drawn, neither solid)
      * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
      * G Green Koopa, J Green Paratroopa, j Blooper, h Cheep-Cheep,
      * R Piranha Plant, D trampoline,
@@ -55,6 +56,8 @@ namespace {
         { 'O', TileType::Ground        },
         { 's', TileType::StairBlock    },
         { '=', TileType::Ground        },
+        { '_', TileType::Decoration    },
+        { ',', TileType::Decoration    },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
