@@ -65,11 +65,13 @@ namespace {
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
-      m_physicsSystem(kGravity, kMaxFallSpeed) {}
+      m_physicsSystem(kGravity, kMaxFallSpeed),
+      m_commandParser(std::make_unique<Core::CommandParser>(*this)) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
-      m_physicsSystem(kGravity, kMaxFallSpeed)
+      m_physicsSystem(kGravity, kMaxFallSpeed),
+      m_commandParser(std::make_unique<Core::CommandParser>(*this))
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
@@ -219,12 +221,41 @@ void PlayState::handleInput(const sf::Event& event) {
         return;
     }
 
+    if (const auto* textEntered = event.getIf<sf::Event::TextEntered>()) {
+        m_console.handleTextInput(textEntered->unicode);
+        return;
+    }
+
     if (const auto* keyReleased = event.getIf<sf::Event::KeyReleased>()) {
-        heldKeys.erase(keyReleased->scancode);
+        if (!m_console.isActive()) {
+            heldKeys.erase(keyReleased->scancode);
+        }
         return;
     }
 
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        if (keyPressed->scancode == sf::Keyboard::Scancode::Slash) {
+            m_console.toggle();
+            if (m_console.isActive()) {
+                heldKeys.clear();
+                inputHandler.reset();
+            }
+            return;
+        }
+
+        if (m_console.isActive()) {
+            if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
+                m_console.toggle();
+                return;
+            }
+            if (m_console.handleKeyPress(keyPressed->scancode)) {
+                std::string cmd = m_console.getAndClearInput();
+                Core::CommandResult res = m_commandParser->execute(cmd);
+                m_console.addOutput(res.message);
+            }
+            return;
+        }
+
         heldKeys.insert(keyPressed->scancode);
 
         if (keyPressed->scancode == sf::Keyboard::Scancode::X) {
@@ -262,6 +293,10 @@ void PlayState::handleInput(const sf::Event& event) {
 
 void PlayState::update(sf::Time dt) {
     if (isPaused || transitionPending || !m_player) {
+        return;
+    }
+
+    if (m_console.isActive()) {
         return;
     }
 
@@ -353,6 +388,12 @@ void PlayState::update(sf::Time dt) {
     if (hud.getTime() <= 0.f) {
         handlePlayerDeath();
     }
+    if (m_godMode && m_player->getPhysicsBody().getPosition().y > tileMap.pixelHeight()) {
+        sf::Vector2f pos = m_player->getPhysicsBody().getPosition();
+        pos.y = tileMap.pixelHeight() - 100.f;
+        m_player->getPhysicsBody().setPosition(pos);
+        m_player->getPhysicsBody().setVelocity({0.f, 0.f});
+    }
 }
 
 void PlayState::render(sf::RenderWindow& window) {
@@ -425,6 +466,9 @@ void PlayState::render(sf::RenderWindow& window) {
     window.setView(screenView);
     m_cameraSystem.drawFreeLookHint(window, assets.getFont("MarioFont"), currentLevel);
     hud.render(window);
+    if (m_console.isActive()) {
+        m_console.render(window, assets.getFont("MarioFont"), screenView);
+    }
 }
 
 void PlayState::pause() {
@@ -639,6 +683,8 @@ void PlayState::updateDeathSequence(sf::Time dt) {
 }
 
 void PlayState::playLevelMusic() {
+    if (m_musicLocked) return;
+    
     auto& sounds = Systems::SoundController::getInstance();
     std::string theme = "assets/audio/Theme.mp3";
     if (Config::stageNumber(currentLevel) == 2 || insideSecretRoom) {
@@ -1482,7 +1528,19 @@ bool PlayState::moveAvatar(sf::Time dt) {
     m_player->update(seconds);
 
     bool swimStroke = false;
-    if (underwater) {
+    if (m_flyMode) {
+        sf::Vector2f velocity = body.getVelocity();
+        if (heldKeys.count(sf::Keyboard::Scancode::W) || heldKeys.count(sf::Keyboard::Scancode::Up)) {
+            velocity.y = -300.f;
+        } else if (heldKeys.count(sf::Keyboard::Scancode::S) || heldKeys.count(sf::Keyboard::Scancode::Down)) {
+            velocity.y = 300.f;
+        } else {
+            velocity.y = 0.f;
+        }
+        body.setVelocity(velocity);
+        body.addAcceleration({0.f, -kGravity});
+        body.setGrounded(false);
+    } else if (underwater) {
         sf::Vector2f velocity = body.getVelocity();
         swimStroke = playerInput.jumpHeld && !swimButtonHeld;
         if (swimStroke) {
@@ -1722,8 +1780,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
             }
         }
 
-        // Star power defeats enemies on contact
-        if (starPowerRemaining > 0.f) {
+        // Star power or Destroyer mode defeats enemies on contact
+        if (starPowerRemaining > 0.f || m_destroyerMode || m_godMode) {
             ent->setAlive(false);
             score += 200;
             hud.setScore(score);
@@ -1771,7 +1829,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
             hud.setScore(score);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
             break;
-        } else if (damageProtectionRemaining <= 0.f && invincibleTimer <= 0.f) {
+        } else if (damageProtectionRemaining <= 0.f && invincibleTimer <= 0.f && !m_godMode) {
             // Player takes damage
             if (m_player->removeLatestPower()) {
                 syncAvatarPowerVisuals();
