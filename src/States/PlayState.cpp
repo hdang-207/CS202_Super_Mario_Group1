@@ -640,8 +640,12 @@ void PlayState::updateDeathSequence(sf::Time dt) {
 
 void PlayState::playLevelMusic() {
     auto& sounds = Systems::SoundController::getInstance();
-    const bool isUnderground = Config::stageNumber(currentLevel) == 2 || insideSecretRoom;
-    const std::string theme = isUnderground ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
+    std::string theme = "assets/audio/Theme.mp3";
+    if (Config::stageNumber(currentLevel) == 2 || insideSecretRoom) {
+        theme = "assets/audio/Theme2.mp3";
+    } else if (Config::stageNumber(currentLevel) == 3) {
+        theme = "assets/audio/Theme3.mp3";
+    }
     sounds.playMusic(Systems::resourcePath(theme));
 }
 
