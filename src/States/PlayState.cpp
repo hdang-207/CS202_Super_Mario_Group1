@@ -1372,13 +1372,16 @@ void PlayState::updateExplosions(sf::Time dt) {
 }
 
 void PlayState::drawExplosions(sf::RenderWindow& window) const {
+    // Six 16x16 cells in a 3x2 grid, drawn two tiles across.
+    constexpr int kExplosionCell = 16;
     sf::Sprite expSprite(assets.getTexture("Explosion"));
-    expSprite.setScale({32.f / 189.f, 32.f / 220.f});
+    expSprite.setScale({32.f / kExplosionCell, 32.f / kExplosionCell});
 
     for (const ExplosionEntity& exp : explosions) {
         int col = exp.currentFrame % 3;
         int row = exp.currentFrame / 3;
-        expSprite.setTextureRect(sf::IntRect({col * 189, row * 220}, {189, 220}));
+        expSprite.setTextureRect(sf::IntRect({col * kExplosionCell, row * kExplosionCell},
+                                             {kExplosionCell, kExplosionCell}));
         expSprite.setPosition({exp.position.x - 8.f, exp.position.y - 8.f});
         window.draw(expSprite);
     }
