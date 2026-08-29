@@ -2139,10 +2139,16 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     spawnMushroom(tile.position, items::MushroomKind::OneUp);
                 } else {
                     BlockReward reward = takeNextItemBlockReward();
-                    if (reward == BlockReward::Mushroom) {
-                        spawnMushroom(tile.position);
-                    } else if (reward == BlockReward::FireFlower) {
-                        spawnFireFlower(tile.position);
+                    if (reward == BlockReward::Mushroom
+                        || reward == BlockReward::FireFlower) {
+                        // A power-up block adapts to Mario's current form just
+                        // like SMB: small Mario gets a mushroom, while Super
+                        // Mario gets a Fire Flower in the same block.
+                        if (m_player->isSuper()) {
+                            spawnFireFlower(tile.position);
+                        } else {
+                            spawnMushroom(tile.position);
+                        }
                     } else {
                         spawnCoinPop(tile.position);
                         Core::EventSystem::getInstance().broadcast(
