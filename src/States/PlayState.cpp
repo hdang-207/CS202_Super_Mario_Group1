@@ -432,6 +432,7 @@ void PlayState::render(sf::RenderWindow& window) {
     const int outdoorStartColumn = std::max(0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     const bool world21 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 1;
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
+    const bool world23 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 3;
     const bool world32 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 2;
     bool underground = Config::stageNumber(currentLevel) == 2 && !world22 && !world32
                     && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
@@ -439,7 +440,8 @@ void PlayState::render(sf::RenderWindow& window) {
     // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
     const bool world33 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 3;
-    const sf::Color outdoorSky = (world21 || world22) ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
+    const sf::Color outdoorSky = (world21 || world22 || world23)
+        ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
     sky.setFillColor(underground || world31 || world32 || world33
                          ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
@@ -726,10 +728,12 @@ void PlayState::playLevelMusic() {
     // theme its stage number would otherwise trade for the underground one.
     const bool world32 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 2;
+    const bool world23 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 3;
     std::string theme = "assets/audio/Theme.mp3";
     if ((Config::stageNumber(currentLevel) == 2 && !world32) || insideSecretRoom) {
         theme = "assets/audio/Theme2.mp3";
-    } else if (Config::stageNumber(currentLevel) == 3) {
+    } else if (Config::stageNumber(currentLevel) == 3 && !world23) {
         theme = "assets/audio/Theme3.mp3";
     }
     sounds.playMusic(Systems::resourcePath(theme));
@@ -931,7 +935,8 @@ bool PlayState::loadLevel(int level) {
 
     currentLevel = level;
     hud.setWorld(currentLevel);
-    hud.setTime((world == 1 && stage == 3) || world32 || world33 ? 300.f : 400.f);
+    hud.setTime((world == 1 && stage == 3) || world23 || world32 || world33
+                    ? 300.f : 400.f);
 
     m_entityManager.clear();
     m_cameraSystem.reset();
