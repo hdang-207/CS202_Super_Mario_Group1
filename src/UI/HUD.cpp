@@ -62,11 +62,11 @@ void HUD::init(Systems::AssetManager& assets, CharacterType charType) {
     // 5. Lives (Far Right)
     livesLabelText.emplace(font, "LIVES", fontSize);
     livesLabelText->setFillColor(sf::Color::White);
-    livesLabelText->setPosition({1050.f, topMargin});
+    livesLabelText->setPosition({1010.f, topMargin});
     
     livesText.emplace(font, "", fontSize);
     livesText->setFillColor(sf::Color::White);
-    livesText->setPosition({1075.f, topMargin + 24.f});
+    livesText->setPosition({1045.f, topMargin + 24.f});
     setLives(3);
 
     // 6. Save/Load Toast
