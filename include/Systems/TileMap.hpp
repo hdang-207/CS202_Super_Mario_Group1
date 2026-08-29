@@ -133,13 +133,13 @@ public:
     /// @brief Where the player starts, in world pixels (top-left of the spawn tile).
     sf::Vector2f playerSpawn() const { return spawn; }
 
-    /// @brief Top-left world position of every enemy spawn marker in the map.
+    /// @brief Top-left world position of every Goomba marker ('E'/'n').
     const std::vector<sf::Vector2f>& enemySpawns() const { return enemies; }
 
     /// @brief Bottom-aligned map cells containing Blue Koopa spawn markers ('K').
     const std::vector<sf::Vector2f>& blueKoopaSpawns() const { return blueKoopas; }
 
-    /// @brief Bottom-aligned Green Koopa spawn markers ('G').
+    /// @brief Bottom-aligned Green Koopa spawn markers ('G'/'u').
     const std::vector<sf::Vector2f>& greenKoopaSpawns() const { return greenKoopas; }
 
     /// @brief Bottom-aligned Green Paratroopa spawn markers ('J').
@@ -165,6 +165,17 @@ public:
     /// @brief Top-left world positions of horizontal moving-platform markers ('L').
     const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
 
+    /// @brief Lifts that ride up and down instead of sideways (':').
+    const std::vector<sf::Vector2f>& verticalPlatformSpawns() const {
+        return verticalPlatforms;
+    }
+
+    /// @brief Left-hand platforms of the World 3-3 pulleys ('/').
+    const std::vector<sf::Vector2f>& balanceLeftSpawns() const { return balanceLefts; }
+
+    /// @brief Right-hand platforms of the World 3-3 pulleys ('\\').
+    const std::vector<sf::Vector2f>& balanceRightSpawns() const { return balanceRights; }
+
     /**
      * @struct SecretRoomWarp
      * @brief The pair of pipes that links a stage to a hidden room.
@@ -184,6 +195,25 @@ public:
 
     /// @brief The hidden room this map links to, if it declares one.
     const SecretRoomWarp& secretRoom() const { return secret; }
+
+    /**
+     * @struct CoinHeavenWarp
+     * @brief Vine entrance and falling exit for an above-the-clouds bonus room.
+     *
+     * '^' is the brick that grows the stage vine, 'N' anchors the matching
+     * vine inside Coin Heaven, '>' starts the open-air exit at its right edge,
+     * and '+' is the column where Mario falls back into the main stage.
+     */
+    struct CoinHeavenWarp {
+        bool available{false};
+        sf::Vector2f vineBlock;   ///< Brick that releases the climbable vine.
+        sf::Vector2f arrival;     ///< Cell at the foot of Coin Heaven's vine.
+        float exitX{0.f};         ///< Falling past the map bottom after this x exits.
+        sf::Vector2f returnCell;  ///< Cell at the top of the main stage's D column.
+    };
+
+    /// @brief Coin Heaven linked by this map's C/C+ and D/D+ guide markers.
+    const CoinHeavenWarp& coinHeavenWarp() const { return coinHeaven; }
 
     /// @brief True when the map contains a level-exit decoration marker ('W').
     bool hasLevelExit() const { return levelExitAvailable; }
@@ -243,7 +273,11 @@ private:
     std::vector<sf::Vector2f> piranhas; ///< Piranha Plant markers ('R').
     std::vector<sf::Vector2f> trampolines; ///< Trampoline markers ('D').
     std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
+    std::vector<sf::Vector2f> verticalPlatforms; ///< Up-and-down lift markers (':').
+    std::vector<sf::Vector2f> balanceLefts;  ///< Left pulley platforms ('/').
+    std::vector<sf::Vector2f> balanceRights; ///< Right pulley platforms ('\\').
     SecretRoomWarp secret;              ///< Hidden-room pipes ('d', 'e', 'x', 'i').
+    CoinHeavenWarp coinHeaven;          ///< Sky bonus markers ('^', 'N', '>', '+').
     bool levelExitAvailable{false};
     sf::FloatRect levelExitTrigger;
     bool goalAvailable{false};

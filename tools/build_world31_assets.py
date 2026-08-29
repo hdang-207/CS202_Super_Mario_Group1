@@ -164,6 +164,16 @@ def main():
         # The two pools are drawn, never solid: falling in is a pit death.
         "world31_water.png": crop_tile(stage, 77, 13),
         "world31_water_surface.png": crop_tile(stage, 77, 12),
+        # Coin Heaven uses the same shapes as the daytime bonus room but its
+        # white/orange/green palette comes directly from this night-stage guide.
+        "world31_cloud_block.png": crop_stage(
+            stage, (186 * 16, 6 * 16, 187 * 16, 7 * 16), transparent=True),
+        "world31_coin_heaven_lift.png": crop_stage(
+            stage, (135 * 16, 10 * 16 + 1, 138 * 16, 10 * 16 + 9),
+            transparent=True),
+        "world31_vine.png": crop_stage(
+            stage, (123 * 16, 9 * 16 + 1, 123 * 16 + 14, 14 * 16),
+            transparent=True),
         # White pipes, and the hidden room's green one further below.
         "world31_pipe_top_left.png": crop_tile(stage, 38, 9),
         "world31_pipe_top_right.png": crop_tile(stage, 39, 9),

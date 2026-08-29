@@ -30,6 +30,9 @@ namespace {
     constexpr int kWaterFrameCount = 4;
 
     constexpr float kVineGrowDuration = 2.25f;
+    constexpr float kVineClimbDuration = 1.15f;
+    constexpr float kVineClimbDistanceTiles = 4.f;
+    constexpr float kVineLowerOffsetTiles = 0.5f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
     constexpr float kStarPowerDuration = 10.f;
 
@@ -57,6 +60,11 @@ namespace {
     constexpr float kMovingPlatformSpeed = 90.f;
     constexpr float kMovingPlatformRangeTiles = 3.f;
     constexpr float kMovingPlatformWidthTiles = 3.f;
+    /// World 3-3's lifts: the up-and-down one, and the pulleys, which take a
+    /// beat longer so there is time to hop off before the rope runs out.
+    constexpr float kVerticalLiftSpeed = 66.f;
+    constexpr float kBalanceLiftSpeed = 54.f;
+    constexpr float kBalanceRopeWidth = 2.f;
 
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
@@ -147,6 +155,7 @@ void PlayState::init() {
     tileMap.setDecorationTexture('W', assets.getTexture("WarpPipeForked"));
     tileMap.setDecorationTexture('Q', assets.getTexture("WarpPipeForked"));
     tileMap.setDecorationTexture('~', assets.getTexture("World23BridgeRail"));
+    tileMap.setDecorationTexture('z', assets.getTexture("World32FencePairOffset"));
 
     if (!loadLevel(currentLevel)) {
         return;
@@ -312,6 +321,12 @@ void PlayState::update(sf::Time dt) {
     }
 
     updateMovingPlatforms(dt);
+    updateGrowingVines(dt);
+    if (updateCoinHeavenClimb(dt) || tryStartCoinHeavenClimb()) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
     if (tryEnterWorld22WaterPipe() || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -344,7 +359,6 @@ void PlayState::update(sf::Time dt) {
 
     m_cameraSystem.followTarget(m_player->getPhysicsBody().getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
 
-    updateGrowingVines(dt);
     updateHammers(dt);
     updateBomb(dt);
     updateBullets(dt);
@@ -370,13 +384,16 @@ void PlayState::render(sf::RenderWindow& window) {
     const int outdoorStartColumn = std::max(0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     const bool world21 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 1;
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
-    bool underground = Config::stageNumber(currentLevel) == 2 && !world22
+    const bool world32 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 2;
+    bool underground = Config::stageNumber(currentLevel) == 2 && !world22 && !world32
                     && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
-    // World 3-1 is played at night, so its sky stays black from the castle all
-    // the way to the flagpole - and through the hidden room behind it.
+    // World 3 is played at night, so its sky stays black from the castle all
+    // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
+    const bool world33 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 3;
     const sf::Color outdoorSky = (world21 || world22) ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
-    sky.setFillColor(underground || world31 ? sf::Color(0, 0, 0) : outdoorSky);
+    sky.setFillColor(underground || world31 || world32 || world33
+                         ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
     window.setView(m_cameraSystem.getView());
@@ -648,7 +665,10 @@ void PlayState::updateDeathSequence(sf::Time dt) {
 
 void PlayState::playLevelMusic() {
     auto& sounds = Systems::SoundController::getInstance();
-    const bool isUnderground = Config::stageNumber(currentLevel) == 2 || insideSecretRoom;
+    const bool world32 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 2;
+    const bool isUnderground = (Config::stageNumber(currentLevel) == 2 && !world32)
+                            || insideSecretRoom;
     const std::string theme = isUnderground ? "assets/audio/Theme2.mp3" : "assets/audio/Theme.mp3";
     sounds.playMusic(Systems::resourcePath(theme));
 }
@@ -736,6 +756,7 @@ bool PlayState::loadLevel(int level) {
     const bool world31 = world == 3 && stage == 1;
     if (world31) {
         tileMap.setTileTexture('#', assets.getTexture("World31Ground"));
+        tileMap.setTileTexture('C', assets.getTexture("World31CloudBlock"));
         tileMap.setTileTexture('B', assets.getTexture("World31Brick"));
         tileMap.setTileTexture('A', assets.getTexture("World31Brick"));
         tileMap.setTileTexture('^', assets.getTexture("World31Brick"));
@@ -753,6 +774,8 @@ bool PlayState::loadLevel(int level) {
         // Only the hidden room uses map coins, so they take its teal palette.
         tileMap.setTileTexture('o', assets.getTexture("World31RoomCoin"),
                                4, sf::seconds(0.12f));
+        tileMap.setTileTexture('0', assets.getTexture("World31Coin"),
+                               4, sf::seconds(0.12f));
         tileMap.setTileTexture('g', assets.getTexture("World31RoomGround"));
         tileMap.setTileTexture('r', assets.getTexture("World31RoomBrick"));
         tileMap.setDecorationTexture('~', assets.getTexture("World31BridgeRail"));
@@ -765,6 +788,62 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('X', assets.getTexture("World31EndCastle"));
         tileMap.setDecorationTexture('F', assets.getTexture("World31GoalPole"));
         tileMap.setDecorationTexture('Q', assets.getTexture("World31RoomPipe"));
+        tileMap.setDecorationTexture('N', assets.getTexture("World31Vine"));
+    }
+
+    const bool world32 = world == 3 && stage == 2;
+    if (world32) {
+        tileMap.setTileTexture('#', assets.getTexture("World32Ground"));
+        tileMap.setTileTexture('B', assets.getTexture("World32Brick"));
+        tileMap.setTileTexture('A', assets.getTexture("World32Brick"));
+        tileMap.setTileTexture('^', assets.getTexture("World32Brick"));
+        tileMap.setTileTexture('b', assets.getTexture("World32Brick"));
+        tileMap.setTileTexture('S', assets.getTexture("World32HardBlock"));
+        tileMap.setTileTexture('s', assets.getTexture("World32HardBlock"));
+        tileMap.setTileTexture('?', assets.getTexture("World32QuestionBlock"),
+                               4, sf::seconds(0.15f));
+        tileMap.setTileTexture('U', assets.getTexture("World32EmptyBlock"));
+        tileMap.setTileTexture('o', assets.getTexture("World32Coin"),
+                               4, sf::seconds(0.12f));
+        tileMap.setTileTexture('[', assets.getTexture("World32PipeTopLeft"));
+        tileMap.setTileTexture(']', assets.getTexture("World32PipeTopRight"));
+        tileMap.setTileTexture('{', assets.getTexture("World32PipeBodyLeft"));
+        tileMap.setTileTexture('}', assets.getTexture("World32PipeBodyRight"));
+        tileMap.setDecorationTexture('T', assets.getTexture("World32TreeTall"));
+        tileMap.setDecorationTexture('t', assets.getTexture("World32TreeShort"));
+        tileMap.setDecorationTexture('q', assets.getTexture("World32Fence"));
+        tileMap.setDecorationTexture('f', assets.getTexture("World32FenceGroup"));
+        tileMap.setDecorationTexture('z', assets.getTexture("World32FencePairOffset"));
+        tileMap.setDecorationTexture('l', assets.getTexture("World32CloudBig"));
+        tileMap.setDecorationTexture('c', assets.getTexture("World32CloudSmall"));
+        tileMap.setDecorationTexture('X', assets.getTexture("World32StartCastle"));
+        tileMap.setDecorationTexture('Z', assets.getTexture("World32EndCastle"));
+        tileMap.setDecorationTexture('F', assets.getTexture("World32GoalPole"));
+    }
+
+    // World 3-3 hangs over a single bottomless pit. Its ground only exists at
+    // the two ends; everything between is green-capped brick pillars, whose
+    // caps ('(', '-', ')') are the solid part and whose trunks ('|') are
+    // scenery, exactly like the floating islands in World 1-3.
+    const bool world33 = world == 3 && stage == 3;
+    if (world33) {
+        tileMap.setTileTexture('#', assets.getTexture("World33Ground"));
+        tileMap.setTileTexture('(', assets.getTexture("World33PlatformLeft"));
+        tileMap.setTileTexture('-', assets.getTexture("World33PlatformMiddle"));
+        tileMap.setTileTexture(')', assets.getTexture("World33PlatformRight"));
+        tileMap.setTileTexture('|', assets.getTexture("World33Pillar"));
+        tileMap.setTileTexture('?', assets.getTexture("World33QuestionBlock"),
+                               4, sf::seconds(0.15f));
+        tileMap.setTileTexture('U', assets.getTexture("World33EmptyBlock"));
+        tileMap.setTileTexture('o', assets.getTexture("World33Coin"),
+                               4, sf::seconds(0.12f));
+        tileMap.setDecorationTexture('l', assets.getTexture("World33CloudBig"));
+        tileMap.setDecorationTexture('c', assets.getTexture("World33CloudSmall"));
+        tileMap.setDecorationTexture('X', assets.getTexture("World33StartCastle"));
+        tileMap.setDecorationTexture('Z', assets.getTexture("World33EndCastle"));
+        tileMap.setDecorationTexture('F', assets.getTexture("World33GoalPole"));
+        tileMap.setDecorationTexture('@', assets.getTexture("World33PulleyWide"));
+        tileMap.setDecorationTexture('&', assets.getTexture("World33PulleyShort"));
     }
 
     if (!tileMap.build(mapParser, Config::kZoom)) {
@@ -775,12 +854,15 @@ bool PlayState::loadLevel(int level) {
 
     currentLevel = level;
     hud.setWorld(currentLevel);
-    hud.setTime(world == 1 && stage == 3 ? 300.f : 400.f);
+    hud.setTime((world == 1 && stage == 3) || world32 || world33 ? 300.f : 400.f);
 
     m_entityManager.clear();
     m_cameraSystem.reset();
     growingVines.clear();
     insideSecretRoom = false;
+    climbingCoinHeavenVine = false;
+    insideCoinHeaven = false;
+    coinHeavenClimbElapsed = 0.f;
     swimButtonHeld = false;
     waterAnimationElapsed = sf::Time::Zero;
     waterAnimationFrame = 0;
@@ -808,7 +890,10 @@ bool PlayState::loadLevel(int level) {
               << tileMap.cheepCheepSpawns().size() << " Cheep-Cheeps, "
               << tileMap.piranhaSpawns().size() << " Piranha Plants, "
               << tileMap.trampolineSpawns().size() << " trampolines, "
-              << tileMap.movingPlatformSpawns().size() << " moving lifts\n";
+              << tileMap.movingPlatformSpawns().size() << " moving lifts, "
+              << tileMap.verticalPlatformSpawns().size() << " up-and-down lifts, "
+              << std::min(tileMap.balanceLeftSpawns().size(),
+                          tileMap.balanceRightSpawns().size()) << " pulleys\n";
     return true;
 }
 
@@ -867,7 +952,7 @@ void PlayState::warpAvatarTo(sf::Vector2f cell) {
 
 bool PlayState::tryEnterSecretRoom() {
     const TileMap::SecretRoomWarp& warp = tileMap.secretRoom();
-    if (!warp.available || insideSecretRoom || m_player == nullptr) {
+    if (!warp.available || insideSecretRoom || insideCoinHeaven || m_player == nullptr) {
         return false;
     }
     if (!inputHandler.getPlayerInput().crouchHeld
@@ -906,6 +991,105 @@ bool PlayState::tryLeaveSecretRoom() {
     return true;
 }
 
+bool PlayState::tryStartCoinHeavenClimb() {
+    const TileMap::CoinHeavenWarp& warp = tileMap.coinHeavenWarp();
+    if (!warp.available || insideSecretRoom || insideCoinHeaven
+        || climbingCoinHeavenVine || m_player == nullptr
+        || !inputHandler.getPlayerInput().jumpHeld) {
+        return false;
+    }
+
+    const auto grownVine = std::find_if(
+        growingVines.begin(), growingVines.end(),
+        [&warp](const GrowingVineEntity& vine) {
+            return vine.elapsed >= kVineGrowDuration
+                && std::abs(vine.blockPosition.x - warp.vineBlock.x) < 1.f
+                && std::abs(vine.blockPosition.y - warp.vineBlock.y) < 1.f;
+        });
+    if (grownVine == growingVines.end()) {
+        return false;
+    }
+
+    const sf::Texture& vineTexture = assets.getTexture("World31Vine");
+    const float vineHeight = static_cast<float>(vineTexture.getSize().y) * Config::kZoom;
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect grabBounds(
+        {grownVine->blockPosition.x - tile * 0.25f,
+         grownVine->blockPosition.y + tile - vineHeight
+             + tile * kVineLowerOffsetTiles},
+        {tile * 1.5f, vineHeight});
+    if (!avatarBounds().findIntersection(grabBounds).has_value()) {
+        return false;
+    }
+
+    climbingCoinHeavenVine = true;
+    coinHeavenClimbElapsed = 0.f;
+    coinHeavenClimbStart = m_player->getPhysicsBody().getPosition();
+    coinHeavenVinePosition = grownVine->blockPosition;
+
+    auto& body = m_player->getPhysicsBody();
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+    std::cout << "[Core Engine] Coin Heaven vine: started climbing.\n";
+    return true;
+}
+
+bool PlayState::updateCoinHeavenClimb(sf::Time dt) {
+    if (!climbingCoinHeavenVine || m_player == nullptr) {
+        return false;
+    }
+
+    coinHeavenClimbElapsed += dt.asSeconds();
+    const float progress = std::min(1.f, coinHeavenClimbElapsed / kVineClimbDuration);
+    auto& body = m_player->getPhysicsBody();
+    const sf::Vector2f size = body.getColliderSize();
+    const float centredX = coinHeavenVinePosition.x
+                         + (tileMap.tileSize() - size.x) * 0.5f;
+    const sf::Vector2f position{
+        coinHeavenClimbStart.x + (centredX - coinHeavenClimbStart.x) * progress,
+        coinHeavenClimbStart.y
+            - progress * tileMap.tileSize() * kVineClimbDistanceTiles};
+    body.setPosition(position);
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(false);
+    avatar.setPosition(position);
+
+    animator.setAction(entity::PlayerAction::Jump);
+    animator.setFacingRight(facingRight);
+    animator.setForm(currentPlayerForm());
+    animator.update(dt);
+
+    if (progress >= 1.f) {
+        climbingCoinHeavenVine = false;
+        insideCoinHeaven = true;
+        warpAvatarTo(tileMap.coinHeavenWarp().arrival);
+        avatar.setPosition(m_player->getPhysicsBody().getPosition());
+        std::cout << "[Core Engine] Coin Heaven vine: entered the sky bonus.\n";
+    }
+    return true;
+}
+
+bool PlayState::tryLeaveCoinHeaven() {
+    const TileMap::CoinHeavenWarp& warp = tileMap.coinHeavenWarp();
+    if (!warp.available || !insideCoinHeaven || m_player == nullptr) {
+        return false;
+    }
+
+    const auto& body = m_player->getPhysicsBody();
+    if (body.getPosition().x < warp.exitX
+        || body.getPosition().y <= tileMap.pixelHeight()) {
+        return false;
+    }
+
+    insideCoinHeaven = false;
+    warpAvatarTo(warp.returnCell);
+    avatar.setPosition(m_player->getPhysicsBody().getPosition());
+    std::cout << "[Core Engine] Coin Heaven D+: returned to the main stage.\n";
+    return true;
+}
+
 bool PlayState::tryEnterNextLevel() {
     if (!m_player) return false;
     const sf::FloatRect player = avatarBounds();
@@ -918,8 +1102,9 @@ bool PlayState::tryEnterNextLevel() {
     const bool reachedStageGoal = tileMap.hasGoal()
         && player.findIntersection(tileMap.goalBounds()).has_value();
 
-    const bool reachedMapEnd = m_player->getPhysicsBody().getPosition().x
-        >= tileMap.pixelWidth() - tileMap.tileSize() * 3.f;
+    const bool reachedMapEnd = !insideSecretRoom && !insideCoinHeaven
+        && m_player->getPhysicsBody().getPosition().x
+            >= tileMap.pixelWidth() - tileMap.tileSize() * 3.f;
 
     if (!reachedLevelExit && !reachedStageGoal && !reachedMapEnd) {
         return false;
@@ -937,7 +1122,11 @@ void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
                       && Config::stageNumber(currentLevel) == 3;
     const bool world31 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 1;
-    const char* coinArt = world23 ? "World23Coin" : (world31 ? "World31Coin" : "Coin");
+    const bool world32 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 2;
+    const char* coinArt = world23 ? "World23Coin"
+                        : (world31 ? "World31Coin"
+                                   : (world32 ? "World32Coin" : "Coin"));
     m_entityManager.addEntity(entity::EntityFactory::createCoinPop(
         blockPosition, tileMap.tileSize(), &assets.getTexture(coinArt)));
 }
@@ -994,6 +1183,15 @@ void PlayState::spawnStar(sf::Vector2f blockPosition) {
 }
 
 bool PlayState::spawnGrowingVine(sf::Vector2f blockPosition) {
+    const bool alreadyGrowing = std::any_of(
+        growingVines.begin(), growingVines.end(),
+        [blockPosition](const GrowingVineEntity& vine) {
+            return std::abs(vine.blockPosition.x - blockPosition.x) < 1.f
+                && std::abs(vine.blockPosition.y - blockPosition.y) < 1.f;
+        });
+    if (alreadyGrowing) {
+        return false;
+    }
     growingVines.push_back({blockPosition, 0.f});
     return true;
 }
@@ -1006,11 +1204,26 @@ void PlayState::updateGrowingVines(sf::Time dt) {
 }
 
 void PlayState::drawGrowingVines(sf::RenderWindow& window) const {
-    sf::Sprite vineSprite(assets.getTexture("VineTop"));
+    const bool world31 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 1;
+    const sf::Texture& texture = assets.getTexture(
+        world31 ? "World31Vine" : "VineTop");
+    sf::Sprite vineSprite(texture);
+    const int sourceWidth = static_cast<int>(texture.getSize().x);
+    const int sourceHeight = static_cast<int>(texture.getSize().y);
     vineSprite.setScale({Config::kZoom, Config::kZoom});
     for (const auto& vine : growingVines) {
         float progress = std::min(1.f, vine.elapsed / kVineGrowDuration);
-        vineSprite.setPosition({vine.blockPosition.x, vine.blockPosition.y - progress * tileMap.tileSize() * 4.f});
+        const int visibleHeight = std::max(
+            1, static_cast<int>(std::ceil(sourceHeight * progress)));
+        vineSprite.setTextureRect(sf::IntRect(
+            {0, sourceHeight - visibleHeight}, {sourceWidth, visibleHeight}));
+        const float drawWidth = sourceWidth * Config::kZoom;
+        vineSprite.setPosition({
+            vine.blockPosition.x + (tileMap.tileSize() - drawWidth) * 0.5f,
+            vine.blockPosition.y + tileMap.tileSize()
+                - visibleHeight * Config::kZoom
+                + tileMap.tileSize() * kVineLowerOffsetTiles});
         window.draw(vineSprite);
     }
 }
@@ -1219,9 +1432,16 @@ void PlayState::updateBlocks(sf::Time dt) {
 }
 
 void PlayState::drawBlocks(sf::RenderWindow& window) const {
-    const bool underground = Config::stageNumber(currentLevel) == 2;
     const bool world23 = Config::worldNumber(currentLevel) == 2
                       && Config::stageNumber(currentLevel) == 3;
+    const bool world31 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 1;
+    const bool world32 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 2;
+    const bool underground = Config::stageNumber(currentLevel) == 2 && !world32;
+    const char* brickArt = world31 ? "World31Brick"
+                         : (world32 ? "World32Brick"
+                                    : (underground ? "BrickUndergroundTile" : "BrickTile"));
 
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
@@ -1233,15 +1453,20 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
         const sf::Texture* tex = nullptr;
         sf::IntRect rect;
 
-        if (drawSymbol == 'B' || drawSymbol == '^') {
-            tex = &assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile");
+        if (drawSymbol == 'B' || drawSymbol == '^' || drawSymbol == 'A') {
+            tex = &assets.getTexture(brickArt);
         } else if (drawSymbol == '?') {
-            tex = &assets.getTexture(
-                world23 ? "World23QuestionBlock"
-                        : (underground ? "QuestionBlockUnderground" : "QuestionBlock"));
+            const char* questionArt = world23 ? "World23QuestionBlock"
+                                    : (world31 ? "World31QuestionBlock"
+                                               : (world32 ? "World32QuestionBlock"
+                                                          : (underground ? "QuestionBlockUnderground" : "QuestionBlock")));
+            tex = &assets.getTexture(questionArt);
             rect = sf::IntRect({0, 0}, {16, 16});
         } else if (drawSymbol == 'U') {
-            tex = &assets.getTexture(world23 ? "World23EmptyBlock" : "EmptyBlock");
+            const char* emptyArt = world23 ? "World23EmptyBlock"
+                                 : (world31 ? "World31EmptyBlock"
+                                            : (world32 ? "World32EmptyBlock" : "EmptyBlock"));
+            tex = &assets.getTexture(emptyArt);
         }
         
         if (tex) {
@@ -1258,7 +1483,7 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
     
     // Draw Brick Debris
     if (!brickDebris.empty()) {
-        sf::Sprite debrisSprite(assets.getTexture(underground ? "BrickUndergroundTile" : "BrickTile"));
+        sf::Sprite debrisSprite(assets.getTexture(brickArt));
         float scale = (tileMap.tileSize() / 16.f) * 0.5f; // half size
         debrisSprite.setScale({scale, scale});
         debrisSprite.setOrigin({8.f, 8.f}); // center of 16x16 texture
@@ -1272,7 +1497,10 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
 }
 
 void PlayState::spawnWalkingEnemies() {
-    const bool underground = Config::stageNumber(currentLevel) == 2 && Config::worldNumber(currentLevel) != 2;
+    const bool world32 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 2;
+    const bool underground = Config::stageNumber(currentLevel) == 2
+                          && Config::worldNumber(currentLevel) != 2 && !world32;
     const auto& goombaTex = assets.getTexture(underground ? "GoombaUnderground" : "Goomba");
     const auto& blueKoopaTex = assets.getTexture("BlueKoopaUnderground");
     const auto& blueShellTex = assets.getTexture("BlueShell");
@@ -1280,30 +1508,42 @@ void PlayState::spawnWalkingEnemies() {
     const auto& shellTex = assets.getTexture("GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
 
+    // Anything past the opening screen waits until the camera reaches it, the
+    // way the original spawns its enemies. On a stage of separate islands like
+    // World 3-3 they would otherwise walk off their platform and into the pit
+    // long before the player got there.
+    auto place = [this](std::unique_ptr<entity::Entity> enemy, sf::Vector2f spawn) {
+        if (spawn.x > Config::kViewWidth) {
+            enemy->setActive(false);
+        }
+        m_entityManager.addEntity(std::move(enemy));
+    };
+
     for (sf::Vector2f spawn : tileMap.enemySpawns()) {
-        m_entityManager.addEntity(entity::EntityFactory::createGoomba(spawn, tileMap.tileSize(), &goombaTex));
+        place(entity::EntityFactory::createGoomba(spawn, tileMap.tileSize(), &goombaTex), spawn);
     }
     const float koopaHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.blueKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createKoopa(
+        place(entity::EntityFactory::createKoopa(
             spawn, tileMap.tileSize(), &blueKoopaTex, &blueShellTex,
-            entity::KoopaKind::BlueUnderground));
+            entity::KoopaKind::BlueUnderground), spawn);
     }
     for (sf::Vector2f spawn : tileMap.greenKoopaSpawns()) {
         spawn.y -= koopaHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &greenKoopaTex, &shellTex, entity::KoopaKind::Green));
+        place(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &greenKoopaTex, &shellTex, entity::KoopaKind::Green), spawn);
     }
     const float hammerBroHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.hammerBroSpawns()) {
         // The marker is a floor cell but a Bro is a tile and a half tall.
         spawn.y -= hammerBroHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createHammerBro(
-            spawn, tileMap.tileSize(), &assets.getTexture("HammerBro")));
+        place(entity::EntityFactory::createHammerBro(
+            spawn, tileMap.tileSize(), &assets.getTexture("HammerBro")), spawn);
     }
     for (sf::Vector2f spawn : tileMap.greenParatroopaSpawns()) {
-        spawn.y -= koopaHeightOffset;
-        m_entityManager.addEntity(entity::EntityFactory::createParatroopa(spawn, tileMap.tileSize(), &paratroopaTex, &shellTex));
+        // The lone 3-2 Paratroopa starts two and a half tiles above the path.
+        spawn.y -= world32 ? tileMap.tileSize() : koopaHeightOffset;
+        place(entity::EntityFactory::createParatroopa(spawn, tileMap.tileSize(), &paratroopaTex, &shellTex), spawn);
     }
 }
 
@@ -1496,31 +1736,179 @@ void PlayState::spawnPiranhas() {
 void PlayState::spawnMovingPlatforms() {
     movingPlatforms.clear();
     for (sf::Vector2f pos : tileMap.movingPlatformSpawns()) {
-        movingPlatforms.push_back({pos, pos, pos.x, kMovingPlatformSpeed});
+        movingPlatforms.push_back({pos, pos, pos, {kMovingPlatformSpeed, 0.f},
+                                   LiftMotion::Horizontal, -1, 0.f});
+    }
+    for (sf::Vector2f pos : tileMap.verticalPlatformSpawns()) {
+        movingPlatforms.push_back({pos, pos, pos, {0.f, kVerticalLiftSpeed},
+                                   LiftMotion::Vertical, -1, 0.f});
+    }
+
+    // A stage may carry several pulleys, so the two ends are matched left to
+    // right: the leftmost '/' belongs to the leftmost '\', and so on.
+    std::vector<sf::Vector2f> lefts = tileMap.balanceLeftSpawns();
+    std::vector<sf::Vector2f> rights = tileMap.balanceRightSpawns();
+    auto leftToRight = [](const sf::Vector2f& a, const sf::Vector2f& b) {
+        return a.x < b.x;
+    };
+    std::sort(lefts.begin(), lefts.end(), leftToRight);
+    std::sort(rights.begin(), rights.end(), leftToRight);
+
+    const std::size_t pulleys = std::min(lefts.size(), rights.size());
+    for (std::size_t i = 0; i < pulleys; ++i) {
+        const int first = static_cast<int>(movingPlatforms.size());
+        movingPlatforms.push_back({lefts[i], lefts[i], lefts[i], {},
+                                   LiftMotion::Balance, first + 1,
+                                   pulleyRopeTop(lefts[i])});
+        movingPlatforms.push_back({rights[i], rights[i], rights[i], {},
+                                   LiftMotion::Balance, first,
+                                   pulleyRopeTop(rights[i])});
     }
 }
 
+bool PlayState::isStandingOnPlatform(sf::Vector2f platformPos) const {
+    if (!m_player || death.active) {
+        return false;
+    }
+    const sf::FloatRect player = avatarBounds();
+    const float feet = player.position.y + player.size.y;
+    const float right = platformPos.x + tileMap.tileSize() * kMovingPlatformWidthTiles;
+    return player.position.x + player.size.x > platformPos.x + 2.f
+        && player.position.x < right - 2.f
+        && feet >= platformPos.y - 4.f
+        && feet <= platformPos.y + tileMap.tileSize() * 0.5f;
+}
+
+float PlayState::pulleyRopeTop(sf::Vector2f platformPos) const {
+    const float tile = tileMap.tileSize();
+    const float centre = platformPos.x + tile * kMovingPlatformWidthTiles * 0.5f;
+    const auto& grid = mapParser.getGrid();
+
+    for (std::size_t row = 0; row < grid.size(); ++row) {
+        for (std::size_t col = 0; col < grid[row].size(); ++col) {
+            const char symbol = grid[row][col];
+            if (symbol != '@' && symbol != '&') {
+                continue;
+            }
+            const auto& header = assets.getTexture(
+                symbol == '@' ? "World33PulleyWide" : "World33PulleyShort");
+            const float left = col * tile;
+            const float width = static_cast<float>(header.getSize().x) * Config::kZoom;
+            if (centre >= left && centre <= left + width) {
+                // The wheels fill the header's own row; the rope starts below it.
+                return (row + 1) * tile;
+            }
+        }
+    }
+    return 0.f;
+}
+
 void PlayState::updateMovingPlatforms(sf::Time dt) {
-    float seconds = dt.asSeconds();
-    float range = kMovingPlatformRangeTiles * tileMap.tileSize();
+    const float seconds = dt.asSeconds();
+    const float range = kMovingPlatformRangeTiles * tileMap.tileSize();
+
     for (auto& plat : movingPlatforms) {
         plat.previousPosition = plat.position;
-        plat.position.x += plat.velocityX * seconds;
-        if (plat.position.x > plat.originX + range) {
-            plat.position.x = plat.originX + range;
-            plat.velocityX = -kMovingPlatformSpeed;
-        } else if (plat.position.x < plat.originX - range) {
-            plat.position.x = plat.originX - range;
-            plat.velocityX = kMovingPlatformSpeed;
+    }
+
+    for (std::size_t i = 0; i < movingPlatforms.size(); ++i) {
+        MovingPlatform& plat = movingPlatforms[i];
+        switch (plat.motion) {
+        case LiftMotion::Horizontal:
+            plat.position.x += plat.velocity.x * seconds;
+            if (plat.position.x > plat.origin.x + range) {
+                plat.position.x = plat.origin.x + range;
+                plat.velocity.x = -kMovingPlatformSpeed;
+            } else if (plat.position.x < plat.origin.x - range) {
+                plat.position.x = plat.origin.x - range;
+                plat.velocity.x = kMovingPlatformSpeed;
+            }
+            break;
+
+        case LiftMotion::Vertical:
+            plat.position.y += plat.velocity.y * seconds;
+            if (plat.position.y > plat.origin.y + range) {
+                plat.position.y = plat.origin.y + range;
+                plat.velocity.y = -kVerticalLiftSpeed;
+            } else if (plat.position.y < plat.origin.y - range) {
+                plat.position.y = plat.origin.y - range;
+                plat.velocity.y = kVerticalLiftSpeed;
+            }
+            break;
+
+        case LiftMotion::Balance: {
+            // Each pulley is stepped once, from whichever end comes first.
+            if (plat.partner < 0 || static_cast<std::size_t>(plat.partner) < i) {
+                break;
+            }
+            MovingPlatform& other = movingPlatforms[plat.partner];
+            const bool ridingThis = isStandingOnPlatform(plat.previousPosition);
+            const bool ridingOther = isStandingOnPlatform(other.previousPosition);
+            if (ridingThis == ridingOther) {
+                break; // empty, or weighed down at both ends: the pair hangs still
+            }
+
+            MovingPlatform& sinking = ridingThis ? plat : other;
+            MovingPlatform& rising = ridingThis ? other : plat;
+            // The rope has a fixed length, so the rising end stops the pair
+            // once it has been hauled all the way up to its wheel.
+            const float step = std::min(kBalanceLiftSpeed * seconds,
+                                        rising.position.y - rising.ropeTopY);
+            if (step <= 0.f) {
+                break;
+            }
+            sinking.position.y += step;
+            rising.position.y -= step;
+            break;
         }
+        }
+    }
+
+    // Whoever is aboard travels with the lift instead of being slid out from
+    // under - that is the only way across the pits in World 3-3.
+    if (!m_player || death.active) {
+        return;
+    }
+    for (const MovingPlatform& plat : movingPlatforms) {
+        const sf::Vector2f delta = plat.position - plat.previousPosition;
+        if ((delta.x == 0.f && delta.y == 0.f)
+            || !isStandingOnPlatform(plat.previousPosition)) {
+            continue;
+        }
+        auto& body = m_player->getPhysicsBody();
+        body.setPosition(body.getPosition() + delta);
+        break;
     }
 }
 
 void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
-    const bool coinHeaven = Config::worldNumber(currentLevel) == 2
-                         && Config::stageNumber(currentLevel) == 1;
-    sf::Sprite sprite(assets.getTexture(
-        coinHeaven ? "CoinHeavenLift" : "MovingPlatform"));
+    const bool world21 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 1;
+    const bool world31 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 1;
+    const bool world33 = Config::worldNumber(currentLevel) == 3
+                      && Config::stageNumber(currentLevel) == 3;
+    const bool coinHeaven = world21 || world31;
+    const char* textureKey = world31 ? "World31CoinHeavenLift"
+                           : (world21 ? "CoinHeavenLift"
+                                      : (world33 ? "World33Lift" : "MovingPlatform"));
+
+    // The rope pays out and reels in as the pulley turns, so it is drawn to
+    // whatever length the platform hangs at rather than baked into the map.
+    sf::RectangleShape rope({kBalanceRopeWidth * Config::kZoom, 0.f});
+    rope.setFillColor(sf::Color(252, 188, 176));
+    for (const auto& plat : movingPlatforms) {
+        if (plat.motion != LiftMotion::Balance || plat.position.y <= plat.ropeTopY) {
+            continue;
+        }
+        const float centre = plat.position.x
+                           + tileMap.tileSize() * kMovingPlatformWidthTiles * 0.5f;
+        rope.setSize({kBalanceRopeWidth * Config::kZoom, plat.position.y - plat.ropeTopY});
+        rope.setPosition({centre - Config::kZoom, plat.ropeTopY});
+        window.draw(rope);
+    }
+
+    sf::Sprite sprite(assets.getTexture(textureKey));
     sprite.setScale({Config::kZoom, Config::kZoom});
     for (const auto& plat : movingPlatforms) {
         sf::Vector2f drawPosition = plat.position;
@@ -1776,6 +2164,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
     const int collectedCoins = tileMap.collectCoinsOverlapping(avatarBounds());
     for (int i = 0; i < collectedCoins; ++i) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
+    }
+
+    if (tryLeaveCoinHeaven()) {
+        updateAvatarAnimation(dt, false);
+        return true;
     }
 
     // Fell in pit
