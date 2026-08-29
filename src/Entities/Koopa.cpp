@@ -70,6 +70,33 @@ void Koopa::update(float deltaTime, physics::PhysicsSystem& physicsSystem, const
         m_facingRight = false;
     }
 
+    // Red Koopas patrol their current island instead of walking into a pit.
+    // Probe just beyond the leading foot after physics has settled the body on
+    // the floor; if there is no solid tile there, turn around before falling.
+    if (m_kind == KoopaKind::Red && m_state == KoopaState::Walking
+        && m_physicsBody.isGrounded() && !m_physicsBody.hitWallLeft()
+        && !m_physicsBody.hitWallRight() && m_velocity.x != 0.f) {
+        const physics::AABB body = m_physicsBody.getAABB();
+        constexpr float probeWidth = 2.f;
+        const bool movingRight = m_velocity.x > 0.f;
+        const float probeX = movingRight ? body.right() : body.left() - probeWidth;
+        const physics::AABB floorProbe(
+            {probeX, body.bottom()}, {probeWidth, m_tileSize * 0.1f});
+
+        bool hasFloorAhead = false;
+        for (const physics::AABB& solid : solids) {
+            if (floorProbe.intersects(solid)) {
+                hasFloorAhead = true;
+                break;
+            }
+        }
+        if (!hasFloorAhead) {
+            m_velocity.x = movingRight ? -currentMoveSpeed : currentMoveSpeed;
+            m_physicsBody.setVelocity(m_velocity);
+            m_facingRight = !movingRight;
+        }
+    }
+
     if (m_position.x < 0.f) {
         m_position.x = 0.f;
         m_velocity.x = currentMoveSpeed;

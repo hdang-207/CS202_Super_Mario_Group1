@@ -26,8 +26,8 @@ std::unique_ptr<Koopa> EntityFactory::createKoopa(const sf::Vector2f& spawnPos, 
     return std::make_unique<Koopa>(spawnPos, tileSize, walkTex, shellTex, kind, initialSpeed);
 }
 
-std::unique_ptr<Paratroopa> EntityFactory::createParatroopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex, const sf::Texture* shellTex, float initialSpeed, float bounceSpeed) {
-    return std::make_unique<Paratroopa>(spawnPos, tileSize, walkTex, shellTex, initialSpeed, bounceSpeed);
+std::unique_ptr<Paratroopa> EntityFactory::createParatroopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex, const sf::Texture* shellTex, float initialSpeed, float bounceSpeed, KoopaKind kind) {
+    return std::make_unique<Paratroopa>(spawnPos, tileSize, walkTex, shellTex, initialSpeed, bounceSpeed, kind);
 }
 
 std::unique_ptr<Blooper> EntityFactory::createBlooper(const sf::Vector2f& spawnPos, float tileSize, const sf::FloatRect& swimBounds, const sf::Texture* texture) {

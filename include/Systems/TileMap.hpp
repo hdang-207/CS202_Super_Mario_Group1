@@ -142,9 +142,17 @@ public:
     /// @brief Bottom-aligned Green Koopa spawn markers ('G'/'u').
     const std::vector<sf::Vector2f>& greenKoopaSpawns() const { return greenKoopas; }
 
+    /// @brief Bottom-aligned Red Koopa spawn markers ('2').
+    const std::vector<sf::Vector2f>& redKoopaSpawns() const { return redKoopas; }
+
     /// @brief Bottom-aligned Green Paratroopa spawn markers ('J').
     const std::vector<sf::Vector2f>& greenParatroopaSpawns() const {
         return greenParatroopas;
+    }
+
+    /// @brief Red Paratroopa spawn markers ('3').
+    const std::vector<sf::Vector2f>& redParatroopaSpawns() const {
+        return redParatroopas;
     }
 
     /// @brief Fixed World 2-2 Blooper markers ('j').
@@ -266,7 +274,9 @@ private:
     std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
     std::vector<sf::Vector2f> greenKoopas; ///< Green Koopa spawn markers ('G').
+    std::vector<sf::Vector2f> redKoopas; ///< Red Koopa spawn markers ('2').
     std::vector<sf::Vector2f> greenParatroopas; ///< Green Paratroopa markers ('J').
+    std::vector<sf::Vector2f> redParatroopas; ///< Red Paratroopa markers ('3').
     std::vector<sf::Vector2f> bloopers; ///< Underwater Blooper markers ('j').
     std::vector<sf::Vector2f> cheepCheeps; ///< Underwater Cheep-Cheep markers ('h').
     std::vector<sf::Vector2f> hammerBros; ///< Hammer Bro markers ('k').

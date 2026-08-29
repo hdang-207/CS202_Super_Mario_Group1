@@ -113,6 +113,9 @@ Game::Game()
     assets.loadTexture("GreenKoopa", Systems::resourcePath("assets/textures/green_koopa.png"));
     assets.loadTexture("GreenParatroopa", Systems::resourcePath("assets/textures/green_paratroopa.png"));
     assets.loadTexture("GreenShell", Systems::resourcePath("assets/textures/green_shell.png"));
+    assets.loadTexture("RedKoopa", Systems::resourcePath("assets/textures/red_koopa.png"));
+    assets.loadTexture("RedParatroopa", Systems::resourcePath("assets/textures/red_paratroopa.png"));
+    assets.loadTexture("RedShell", Systems::resourcePath("assets/textures/red_shell.png"));
     assets.loadTexture("BlueShell", Systems::resourcePath("assets/textures/blue_shell.png"));
     assets.loadTexture("Blooper", Systems::resourcePath("assets/textures/blooper.png"));
     assets.loadTexture("CheepCheep", Systems::resourcePath("assets/textures/cheep_cheep.png"));

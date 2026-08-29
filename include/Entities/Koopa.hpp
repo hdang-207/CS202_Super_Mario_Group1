@@ -13,6 +13,7 @@ namespace entity {
 
 enum class KoopaKind {
     Green,
+    Red,
     BlueUnderground
 };
 

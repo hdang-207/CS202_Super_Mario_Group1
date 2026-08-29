@@ -939,7 +939,9 @@ bool PlayState::loadLevel(int level) {
               << tileMap.enemySpawns().size() << " Goombas, "
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
               << tileMap.greenKoopaSpawns().size() << " Green Koopas, "
+              << tileMap.redKoopaSpawns().size() << " Red Koopas, "
               << tileMap.greenParatroopaSpawns().size() << " Green Paratroopas, "
+              << tileMap.redParatroopaSpawns().size() << " Red Paratroopas, "
               << tileMap.blooperSpawns().size() << " Bloopers, "
               << tileMap.cheepCheepSpawns().size() << " Cheep-Cheeps, "
               << tileMap.piranhaSpawns().size() << " Piranha Plants, "
@@ -1564,6 +1566,9 @@ void PlayState::spawnWalkingEnemies() {
     const auto& greenKoopaTex = assets.getTexture("GreenKoopa");
     const auto& shellTex = assets.getTexture("GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
+    const auto& redKoopaTex = assets.getTexture("RedKoopa");
+    const auto& redParatroopaTex = assets.getTexture("RedParatroopa");
+    const auto& redShellTex = assets.getTexture("RedShell");
 
     // Anything past the opening screen waits until the camera reaches it, the
     // way the original spawns its enemies. On a stage of separate islands like
@@ -1590,6 +1595,12 @@ void PlayState::spawnWalkingEnemies() {
         spawn.y -= koopaHeightOffset;
         place(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &greenKoopaTex, &shellTex, entity::KoopaKind::Green), spawn);
     }
+    for (sf::Vector2f spawn : tileMap.redKoopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        place(entity::EntityFactory::createKoopa(
+            spawn, tileMap.tileSize(), &redKoopaTex, &redShellTex,
+            entity::KoopaKind::Red), spawn);
+    }
     const float hammerBroHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.hammerBroSpawns()) {
         // The marker is a floor cell but a Bro is a tile and a half tall.
@@ -1602,6 +1613,15 @@ void PlayState::spawnWalkingEnemies() {
         spawn.y -= world32 ? tileMap.tileSize() : koopaHeightOffset;
         place(entity::EntityFactory::createParatroopa(spawn, tileMap.tileSize(), &paratroopaTex, &shellTex), spawn);
     }
+    for (sf::Vector2f spawn : tileMap.redParatroopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        // Red Paratroopas hover vertically; after losing their wings they use
+        // the same red shell and ledge-aware walking behaviour as Red Koopas.
+        place(entity::EntityFactory::createParatroopa(
+            spawn, tileMap.tileSize(), &redParatroopaTex, &redShellTex,
+            0.f, 600.f, entity::KoopaKind::Red), spawn);
+    }
+
 }
 
 void PlayState::updateEnemyReactions() {

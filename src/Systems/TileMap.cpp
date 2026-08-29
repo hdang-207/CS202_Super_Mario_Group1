@@ -24,7 +24,8 @@ namespace {
      *   0 Coin Heaven coin
      * Markers handled separately: P player spawn, E Goomba, n half-tile Goomba,
      * K Blue Koopa, G Green Koopa, u half-tile Green Koopa,
-     * J Green Paratroopa, k Hammer Bro, j Blooper, h Cheep-Cheep,
+     * 2 Red Koopa, J Green Paratroopa, 3 Red Paratroopa,
+     * k Hammer Bro, j Blooper, h Cheep-Cheep,
      * R Piranha Plant, D trampoline,
      * L horizontal lift, : up-and-down lift, / and \\ the two platforms of a
      * pulley, d/e/x/i the hidden-room pipes, ^/N/>/+ the Coin
@@ -189,7 +190,9 @@ bool TileMap::build(const MapParser& parser, float scale) {
     enemies.clear();
     blueKoopas.clear();
     greenKoopas.clear();
+    redKoopas.clear();
     greenParatroopas.clear();
+    redParatroopas.clear();
     bloopers.clear();
     cheepCheeps.clear();
     hammerBros.clear();
@@ -258,8 +261,16 @@ bool TileMap::build(const MapParser& parser, float scale) {
                     worldPos + sf::Vector2f(tileSizePx * 0.5f, 0.f));
                 continue;
             }
+            if (symbol == '2') {
+                redKoopas.push_back(worldPos);
+                continue;
+            }
             if (symbol == 'J') {
                 greenParatroopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '3') {
+                redParatroopas.push_back(worldPos);
                 continue;
             }
             if (symbol == 'j') {

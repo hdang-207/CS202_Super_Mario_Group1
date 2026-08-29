@@ -21,7 +21,9 @@ enum class EnemyType {
     Goomba,
     BlueKoopa,
     GreenKoopa,
-    GreenParatroopa
+    GreenParatroopa,
+    RedKoopa,
+    RedParatroopa
 };
 
 enum class ItemType {
@@ -55,7 +57,7 @@ public:
 
     static std::unique_ptr<Goomba> createGoomba(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* texture = nullptr, GoombaType type = GoombaType::Normal, float initialSpeed = 72.f);
     static std::unique_ptr<Koopa> createKoopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex = nullptr, const sf::Texture* shellTex = nullptr, KoopaKind kind = KoopaKind::Green, float initialSpeed = 60.f);
-    static std::unique_ptr<Paratroopa> createParatroopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex = nullptr, const sf::Texture* shellTex = nullptr, float initialSpeed = 60.f, float bounceSpeed = 600.f);
+    static std::unique_ptr<Paratroopa> createParatroopa(const sf::Vector2f& spawnPos, float tileSize, const sf::Texture* walkTex = nullptr, const sf::Texture* shellTex = nullptr, float initialSpeed = 60.f, float bounceSpeed = 600.f, KoopaKind kind = KoopaKind::Green);
     static std::unique_ptr<Blooper> createBlooper(const sf::Vector2f& spawnPos, float tileSize, const sf::FloatRect& swimBounds, const sf::Texture* texture = nullptr);
     static std::unique_ptr<CheepCheep> createCheepCheep(const sf::Vector2f& spawnPos, float tileSize, const sf::FloatRect& swimBounds, const sf::Texture* texture = nullptr, float swimSpeed = 96.f);
     static std::unique_ptr<FlyingCheepCheep> createFlyingCheepCheep(

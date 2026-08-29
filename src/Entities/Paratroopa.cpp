@@ -4,8 +4,8 @@
 
 namespace entity {
 
-Paratroopa::Paratroopa(const sf::Vector2f& position, float tileSize, const sf::Texture* walkingTexture, const sf::Texture* shellTexture, float initialSpeed, float bounceSpeed)
-    : Koopa(position, tileSize, walkingTexture, shellTexture, KoopaKind::Green, initialSpeed),
+Paratroopa::Paratroopa(const sf::Vector2f& position, float tileSize, const sf::Texture* walkingTexture, const sf::Texture* shellTexture, float initialSpeed, float bounceSpeed, KoopaKind kind)
+    : Koopa(position, tileSize, walkingTexture, shellTexture, kind, initialSpeed),
       m_hasWings(true),
       m_bounceSpeed(bounceSpeed) {}
 
