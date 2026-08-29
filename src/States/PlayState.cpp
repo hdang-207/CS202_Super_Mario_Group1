@@ -1795,10 +1795,19 @@ void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
         return;
     }
 
-    const bool spawnAhead = (rewardRandom() & 1U) != 0U;
+    // At running speed the fish usually erupts behind Mario; while walking or
+    // standing it usually approaches from the front. A one-in-four exception
+    // keeps the stream unpredictable without losing that original bias.
+    const float playerVelocityX = m_player->getPhysicsBody().getVelocity().x;
+    const bool playerRunning = std::abs(playerVelocityX) >= kMaxWalkSpeed * 0.65f;
+    const unsigned approachRoll = rewardRandom() % 4U;
+    const bool spawnAhead = playerRunning ? approachRoll == 0U
+                                          : approachRoll != 0U;
+    const float travelDirection = playerVelocityX < -1.f ? -1.f : 1.f;
     const float horizontalSpeed = 135.f
         + static_cast<float>(rewardRandom() % 91U);
-    const float horizontalOffset = (spawnAhead ? 5.f : -3.f) * tile;
+    const float horizontalOffset = (spawnAhead ? 5.f : -3.f)
+                                 * tile * travelDirection;
     const float jitter = static_cast<float>(static_cast<int>(rewardRandom() % 5U) - 2)
                        * tile * 0.5f;
     const float spawnX = std::clamp(
@@ -1807,7 +1816,7 @@ void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
     const sf::Vector2f spawnPosition(
         spawnX, tileMap.pixelHeight() + tile * 0.25f);
     const sf::Vector2f launchVelocity(
-        spawnAhead ? -horizontalSpeed : horizontalSpeed,
+        (spawnAhead ? -horizontalSpeed : horizontalSpeed) * travelDirection,
         -920.f - static_cast<float>(rewardRandom() % 121U));
     const sf::FloatRect flightBounds(
         {0.f, 0.f}, {tileMap.pixelWidth(), tileMap.pixelHeight()});
