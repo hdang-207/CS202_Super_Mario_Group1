@@ -13,4 +13,5 @@ struct SaveData {
     int coins{0};                          ///< Total coins collected
     int lives{3};                          ///< Remaining player lives
     CharacterType selectedCharacter{CharacterType::Mario}; ///< Selected character (Mario or Luigi)
+    bool world23AllCoinsCollected{false};  ///< Unlocks World 3-1's hidden 1-Up after a perfect World 2-3 clear.
 };

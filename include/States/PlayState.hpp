@@ -42,6 +42,8 @@ private:
     int score{0};
     int coins{0};
     int lives{3};
+    int levelCoinsCollected{0};
+    bool world23AllCoinsCollected{false};
     UI::HUD hud;
 
     InputHandler inputHandler;

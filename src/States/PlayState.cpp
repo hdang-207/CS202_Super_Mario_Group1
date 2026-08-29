@@ -78,6 +78,7 @@ namespace {
     constexpr int kWorld22WaterSpawnRow = 9;
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
+    constexpr int kWorld23CoinTotal = 35;
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
@@ -94,6 +95,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->score = data.score;
     this->coins = data.coins;
     this->lives = data.lives;
+    this->world23AllCoinsCollected = data.world23AllCoinsCollected;
 }
 
 PlayState::~PlayState() = default;
@@ -183,6 +185,7 @@ void PlayState::registerEvents() {
     events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
         auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("CoinSound"));
+        this->levelCoinsCollected += 1;
         this->coins += 1;
         this->score += 200;
         if (this->coins >= 100) {
@@ -520,6 +523,7 @@ SaveData PlayState::getSaveData() const {
     data.coins = coins;
     data.lives = lives;
     data.selectedCharacter = selectedCharacter;
+    data.world23AllCoinsCollected = world23AllCoinsCollected;
     return data;
 }
 
@@ -527,6 +531,8 @@ bool PlayState::quickLoad() {
     SaveData data;
     if (SaveManager::loadProgress("savegame.txt", data)) {
         std::cout << "[Core Engine] Quick Load loading Level " << data.currentLevel << "...\n";
+        const bool previousWorld23Reward = world23AllCoinsCollected;
+        world23AllCoinsCollected = data.world23AllCoinsCollected;
         if (loadLevel(data.currentLevel)) {
             score = data.score;
             coins = data.coins;
@@ -545,6 +551,7 @@ bool PlayState::quickLoad() {
             playLevelMusic();
             return true;
         }
+        world23AllCoinsCollected = previousWorld23Reward;
     }
     return false;
 }
@@ -907,6 +914,21 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
+    // SMB Deluxe only enables this hidden 1-Up after every open-air coin in
+    // World 2-3 was collected. The marker stays in the authored World 3-1 map,
+    // but becomes empty/non-solid until that perfect-clear flag is present.
+    if (world31 && !world23AllCoinsCollected) {
+        const auto& grid = mapParser.getGrid();
+        for (std::size_t row = 0; row < grid.size(); ++row) {
+            for (std::size_t col = 0; col < grid[row].size(); ++col) {
+                if (grid[row][col] == '1') {
+                    tileMap.changeType(static_cast<int>(col), static_cast<int>(row),
+                                       TileType::Empty);
+                }
+            }
+        }
+    }
+
     currentLevel = level;
     hud.setWorld(currentLevel);
     hud.setTime((world == 1 && stage == 3) || world32 || world33 ? 300.f : 400.f);
@@ -922,6 +944,7 @@ bool PlayState::loadLevel(int level) {
     waterAnimationElapsed = sf::Time::Zero;
     waterAnimationFrame = 0;
     flyingCheepSpawnTimer = 0.8f;
+    levelCoinsCollected = 0;
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
@@ -1170,6 +1193,15 @@ bool PlayState::tryEnterNextLevel() {
 
     if (transitionPending) return false;
     transitionPending = true;
+    if (Config::worldNumber(currentLevel) == 2
+        && Config::stageNumber(currentLevel) == 3) {
+        world23AllCoinsCollected = levelCoinsCollected >= kWorld23CoinTotal;
+        std::cout << "[Core Engine] World 2-3 coin challenge: "
+                  << levelCoinsCollected << "/" << kWorld23CoinTotal
+                  << (world23AllCoinsCollected
+                          ? " collected; World 3-1 hidden 1-Up unlocked.\n"
+                          : " collected; World 3-1 hidden 1-Up remains locked.\n");
+    }
     std::cout << "[Core Engine] Level Complete reached! Transitioning to LevelCompleteState...\n";
     gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, getSaveData()));
     return true;
