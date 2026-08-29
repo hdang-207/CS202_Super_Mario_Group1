@@ -2,6 +2,7 @@
 #include "Core/CharacterType.hpp"
 #include "Combat/Bomb.hpp"
 #include "Entities/Bullet.hpp"
+#include "Entities/Hammer.hpp"
 #include "Entities/Entity.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Entities/EntityManager.hpp"
@@ -120,11 +121,33 @@ private:
     };
     std::vector<GrowingVineEntity> growingVines;
 
+    /// Scripted climb used because the supplied Mario/Luigi sheet has no
+    /// dedicated climbing frames. The normal jump pose travels up the vine,
+    /// then the paired C+ marker receives the player in Coin Heaven.
+    bool climbingCoinHeavenVine{false};
+    bool insideCoinHeaven{false};
+    float coinHeavenClimbElapsed{0.f};
+    sf::Vector2f coinHeavenClimbStart;
+    sf::Vector2f coinHeavenVinePosition;
+
+    /**
+     * @brief How a lift travels.
+     *
+     * World 1-3's lifts swing sideways. World 3-3 adds one that rides up and
+     * down and two pairs slung over a pulley: standing on one end lowers it
+     * and hauls the other end up by the same amount, until the rising end
+     * reaches its wheel.
+     */
+    enum class LiftMotion { Horizontal, Vertical, Balance };
+
     struct MovingPlatform {
         sf::Vector2f position;
         sf::Vector2f previousPosition;
-        float originX;
-        float velocityX;
+        sf::Vector2f origin;
+        sf::Vector2f velocity;
+        LiftMotion motion{LiftMotion::Horizontal};
+        int partner{-1};      ///< Other end of the pulley, -1 when it has none.
+        float ropeTopY{0.f};  ///< Row the pulley's rope hangs from.
     };
     std::vector<MovingPlatform> movingPlatforms;
 
@@ -183,6 +206,15 @@ private:
     /// @brief Walking into the hidden room's side pipe returns to the stage.
     bool tryLeaveSecretRoom();
 
+    /// @brief Starts climbing a fully-grown World 3-1 vine while Up/Jump is held.
+    bool tryStartCoinHeavenClimb();
+
+    /// @brief Advances the short climb and warps to the C+ vine when complete.
+    bool updateCoinHeavenClimb(sf::Time dt);
+
+    /// @brief Returns from the D+ fall at Coin Heaven's open right edge.
+    bool tryLeaveCoinHeaven();
+
     /// @brief Drops the avatar into a map cell and takes the camera with it.
     void warpAvatarTo(sf::Vector2f cell);
 
@@ -204,6 +236,10 @@ private:
         int currentFrame;
     };
     std::vector<entity::Bullet> bullets;
+
+    /// Hammers in flight. They are the Bros' half of the fight, so the level
+    /// owns them beside the fireballs rather than as entities.
+    std::vector<entity::Hammer> hammers;
     std::vector<ExplosionEntity> explosions;
 
     void spawnBullet();
@@ -221,6 +257,14 @@ private:
     void updateBlocks(sf::Time dt);
     void drawBlocks(sf::RenderWindow& window) const;
 
+    /// @brief Enemies that react to where the avatar is: Piranha Plants stay
+    ///        down while he stands on their pipe, Hammer Bros turn to face him
+    ///        and hand the level a hammer to throw.
+    void updateEnemyReactions();
+
+    void updateHammers(sf::Time dt);
+    void drawHammers(sf::RenderWindow& window) const;
+
     void spawnWalkingEnemies();
     void spawnAquaticEnemies();
     void updateAquaticEnemyTargets();
@@ -229,6 +273,12 @@ private:
     void spawnMovingPlatforms();
     void updateMovingPlatforms(sf::Time dt);
     void drawMovingPlatforms(sf::RenderWindow& window) const;
+
+    /// @brief True while the avatar's feet rest on a lift standing at @p platformPos.
+    [[nodiscard]] bool isStandingOnPlatform(sf::Vector2f platformPos) const;
+
+    /// @brief Height the rope of the pulley above @p platformPos hangs from.
+    [[nodiscard]] float pulleyRopeTop(sf::Vector2f platformPos) const;
     void spawnTrampolines();
     void updateTrampolines(sf::Time dt);
     void drawTrampolines(sf::RenderWindow& window) const;

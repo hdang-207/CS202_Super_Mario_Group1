@@ -138,6 +138,8 @@ Game::Game()
     assets.loadTexture("CheepCheep", Systems::resourcePath("assets/textures/cheep_cheep.png"));
     assets.loadTexture("FlyingCheepCheep",
                        Systems::resourcePath("assets/textures/flying_cheep_cheep.png"));
+    assets.loadTexture("HammerBro", Systems::resourcePath("assets/textures/hammer_bro.png"));
+    assets.loadTexture("Hammer", Systems::resourcePath("assets/textures/hammer.png"));
 
     // Scenery: whole objects rather than tiles, so each one is several tiles big.
     assets.loadTexture("HillBig", Systems::resourcePath("assets/textures/hill_big.png"));
@@ -233,6 +235,12 @@ Game::Game()
                        Systems::resourcePath("assets/textures/world31_water.png"));
     assets.loadTexture("World31WaterSurface",
                        Systems::resourcePath("assets/textures/world31_water_surface.png"));
+    assets.loadTexture("World31CloudBlock",
+                       Systems::resourcePath("assets/textures/world31_cloud_block.png"));
+    assets.loadTexture("World31CoinHeavenLift",
+                       Systems::resourcePath("assets/textures/world31_coin_heaven_lift.png"));
+    assets.loadTexture("World31Vine",
+                       Systems::resourcePath("assets/textures/world31_vine.png"));
     assets.loadTexture("World31TreeTall",
                        Systems::resourcePath("assets/textures/world31_tree_tall.png"));
     assets.loadTexture("World31TreeShort",
@@ -257,6 +265,85 @@ Game::Game()
                        Systems::resourcePath("assets/textures/world31_room_coin.png"));
     assets.loadTexture("World31RoomPipe",
                        Systems::resourcePath("assets/textures/world31_room_pipe.png"));
+
+    // World 3-2 keeps the night sky but returns to overworld terrain and music.
+    // Every entry below is an exact crop from its supplied 222x15 guide.
+    assets.loadTexture("World32Ground",
+                       Systems::resourcePath("assets/textures/world32_ground.png"));
+    assets.loadTexture("World32HardBlock",
+                       Systems::resourcePath("assets/textures/world32_hard_block.png"));
+    assets.loadTexture("World32Brick",
+                       Systems::resourcePath("assets/textures/world32_brick.png"));
+    assets.loadTexture("World32QuestionBlock",
+                       Systems::resourcePath("assets/textures/world32_question_block.png"));
+    assets.loadTexture("World32EmptyBlock",
+                       Systems::resourcePath("assets/textures/world32_empty_block.png"));
+    assets.loadTexture("World32Coin",
+                       Systems::resourcePath("assets/textures/world32_coin.png"));
+    assets.loadTexture("World32PipeTopLeft",
+                       Systems::resourcePath("assets/textures/world32_pipe_top_left.png"));
+    assets.loadTexture("World32PipeTopRight",
+                       Systems::resourcePath("assets/textures/world32_pipe_top_right.png"));
+    assets.loadTexture("World32PipeBodyLeft",
+                       Systems::resourcePath("assets/textures/world32_pipe_body_left.png"));
+    assets.loadTexture("World32PipeBodyRight",
+                       Systems::resourcePath("assets/textures/world32_pipe_body_right.png"));
+    assets.loadTexture("World32TreeTall",
+                       Systems::resourcePath("assets/textures/world32_tree_tall.png"));
+    assets.loadTexture("World32TreeShort",
+                       Systems::resourcePath("assets/textures/world32_tree_short.png"));
+    assets.loadTexture("World32Fence",
+                       Systems::resourcePath("assets/textures/world32_fence.png"));
+    assets.loadTexture("World32FenceGroup",
+                       Systems::resourcePath("assets/textures/world32_fence_group.png"));
+    assets.loadTexture("World32FencePairOffset",
+                       Systems::resourcePath("assets/textures/world32_fence_pair_offset.png"));
+    assets.loadTexture("World32CloudBig",
+                       Systems::resourcePath("assets/textures/world32_cloud_big.png"));
+    assets.loadTexture("World32CloudSmall",
+                       Systems::resourcePath("assets/textures/world32_cloud_small.png"));
+    assets.loadTexture("World32StartCastle",
+                       Systems::resourcePath("assets/textures/world32_start_castle.png"));
+    assets.loadTexture("World32EndCastle",
+                       Systems::resourcePath("assets/textures/world32_end_castle.png"));
+    assets.loadTexture("World32GoalPole",
+                       Systems::resourcePath("assets/textures/world32_goal_pole.png"));
+
+    // World 3-3 spans a bottomless pit on green-capped pillars, swinging lifts
+    // and two pulleys. Cropped from its own 163x15 guide; the coins and blocks
+    // share World 3-2's night palette.
+    assets.loadTexture("World33Ground",
+                       Systems::resourcePath("assets/textures/world33_ground.png"));
+    assets.loadTexture("World33Pillar",
+                       Systems::resourcePath("assets/textures/world33_pillar.png"));
+    assets.loadTexture("World33PlatformLeft",
+                       Systems::resourcePath("assets/textures/world33_platform_left.png"));
+    assets.loadTexture("World33PlatformMiddle",
+                       Systems::resourcePath("assets/textures/world33_platform_middle.png"));
+    assets.loadTexture("World33PlatformRight",
+                       Systems::resourcePath("assets/textures/world33_platform_right.png"));
+    assets.loadTexture("World33QuestionBlock",
+                       Systems::resourcePath("assets/textures/world33_question_block.png"));
+    assets.loadTexture("World33EmptyBlock",
+                       Systems::resourcePath("assets/textures/world33_empty_block.png"));
+    assets.loadTexture("World33Coin",
+                       Systems::resourcePath("assets/textures/world33_coin.png"));
+    assets.loadTexture("World33Lift",
+                       Systems::resourcePath("assets/textures/world33_lift.png"));
+    assets.loadTexture("World33PulleyWide",
+                       Systems::resourcePath("assets/textures/world33_pulley_wide.png"));
+    assets.loadTexture("World33PulleyShort",
+                       Systems::resourcePath("assets/textures/world33_pulley_short.png"));
+    assets.loadTexture("World33CloudBig",
+                       Systems::resourcePath("assets/textures/world33_cloud_big.png"));
+    assets.loadTexture("World33CloudSmall",
+                       Systems::resourcePath("assets/textures/world33_cloud_small.png"));
+    assets.loadTexture("World33StartCastle",
+                       Systems::resourcePath("assets/textures/world33_start_castle.png"));
+    assets.loadTexture("World33EndCastle",
+                       Systems::resourcePath("assets/textures/world33_end_castle.png"));
+    assets.loadTexture("World33GoalPole",
+                       Systems::resourcePath("assets/textures/world33_goal_pole.png"));
 
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));

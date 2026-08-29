@@ -24,6 +24,7 @@ TEXTURES = ROOT / "assets" / "textures"
 
 STAGE_PATH = SOURCE / "world3-1.png"
 TILESET_PATH = SOURCE / "nes_tileset.png"
+ENEMIES_PATH = SOURCE / "nes_enemies.png"
 
 # Row the stage strip starts on inside the guide, in tiles.
 STAGE_ROW = 15
@@ -115,6 +116,22 @@ def key_colours(image, backgrounds, palette=None):
     return rgba
 
 
+# The thrower's hand shares the hammer's cell in the sheet and is cropped away.
+THROWER_HAND = (255, 206, 197)
+
+
+def build_sprite_strip(source, cells, size, drop=()):
+    """Lay sprites of one size side by side, centred in equal cells."""
+    strip = Image.new("RGBA", (size[0] * len(cells), size[1]), (0, 0, 0, 0))
+    for index, box in enumerate(cells):
+        sprite = key_colours(source.crop(box), SHEET_BACKGROUNDS | set(drop))
+        strip.alpha_composite(
+            sprite,
+            (index * size[0] + (size[0] - sprite.width) // 2,
+             (size[1] - sprite.height) // 2))
+    return strip
+
+
 def build_strip(source, positions):
     strip = Image.new("RGBA", (16 * len(positions), 16), (0, 0, 0, 0))
     for index, (x, y) in enumerate(positions):
@@ -127,11 +144,14 @@ def build_strip(source, positions):
 def main():
     stage = Image.open(STAGE_PATH).convert("RGBA")
     tileset = Image.open(TILESET_PATH).convert("RGBA")
+    enemies = Image.open(ENEMIES_PATH).convert("RGBA")
 
     if stage.size != (213 * 16, 45 * 16):
         raise ValueError(f"World 3-1 source must be 3408x720, got {stage.size}")
     if tileset.size != (680, 776):
         raise ValueError(f"Tileset source must be 680x776, got {tileset.size}")
+    if enemies.size != (436, 530):
+        raise ValueError(f"Enemy source must be 436x530, got {enemies.size}")
 
     assets = {
         # Terrain. The night palette keeps the overworld shapes but swaps their
@@ -144,6 +164,16 @@ def main():
         # The two pools are drawn, never solid: falling in is a pit death.
         "world31_water.png": crop_tile(stage, 77, 13),
         "world31_water_surface.png": crop_tile(stage, 77, 12),
+        # Coin Heaven uses the same shapes as the daytime bonus room but its
+        # white/orange/green palette comes directly from this night-stage guide.
+        "world31_cloud_block.png": crop_stage(
+            stage, (186 * 16, 6 * 16, 187 * 16, 7 * 16), transparent=True),
+        "world31_coin_heaven_lift.png": crop_stage(
+            stage, (135 * 16, 10 * 16 + 1, 138 * 16, 10 * 16 + 9),
+            transparent=True),
+        "world31_vine.png": crop_stage(
+            stage, (123 * 16, 9 * 16 + 1, 123 * 16 + 14, 14 * 16),
+            transparent=True),
         # White pipes, and the hidden room's green one further below.
         "world31_pipe_top_left.png": crop_tile(stage, 38, 9),
         "world31_pipe_top_right.png": crop_tile(stage, 39, 9),
@@ -182,6 +212,16 @@ def main():
             tileset, ((298, 95), (315, 95), (332, 95), (315, 95))),
         "world31_room_coin.png": build_strip(
             tileset, ((397, 95), (414, 95), (431, 95), (414, 95))),
+        # Hammer Bros first appear in this stage. Unlike the terrain they keep
+        # the enemy sheet's own palette, which is the one the Goombas and
+        # Koopas already in the game were cut from.
+        "hammer_bro.png": build_sprite_strip(
+            enemies, ((0, 182, 16, 206), (18, 182, 34, 206)), (16, 24)),
+        "hammer.png": build_sprite_strip(
+            enemies,
+            ((74, 172, 86, 182), (96, 172, 104, 182),
+             (114, 172, 122, 182), (132, 172, 140, 182)),
+            (16, 16), drop=(THROWER_HAND,)),
     }
 
     for name, image in assets.items():

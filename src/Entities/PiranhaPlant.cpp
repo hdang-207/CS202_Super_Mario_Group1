@@ -39,6 +39,11 @@ void PiranhaPlant::update(float deltaTime) {
         m_animationFrame = (m_animationFrame + 1) % kPiranhaFrameCount;
     }
 
+    // Hold the cycle at the bottom of the pipe until the avatar steps away.
+    if (m_playerNearby && m_exposure <= 0.f) {
+        return;
+    }
+
     m_elapsed = std::fmod(m_elapsed + deltaTime, kPiranhaCycleDuration);
     if (m_elapsed < kPiranhaVisibleDuration) {
         m_exposure = 1.f;
