@@ -48,38 +48,18 @@ Game::Game()
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));
 
-    // Character preview & movement textures
+    // Menu artwork: the character-select preview and the standing sprite the
+    // respawn screen puts next to the lives count.
     assets.loadTexture("MarioPreview", Systems::resourcePath("assets/character/Mario_preview.png"));
     assets.loadTexture("LuigiPreview", Systems::resourcePath("assets/character/Luigi_preview.png"));
-    
-    // Normal Mario
     assets.loadTexture("MarioIdle", Systems::resourcePath("assets/character/Mario_idle.png"));
-    assets.loadTexture("MarioJump", Systems::resourcePath("assets/character/Mario_jump.png"));
-    assets.loadTexture("MarioRun1", Systems::resourcePath("assets/character/Mario_run1.png"));
-    assets.loadTexture("MarioRun2", Systems::resourcePath("assets/character/Mario_run2.png"));
-    
-    // Fire Mario
-    assets.loadTexture("FireMarioIdle", Systems::resourcePath("assets/character/FireMarioIdle.png"));
-    assets.loadTexture("FireMarioJump", Systems::resourcePath("assets/character/FireMarioJump.png"));
-    assets.loadTexture("FireMarioRun1", Systems::resourcePath("assets/character/FireMarioRun1.png"));
-    assets.loadTexture("FireMarioRun2", Systems::resourcePath("assets/character/FireMarioRun2.png"));
-    
-    // Normal Luigi
     assets.loadTexture("LuigiIdle", Systems::resourcePath("assets/character/Luigi_idle.png"));
-    assets.loadTexture("LuigiJump", Systems::resourcePath("assets/character/Luigi_jump.png"));
-    assets.loadTexture("LuigiRun1", Systems::resourcePath("assets/character/Luigi_run1.png"));
-    assets.loadTexture("LuigiRun2", Systems::resourcePath("assets/character/Luigi_run2.png"));
 
-    // Fire Luigi
-    assets.loadTexture("FireLuigiIdle", Systems::resourcePath("assets/character/FireLuigiIdle.png"));
-    assets.loadTexture("FireLuigiJump", Systems::resourcePath("assets/character/FireLuigiJump.png"));
-    assets.loadTexture("FireLuigiRun1", Systems::resourcePath("assets/character/FireLuigiRun1.png"));
-    assets.loadTexture("FireLuigiRun2", Systems::resourcePath("assets/character/FireLuigiRun2.png"));
-
-    // Normalised gameplay sheets: five land poses followed by the six authentic
-    // NES swimming poses, all in equal cells so PlayerAnimator can draw them at
-    // the project's whole-number zoom. Rebuild them with
-    // `python3 tools/build_character_sheets.py` after touching the art above.
+    // Gameplay sheets: nine land poses followed by the six NES swimming poses,
+    // all in equal cells so PlayerAnimator can draw them at the project's
+    // whole-number zoom. Every frame is cut from the NES source artwork by
+    // `python3 tools/build_character_sheets.py`, which also writes the four
+    // menu sprites above.
     assets.loadTexture("MarioSmallSheet", Systems::resourcePath("assets/character/mario_small.png"));
     assets.loadTexture("MarioSuperSheet", Systems::resourcePath("assets/character/mario_super.png"));
     assets.loadTexture("MarioFireSheet", Systems::resourcePath("assets/character/mario_fire.png"));
@@ -133,6 +113,9 @@ Game::Game()
     assets.loadTexture("GreenKoopa", Systems::resourcePath("assets/textures/green_koopa.png"));
     assets.loadTexture("GreenParatroopa", Systems::resourcePath("assets/textures/green_paratroopa.png"));
     assets.loadTexture("GreenShell", Systems::resourcePath("assets/textures/green_shell.png"));
+    assets.loadTexture("RedKoopa", Systems::resourcePath("assets/textures/red_koopa.png"));
+    assets.loadTexture("RedParatroopa", Systems::resourcePath("assets/textures/red_paratroopa.png"));
+    assets.loadTexture("RedShell", Systems::resourcePath("assets/textures/red_shell.png"));
     assets.loadTexture("BlueShell", Systems::resourcePath("assets/textures/blue_shell.png"));
     assets.loadTexture("Blooper", Systems::resourcePath("assets/textures/blooper.png"));
     assets.loadTexture("CheepCheep", Systems::resourcePath("assets/textures/cheep_cheep.png"));

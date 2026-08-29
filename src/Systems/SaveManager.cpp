@@ -31,6 +31,7 @@ bool SaveManager::saveToFile(const std::string& filepath, const SaveData& data) 
     outFile << data.coins << "\n";
     outFile << data.lives << "\n";
     outFile << static_cast<int>(data.selectedCharacter) << "\n";
+    outFile << static_cast<int>(data.world23AllCoinsCollected) << "\n";
 
     outFile.close();
     std::cout << "[SaveManager] Successfully saved progress to: " << filepath << std::endl;
@@ -49,7 +50,19 @@ bool SaveManager::loadFromFile(const std::string& filepath, SaveData& outData) {
     if (inFile >> loaded.currentLevel >> loaded.score >> loaded.coins
                >> loaded.lives >> charTypeInt) {
         loaded.selectedCharacter = static_cast<CharacterType>(charTypeInt);
-        if (isValidSave(loaded)) {
+        // The sixth field was added after the original save format shipped.
+        // Reaching EOF here is therefore a valid legacy save and keeps the
+        // World 3-1 bonus locked until World 2-3 is cleared perfectly.
+        int world23AllCoinsInt = 0;
+        bool optionalFieldValid = true;
+        if (inFile >> world23AllCoinsInt) {
+            optionalFieldValid = world23AllCoinsInt == 0 || world23AllCoinsInt == 1;
+            loaded.world23AllCoinsCollected = world23AllCoinsInt == 1;
+        } else if (!inFile.eof()) {
+            optionalFieldValid = false;
+        }
+
+        if (optionalFieldValid && isValidSave(loaded)) {
             outData = loaded;
             inFile.close();
             std::cout << "[SaveManager] Successfully loaded progress from: "

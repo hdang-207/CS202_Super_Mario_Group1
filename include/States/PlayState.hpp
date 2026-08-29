@@ -42,6 +42,8 @@ private:
     int score{0};
     int coins{0};
     int lives{3};
+    int levelCoinsCollected{0};
+    bool world23AllCoinsCollected{false};
     UI::HUD hud;
 
     InputHandler inputHandler;
@@ -107,6 +109,14 @@ private:
     };
     std::vector<BouncingBlock> bouncingBlocks;
 
+    struct CoinBlockUsage {
+        int col;
+        int row;
+        int coinsReleased;
+    };
+    /// Tracks repeat hits on 'b' blocks; each one can release up to ten coins.
+    std::vector<CoinBlockUsage> coinBlockUsages;
+
     struct BrickDebris {
         sf::Vector2f position;
         sf::Vector2f velocity;
@@ -121,9 +131,9 @@ private:
     };
     std::vector<GrowingVineEntity> growingVines;
 
-    /// Scripted climb used because the supplied Mario/Luigi sheet has no
-    /// dedicated climbing frames. The normal jump pose travels up the vine,
-    /// then the paired C+ marker receives the player in Coin Heaven.
+    /// The climb is scripted rather than driven by input: the vine is a fixed
+    /// ride up, playing the sheet's two gripping poses, and the paired C+
+    /// marker receives the player at the top in Coin Heaven.
     bool climbingCoinHeavenVine{false};
     bool insideCoinHeaven{false};
     float coinHeavenClimbElapsed{0.f};

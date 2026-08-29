@@ -211,7 +211,7 @@ def main():
         "world31_coin.png": build_strip(
             tileset, ((298, 95), (315, 95), (332, 95), (315, 95))),
         "world31_room_coin.png": build_strip(
-            tileset, ((397, 95), (414, 95), (431, 95), (414, 95))),
+            tileset, ((394, 95), (411, 95), (428, 95), (411, 95))),
         # Hammer Bros first appear in this stage. Unlike the terrain they keep
         # the enemy sheet's own palette, which is the one the Goombas and
         # Koopas already in the game were cut from.

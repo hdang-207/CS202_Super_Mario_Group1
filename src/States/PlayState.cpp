@@ -35,6 +35,7 @@ namespace {
     constexpr float kVineLowerOffsetTiles = 0.5f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
     constexpr float kStarPowerDuration = 10.f;
+    constexpr int kCoinBlockCapacity = 10;
 
     constexpr float kTrampolineCompressDuration = 0.12f;
     constexpr float kTrampolineLaunchDuration = 0.18f;
@@ -77,6 +78,7 @@ namespace {
     constexpr int kWorld22WaterSpawnRow = 9;
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
+    constexpr int kWorld23CoinTotal = 35;
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
@@ -93,6 +95,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->score = data.score;
     this->coins = data.coins;
     this->lives = data.lives;
+    this->world23AllCoinsCollected = data.world23AllCoinsCollected;
 }
 
 PlayState::~PlayState() = default;
@@ -182,6 +185,7 @@ void PlayState::registerEvents() {
     events.subscribe(Core::EventType::CoinCollected, [this](const Core::Event&) {
         auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("CoinSound"));
+        this->levelCoinsCollected += 1;
         this->coins += 1;
         this->score += 200;
         if (this->coins >= 100) {
@@ -428,6 +432,7 @@ void PlayState::render(sf::RenderWindow& window) {
     const int outdoorStartColumn = std::max(0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     const bool world21 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 1;
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
+    const bool world23 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 3;
     const bool world32 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 2;
     bool underground = Config::stageNumber(currentLevel) == 2 && !world22 && !world32
                     && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
@@ -435,7 +440,8 @@ void PlayState::render(sf::RenderWindow& window) {
     // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
     const bool world33 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 3;
-    const sf::Color outdoorSky = (world21 || world22) ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
+    const sf::Color outdoorSky = (world21 || world22 || world23)
+        ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
     sky.setFillColor(underground || world31 || world32 || world33
                          ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
@@ -519,6 +525,7 @@ SaveData PlayState::getSaveData() const {
     data.coins = coins;
     data.lives = lives;
     data.selectedCharacter = selectedCharacter;
+    data.world23AllCoinsCollected = world23AllCoinsCollected;
     return data;
 }
 
@@ -526,6 +533,8 @@ bool PlayState::quickLoad() {
     SaveData data;
     if (SaveManager::loadProgress("savegame.txt", data)) {
         std::cout << "[Core Engine] Quick Load loading Level " << data.currentLevel << "...\n";
+        const bool previousWorld23Reward = world23AllCoinsCollected;
+        world23AllCoinsCollected = data.world23AllCoinsCollected;
         if (loadLevel(data.currentLevel)) {
             score = data.score;
             coins = data.coins;
@@ -544,6 +553,7 @@ bool PlayState::quickLoad() {
             playLevelMusic();
             return true;
         }
+        world23AllCoinsCollected = previousWorld23Reward;
     }
     return false;
 }
@@ -718,10 +728,12 @@ void PlayState::playLevelMusic() {
     // theme its stage number would otherwise trade for the underground one.
     const bool world32 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 2;
+    const bool world23 = Config::worldNumber(currentLevel) == 2
+                      && Config::stageNumber(currentLevel) == 3;
     std::string theme = "assets/audio/Theme.mp3";
     if ((Config::stageNumber(currentLevel) == 2 && !world32) || insideSecretRoom) {
         theme = "assets/audio/Theme2.mp3";
-    } else if (Config::stageNumber(currentLevel) == 3) {
+    } else if (Config::stageNumber(currentLevel) == 3 && !world23) {
         theme = "assets/audio/Theme3.mp3";
     }
     sounds.playMusic(Systems::resourcePath(theme));
@@ -906,9 +918,25 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
+    // SMB Deluxe only enables this hidden 1-Up after every open-air coin in
+    // World 2-3 was collected. The marker stays in the authored World 3-1 map,
+    // but becomes empty/non-solid until that perfect-clear flag is present.
+    if (world31 && !world23AllCoinsCollected) {
+        const auto& grid = mapParser.getGrid();
+        for (std::size_t row = 0; row < grid.size(); ++row) {
+            for (std::size_t col = 0; col < grid[row].size(); ++col) {
+                if (grid[row][col] == '1') {
+                    tileMap.changeType(static_cast<int>(col), static_cast<int>(row),
+                                       TileType::Empty);
+                }
+            }
+        }
+    }
+
     currentLevel = level;
     hud.setWorld(currentLevel);
-    hud.setTime((world == 1 && stage == 3) || world32 || world33 ? 300.f : 400.f);
+    hud.setTime((world == 1 && stage == 3) || world23 || world32 || world33
+                    ? 300.f : 400.f);
 
     m_entityManager.clear();
     m_cameraSystem.reset();
@@ -921,9 +949,11 @@ bool PlayState::loadLevel(int level) {
     waterAnimationElapsed = sf::Time::Zero;
     waterAnimationFrame = 0;
     flyingCheepSpawnTimer = 0.8f;
+    levelCoinsCollected = 0;
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
+    coinBlockUsages.clear();
     brickDebris.clear();
     hammers.clear();
 
@@ -939,7 +969,9 @@ bool PlayState::loadLevel(int level) {
               << tileMap.enemySpawns().size() << " Goombas, "
               << tileMap.blueKoopaSpawns().size() << " Blue Koopas, "
               << tileMap.greenKoopaSpawns().size() << " Green Koopas, "
+              << tileMap.redKoopaSpawns().size() << " Red Koopas, "
               << tileMap.greenParatroopaSpawns().size() << " Green Paratroopas, "
+              << tileMap.redParatroopaSpawns().size() << " Red Paratroopas, "
               << tileMap.blooperSpawns().size() << " Bloopers, "
               << tileMap.cheepCheepSpawns().size() << " Cheep-Cheeps, "
               << tileMap.piranhaSpawns().size() << " Piranha Plants, "
@@ -1110,7 +1142,7 @@ bool PlayState::updateCoinHeavenClimb(sf::Time dt) {
     body.setGrounded(false);
     avatar.setPosition(position);
 
-    animator.setAction(entity::PlayerAction::Jump);
+    animator.setAction(entity::PlayerAction::Climb);
     animator.setFacingRight(facingRight);
     animator.setForm(currentPlayerForm());
     animator.update(dt);
@@ -1166,6 +1198,15 @@ bool PlayState::tryEnterNextLevel() {
 
     if (transitionPending) return false;
     transitionPending = true;
+    if (Config::worldNumber(currentLevel) == 2
+        && Config::stageNumber(currentLevel) == 3) {
+        world23AllCoinsCollected = levelCoinsCollected >= kWorld23CoinTotal;
+        std::cout << "[Core Engine] World 2-3 coin challenge: "
+                  << levelCoinsCollected << "/" << kWorld23CoinTotal
+                  << (world23AllCoinsCollected
+                          ? " collected; World 3-1 hidden 1-Up unlocked.\n"
+                          : " collected; World 3-1 hidden 1-Up remains locked.\n");
+    }
     std::cout << "[Core Engine] Level Complete reached! Transitioning to LevelCompleteState...\n";
     gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, getSaveData()));
     return true;
@@ -1372,13 +1413,16 @@ void PlayState::updateExplosions(sf::Time dt) {
 }
 
 void PlayState::drawExplosions(sf::RenderWindow& window) const {
+    // Six 16x16 cells in a 3x2 grid, drawn two tiles across.
+    constexpr int kExplosionCell = 16;
     sf::Sprite expSprite(assets.getTexture("Explosion"));
-    expSprite.setScale({32.f / 189.f, 32.f / 220.f});
+    expSprite.setScale({32.f / kExplosionCell, 32.f / kExplosionCell});
 
     for (const ExplosionEntity& exp : explosions) {
         int col = exp.currentFrame % 3;
         int row = exp.currentFrame / 3;
-        expSprite.setTextureRect(sf::IntRect({col * 189, row * 220}, {189, 220}));
+        expSprite.setTextureRect(sf::IntRect({col * kExplosionCell, row * kExplosionCell},
+                                             {kExplosionCell, kExplosionCell}));
         expSprite.setPosition({exp.position.x - 8.f, exp.position.y - 8.f});
         window.draw(expSprite);
     }
@@ -1500,14 +1544,12 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
         char drawSymbol = block.originalSymbol;
-        if (drawSymbol == 'b') {
-            drawSymbol = 'U';
-        }
 
         const sf::Texture* tex = nullptr;
         sf::IntRect rect;
 
-        if (drawSymbol == 'B' || drawSymbol == '^' || drawSymbol == 'A') {
+        if (drawSymbol == 'B' || drawSymbol == '^' || drawSymbol == 'A'
+            || drawSymbol == 'b') {
             tex = &assets.getTexture(brickArt);
         } else if (drawSymbol == '?') {
             const char* questionArt = world23 ? "World23QuestionBlock"
@@ -1561,6 +1603,9 @@ void PlayState::spawnWalkingEnemies() {
     const auto& greenKoopaTex = assets.getTexture("GreenKoopa");
     const auto& shellTex = assets.getTexture("GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
+    const auto& redKoopaTex = assets.getTexture("RedKoopa");
+    const auto& redParatroopaTex = assets.getTexture("RedParatroopa");
+    const auto& redShellTex = assets.getTexture("RedShell");
 
     // Anything past the opening screen waits until the camera reaches it, the
     // way the original spawns its enemies. On a stage of separate islands like
@@ -1587,6 +1632,12 @@ void PlayState::spawnWalkingEnemies() {
         spawn.y -= koopaHeightOffset;
         place(entity::EntityFactory::createKoopa(spawn, tileMap.tileSize(), &greenKoopaTex, &shellTex, entity::KoopaKind::Green), spawn);
     }
+    for (sf::Vector2f spawn : tileMap.redKoopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        place(entity::EntityFactory::createKoopa(
+            spawn, tileMap.tileSize(), &redKoopaTex, &redShellTex,
+            entity::KoopaKind::Red), spawn);
+    }
     const float hammerBroHeightOffset = tileMap.tileSize() * 0.5f;
     for (sf::Vector2f spawn : tileMap.hammerBroSpawns()) {
         // The marker is a floor cell but a Bro is a tile and a half tall.
@@ -1599,6 +1650,15 @@ void PlayState::spawnWalkingEnemies() {
         spawn.y -= world32 ? tileMap.tileSize() : koopaHeightOffset;
         place(entity::EntityFactory::createParatroopa(spawn, tileMap.tileSize(), &paratroopaTex, &shellTex), spawn);
     }
+    for (sf::Vector2f spawn : tileMap.redParatroopaSpawns()) {
+        spawn.y -= koopaHeightOffset;
+        // Red Paratroopas hover vertically; after losing their wings they use
+        // the same red shell and ledge-aware walking behaviour as Red Koopas.
+        place(entity::EntityFactory::createParatroopa(
+            spawn, tileMap.tileSize(), &redParatroopaTex, &redShellTex,
+            0.f, 600.f, entity::KoopaKind::Red), spawn);
+    }
+
 }
 
 void PlayState::updateEnemyReactions() {
@@ -1735,10 +1795,19 @@ void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
         return;
     }
 
-    const bool spawnAhead = (rewardRandom() & 1U) != 0U;
+    // At running speed the fish usually erupts behind Mario; while walking or
+    // standing it usually approaches from the front. A one-in-four exception
+    // keeps the stream unpredictable without losing that original bias.
+    const float playerVelocityX = m_player->getPhysicsBody().getVelocity().x;
+    const bool playerRunning = std::abs(playerVelocityX) >= kMaxWalkSpeed * 0.65f;
+    const unsigned approachRoll = rewardRandom() % 4U;
+    const bool spawnAhead = playerRunning ? approachRoll == 0U
+                                          : approachRoll != 0U;
+    const float travelDirection = playerVelocityX < -1.f ? -1.f : 1.f;
     const float horizontalSpeed = 135.f
         + static_cast<float>(rewardRandom() % 91U);
-    const float horizontalOffset = (spawnAhead ? 5.f : -3.f) * tile;
+    const float horizontalOffset = (spawnAhead ? 5.f : -3.f)
+                                 * tile * travelDirection;
     const float jitter = static_cast<float>(static_cast<int>(rewardRandom() % 5U) - 2)
                        * tile * 0.5f;
     const float spawnX = std::clamp(
@@ -1747,7 +1816,7 @@ void PlayState::updateFlyingCheepSpawner(sf::Time dt) {
     const sf::Vector2f spawnPosition(
         spawnX, tileMap.pixelHeight() + tile * 0.25f);
     const sf::Vector2f launchVelocity(
-        spawnAhead ? -horizontalSpeed : horizontalSpeed,
+        (spawnAhead ? -horizontalSpeed : horizontalSpeed) * travelDirection,
         -920.f - static_cast<float>(rewardRandom() % 121U));
     const sf::FloatRect flightBounds(
         {0.f, 0.f}, {tileMap.pixelWidth(), tileMap.pixelHeight()});
@@ -2116,10 +2185,16 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     spawnMushroom(tile.position, items::MushroomKind::OneUp);
                 } else {
                     BlockReward reward = takeNextItemBlockReward();
-                    if (reward == BlockReward::Mushroom) {
-                        spawnMushroom(tile.position);
-                    } else if (reward == BlockReward::FireFlower) {
-                        spawnFireFlower(tile.position);
+                    if (reward == BlockReward::Mushroom
+                        || reward == BlockReward::FireFlower) {
+                        // A power-up block adapts to Mario's current form just
+                        // like SMB: small Mario gets a mushroom, while Super
+                        // Mario gets a Fire Flower in the same block.
+                        if (m_player->isSuper()) {
+                            spawnFireFlower(tile.position);
+                        } else {
+                            spawnMushroom(tile.position);
+                        }
                     } else {
                         spawnCoinPop(tile.position);
                         Core::EventSystem::getInstance().broadcast(
@@ -2156,8 +2231,23 @@ bool PlayState::moveAvatar(sf::Time dt) {
                             if (type == TileType::CoinBrick) {
                                 spawnCoinPop(tile.position);
                                 Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
-                                symbol = 'U';
-                                tileMap.changeType(col, row, TileType::UsedBlock);
+
+                                auto usage = std::find_if(
+                                    coinBlockUsages.begin(), coinBlockUsages.end(),
+                                    [col, row](const CoinBlockUsage& value) {
+                                        return value.col == col && value.row == row;
+                                    });
+                                int coinsReleased = 1;
+                                if (usage == coinBlockUsages.end()) {
+                                    coinBlockUsages.push_back({col, row, 1});
+                                } else {
+                                    coinsReleased = ++usage->coinsReleased;
+                                }
+
+                                if (coinsReleased >= kCoinBlockCapacity) {
+                                    symbol = 'U';
+                                    tileMap.changeType(col, row, TileType::UsedBlock);
+                                }
                             } else {
                                 Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("BrickCollision"));
                             }

@@ -6,7 +6,7 @@ namespace entity {
 
 class Paratroopa : public Koopa {
 public:
-    Paratroopa(const sf::Vector2f& position, float tileSize, const sf::Texture* walkingTexture = nullptr, const sf::Texture* shellTexture = nullptr, float initialSpeed = 60.f, float bounceSpeed = 600.f);
+    Paratroopa(const sf::Vector2f& position, float tileSize, const sf::Texture* walkingTexture = nullptr, const sf::Texture* shellTexture = nullptr, float initialSpeed = 60.f, float bounceSpeed = 600.f, KoopaKind kind = KoopaKind::Green);
     virtual ~Paratroopa() override = default;
 
     void update(float deltaTime) override;

@@ -15,8 +15,11 @@ namespace {
     constexpr int kFrameIdle = 0;
     constexpr int kFrameWalk1 = 1;
     constexpr int kFrameWalk2 = 2;
-    constexpr int kFrameJump = 3;
-    constexpr int kFrameCrouch = 4;
+    constexpr int kFrameSkid = 3;
+    constexpr int kFrameJump = 4;
+    constexpr int kFrameCrouch = 5;
+    constexpr int kFrameDead = 6;
+    constexpr int kFrameClimbStart = 7;
 
     /**
      * Walk cycle. Passing back through the standing pose between strides is
@@ -27,9 +30,13 @@ namespace {
     constexpr int kWalkCycleLength = 4;
 
     /// Exact six-pose swimming cycle from the original NES character sheet.
-    constexpr int kFrameSwimStart = 5;
+    constexpr int kFrameSwimStart = 9;
     constexpr int kSwimCycleLength = 6;
     constexpr float kSwimFrameDuration = 0.16f;
+
+    /// The two gripping poses, swapped over as the vine goes past.
+    constexpr int kClimbCycleLength = 2;
+    constexpr float kClimbFrameDuration = 0.12f;
 
     /// Legs move with the character: a slow shuffle, then a sprint.
     constexpr float kWalkFrameSlow = 0.15f;
@@ -71,6 +78,8 @@ void PlayerAnimator::reset(PlayerForm form) {
     m_footstep = false;
     m_swimTimer = 0.f;
     m_swimStep = 0;
+    m_climbTimer = 0.f;
+    m_climbStep = 0;
     m_transformRemaining = 0.f;
     m_transformFlashTimer = 0.f;
     m_showPreviousForm = false;
@@ -108,6 +117,10 @@ void PlayerAnimator::setAction(PlayerAction action) noexcept {
     if (action != PlayerAction::Swim) {
         m_swimTimer = 0.f;
         m_swimStep = 0;
+    }
+    if (action != PlayerAction::Climb) {
+        m_climbTimer = 0.f;
+        m_climbStep = 0;
     }
     m_action = action;
 }
@@ -163,6 +176,12 @@ void PlayerAnimator::update(sf::Time dt) {
             m_swimTimer -= kSwimFrameDuration;
             m_swimStep = (m_swimStep + 1) % kSwimCycleLength;
         }
+    } else if (m_action == PlayerAction::Climb) {
+        m_climbTimer += seconds;
+        while (m_climbTimer >= kClimbFrameDuration) {
+            m_climbTimer -= kClimbFrameDuration;
+            m_climbStep = (m_climbStep + 1) % kClimbCycleLength;
+        }
     }
 
     if (m_blinking) {
@@ -205,14 +224,18 @@ int PlayerAnimator::frameIndex() const noexcept {
             return kWalkCycle[m_walkStep];
         case PlayerAction::Swim:
             return kFrameSwimStart + m_swimStep;
+        case PlayerAction::Climb:
+            return kFrameClimbStart + m_climbStep;
         case PlayerAction::Crouch:
             return kFrameCrouch;
-        // The arm-up pose doubles as the skid and the death frame, which is how
-        // it reads in the original artwork too.
         case PlayerAction::Skid:
+            return kFrameSkid;
+        case PlayerAction::Dead:
+            return kFrameDead;
+        // Rising and falling share one pose in the original game; only the
+        // swimming stroke ever animates while off the ground.
         case PlayerAction::Jump:
         case PlayerAction::Fall:
-        case PlayerAction::Dead:
             return kFrameJump;
         case PlayerAction::Idle:
             break;
