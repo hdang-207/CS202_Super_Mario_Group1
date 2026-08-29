@@ -38,6 +38,7 @@ enum class PlayerAction {
     Jump,
     Fall,
     Crouch,
+    Climb,  ///< Hauling up a vine, alternating the two gripping poses.
     Swim,
     Dead
 };
@@ -46,20 +47,20 @@ enum class PlayerAction {
  * @class PlayerAnimator
  * @brief Owns everything about how Mario/Luigi look: form, pose, and flashes.
  *
- * The sheets it reads are built by tools/build_character_sheets.py and share a
- * single convention: @ref kFrameCount cells of identical size, the character
- * bottom-aligned in his cell and centred on his head. That is what lets the
+ * The sheets it reads are built by tools/build_character_sheets.py, which cuts
+ * @ref kFrameCount equally sized cells out of the NES artwork and keeps each
+ * pose at the offset the original artist drew it at. That is what lets the
  * avatar be drawn at the project's whole-number Config::kZoom with no per-frame
  * rescaling, so a Small Mario is exactly one tile tall and a Super Mario two,
- * and the walk cycle no longer wobbles because each pose was cropped
- * differently.
+ * and the walk cycle never wobbles: every frame already agrees with the rest
+ * about where the ground and the centre line are.
  */
 class PlayerAnimator {
 public:
-    /// Cells per sheet: five land poses, followed by six NES swim poses.
-    static constexpr int kFrameCount = 11;
+    /// Cells per sheet: nine land poses, followed by six NES swim poses.
+    static constexpr int kFrameCount = 15;
 
-    /// @brief Looks up the six sheets belonging to one character.
+    /// @brief Looks up the three form sheets belonging to one character.
     void init(const Systems::AssetManager& assets, CharacterType character);
 
     /// @brief Returns to a standing pose in @p form with every flash cleared.
@@ -129,6 +130,9 @@ private:
 
     float m_swimTimer{0.f};
     int m_swimStep{0};
+
+    float m_climbTimer{0.f};
+    int m_climbStep{0};
 
     float m_transformRemaining{0.f};
     float m_transformFlashTimer{0.f};

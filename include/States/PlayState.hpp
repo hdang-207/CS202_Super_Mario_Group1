@@ -121,9 +121,9 @@ private:
     };
     std::vector<GrowingVineEntity> growingVines;
 
-    /// Scripted climb used because the supplied Mario/Luigi sheet has no
-    /// dedicated climbing frames. The normal jump pose travels up the vine,
-    /// then the paired C+ marker receives the player in Coin Heaven.
+    /// The climb is scripted rather than driven by input: the vine is a fixed
+    /// ride up, playing the sheet's two gripping poses, and the paired C+
+    /// marker receives the player at the top in Coin Heaven.
     bool climbingCoinHeavenVine{false};
     bool insideCoinHeaven{false};
     float coinHeavenClimbElapsed{0.f};

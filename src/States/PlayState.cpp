@@ -1110,7 +1110,7 @@ bool PlayState::updateCoinHeavenClimb(sf::Time dt) {
     body.setGrounded(false);
     avatar.setPosition(position);
 
-    animator.setAction(entity::PlayerAction::Jump);
+    animator.setAction(entity::PlayerAction::Climb);
     animator.setFacingRight(facingRight);
     animator.setForm(currentPlayerForm());
     animator.update(dt);
