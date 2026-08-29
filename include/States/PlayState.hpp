@@ -24,12 +24,16 @@
 #include <optional>
 #include <set>
 #include <vector>
+#include "UI/ConsoleOverlay.hpp"
+#include "Core/CommandParser.hpp"
 
 /**
  * @class PlayState
  * @brief Active gameplay state: Scene Coordinator between TileMap, EntityManager, PhysicsSystem, CameraSystem, and HUD.
  */
 class PlayState : public State {
+public:
+    friend class Core::CommandParser;
 private:
     CharacterType selectedCharacter;
     MapParser mapParser;
@@ -164,6 +168,13 @@ private:
     /// music and decides which of the two warp pipes is listening for input.
     bool insideSecretRoom{false};
     std::set<sf::Keyboard::Scancode> heldKeys;
+
+    UI::ConsoleOverlay m_console;
+    std::unique_ptr<Core::CommandParser> m_commandParser;
+    bool m_flyMode{false};
+    bool m_godMode{false};
+    bool m_destroyerMode{false};
+    bool m_musicLocked{false};
 
     std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
     sf::FloatRect avatarBounds() const;
