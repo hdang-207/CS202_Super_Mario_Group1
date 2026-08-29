@@ -107,6 +107,14 @@ private:
     };
     std::vector<BouncingBlock> bouncingBlocks;
 
+    struct CoinBlockUsage {
+        int col;
+        int row;
+        int coinsReleased;
+    };
+    /// Tracks repeat hits on 'b' blocks; each one can release up to ten coins.
+    std::vector<CoinBlockUsage> coinBlockUsages;
+
     struct BrickDebris {
         sf::Vector2f position;
         sf::Vector2f velocity;

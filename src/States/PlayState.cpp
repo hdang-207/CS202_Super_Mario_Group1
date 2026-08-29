@@ -35,6 +35,7 @@ namespace {
     constexpr float kVineLowerOffsetTiles = 0.5f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
     constexpr float kStarPowerDuration = 10.f;
+    constexpr int kCoinBlockCapacity = 10;
 
     constexpr float kTrampolineCompressDuration = 0.12f;
     constexpr float kTrampolineLaunchDuration = 0.18f;
@@ -924,6 +925,7 @@ bool PlayState::loadLevel(int level) {
     starPowerRemaining = 0.f;
     activeBomb.reset();
     bouncingBlocks.clear();
+    coinBlockUsages.clear();
     brickDebris.clear();
     hammers.clear();
 
@@ -1505,14 +1507,12 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
         char drawSymbol = block.originalSymbol;
-        if (drawSymbol == 'b') {
-            drawSymbol = 'U';
-        }
 
         const sf::Texture* tex = nullptr;
         sf::IntRect rect;
 
-        if (drawSymbol == 'B' || drawSymbol == '^' || drawSymbol == 'A') {
+        if (drawSymbol == 'B' || drawSymbol == '^' || drawSymbol == 'A'
+            || drawSymbol == 'b') {
             tex = &assets.getTexture(brickArt);
         } else if (drawSymbol == '?') {
             const char* questionArt = world23 ? "World23QuestionBlock"
@@ -2179,8 +2179,23 @@ bool PlayState::moveAvatar(sf::Time dt) {
                             if (type == TileType::CoinBrick) {
                                 spawnCoinPop(tile.position);
                                 Core::EventSystem::getInstance().broadcast({Core::EventType::CoinCollected});
-                                symbol = 'U';
-                                tileMap.changeType(col, row, TileType::UsedBlock);
+
+                                auto usage = std::find_if(
+                                    coinBlockUsages.begin(), coinBlockUsages.end(),
+                                    [col, row](const CoinBlockUsage& value) {
+                                        return value.col == col && value.row == row;
+                                    });
+                                int coinsReleased = 1;
+                                if (usage == coinBlockUsages.end()) {
+                                    coinBlockUsages.push_back({col, row, 1});
+                                } else {
+                                    coinsReleased = ++usage->coinsReleased;
+                                }
+
+                                if (coinsReleased >= kCoinBlockCapacity) {
+                                    symbol = 'U';
+                                    tileMap.changeType(col, row, TileType::UsedBlock);
+                                }
                             } else {
                                 Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("BrickCollision"));
                             }

@@ -13,7 +13,8 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   # ground   C cloud block   B brick   A star brick   ^ vine brick   b coin brick
+     *   # ground   C cloud block   B brick   A star brick   ^ vine brick
+     *   b repeatable coin brick (up to 10 coins)
      *   ? question block
      *   U used block      S staircase          [] pipe top    {} pipe body
      *   H hidden block    1 hidden 1-Up block    o coin

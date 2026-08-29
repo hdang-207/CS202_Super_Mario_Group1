@@ -13,7 +13,7 @@ enum class TileType {
     Coin,          ///< Pickup: drawn and animated, but never blocks movement.
     Ground,        ///< Solid terrain.
     Brick,         ///< Breakable brick block (solid).
-    CoinBrick,     ///< Brick that contains coins (solid).
+    CoinBrick,     ///< Brick that releases up to ten coins over repeated hits (solid).
     QuestionBlock, ///< Item block (solid).
     UsedBlock,     ///< Question block after its item has been released (solid).
     StairBlock,    ///< Solid staircase block.
