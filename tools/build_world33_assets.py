@@ -23,6 +23,7 @@ TEXTURES = ROOT / "assets" / "textures"
 
 STAGE_PATH = SOURCE / "world3-3.png"
 TILESET_PATH = SOURCE / "nes_tileset.png"
+ENEMIES_PATH = SOURCE / "nes_enemies.png"
 
 NIGHT_SKY = (0, 0, 0)
 SHEET_BACKGROUNDS = {
@@ -109,14 +110,30 @@ def build_strip(source, positions):
     return strip
 
 
+def build_sprite_strip(source, boxes, size):
+    """Cuts enemy frames and packs them into equal transparent cells."""
+    strip = Image.new("RGBA", (size[0] * len(boxes), size[1]), (0, 0, 0, 0))
+    for index, box in enumerate(boxes):
+        frame = key_colours(source.crop(box))
+        strip.alpha_composite(
+            frame,
+            (index * size[0] + (size[0] - frame.width) // 2,
+             (size[1] - frame.height) // 2),
+        )
+    return strip
+
+
 def main():
     stage = Image.open(STAGE_PATH).convert("RGBA")
     tileset = Image.open(TILESET_PATH).convert("RGBA")
+    enemies = Image.open(ENEMIES_PATH).convert("RGBA")
 
     if stage.size != (163 * 16, 15 * 16):
         raise ValueError(f"World 3-3 source must be 2608x240, got {stage.size}")
     if tileset.size != (680, 776):
         raise ValueError(f"Tileset source must be 680x776, got {tileset.size}")
+    if enemies.size != (436, 530):
+        raise ValueError(f"Enemy source must be 436x530, got {enemies.size}")
 
     assets = {
         "world33_ground.png": crop_tile(stage, 0, 13),
@@ -153,6 +170,14 @@ def main():
         "world33_empty_block.png": build_strip(tileset, ((349, 78),)),
         "world33_coin.png": build_strip(
             tileset, ((298, 95), (315, 95), (332, 95), (315, 95))),
+        # World 3-3 introduces the red, ledge-aware Koopa family. These are
+        # the two walk/flap phases and the matching shell from the NES sheet.
+        "red_koopa.png": build_sprite_strip(
+            enemies, ((0, 318, 16, 342), (18, 318, 34, 342)), (16, 24)),
+        "red_paratroopa.png": build_sprite_strip(
+            enemies, ((36, 318, 52, 342), (54, 318, 70, 342)), (16, 24)),
+        "red_shell.png": build_sprite_strip(
+            enemies, ((72, 326, 88, 342),), (16, 16)),
     }
 
     for name, image in assets.items():
