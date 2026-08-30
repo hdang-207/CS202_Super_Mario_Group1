@@ -14,6 +14,7 @@
 #include "Systems/SoundController.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -26,6 +27,8 @@ namespace {
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
+    constexpr float kWorld22CurrentAcceleration = 1100.f;
+    constexpr float kWorld22CurrentMaxFallSpeed = 640.f;
     constexpr float kWaterFrameDuration = 0.18f;
     constexpr int kWaterFrameCount = 4;
 
@@ -80,6 +83,27 @@ namespace {
     constexpr int kWorld22ExitMouthRow = 8;
     constexpr int kWorld22OutdoorPipeColumn = 232;
     constexpr int kWorld22OutdoorPipeArrivalRow = 10;
+
+    struct ColumnSpan {
+        int first;
+        int pastLast;
+    };
+
+    // The three openings in the supplied guide are the stage's strong currents.
+    constexpr std::array<ColumnSpan, 3> kWorld22Currents{{
+        {103, 108},
+        {168, 177},
+        {194, 201},
+    }};
+
+    bool isWorld22CurrentColumn(float worldX, float tileSize) {
+        const int column = static_cast<int>(std::floor(worldX / tileSize));
+        return std::any_of(
+            kWorld22Currents.begin(), kWorld22Currents.end(),
+            [column](const ColumnSpan& current) {
+                return column >= current.first && column < current.pastLast;
+            });
+    }
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
     constexpr int kWorld23CoinTotal = 35;
@@ -2161,6 +2185,9 @@ bool PlayState::moveAvatar(sf::Time dt) {
                          && playerColumn >= kWorld22WaterStartColumn
                          && playerColumn < kWorld22WaterEndColumn
                          && playerCentreY >= kWorld22WaterSurfaceRow * tileMap.tileSize();
+    const float playerCentreX = playerBounds.position.x + playerBounds.size.x * 0.5f;
+    const bool inStrongCurrent = underwater
+                              && isWorld22CurrentColumn(playerCentreX, tileMap.tileSize());
     const bool wasGrounded = body.isGrounded();
     m_player->setInput(playerInput);
     m_player->update(seconds);
@@ -2187,6 +2214,9 @@ bool PlayState::moveAvatar(sf::Time dt) {
         }
         body.setVelocity(velocity);
         body.addAcceleration({0.f, -(kGravity - kWaterGravity)});
+        if (inStrongCurrent) {
+            body.addAcceleration({0.f, kWorld22CurrentAcceleration});
+        }
     }
     swimButtonHeld = underwater && playerInput.jumpHeld;
 
@@ -2206,9 +2236,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
 
     // Kinematics and collision resolution
     m_physicsSystem.update(body, solids, seconds);
-    if (underwater && body.getVelocity().y > kMaxSwimFallSpeed) {
+    const float swimFallLimit = inStrongCurrent
+                              ? kWorld22CurrentMaxFallSpeed : kMaxSwimFallSpeed;
+    if (underwater && body.getVelocity().y > swimFallLimit) {
         sf::Vector2f velocity = body.getVelocity();
-        velocity.y = kMaxSwimFallSpeed;
+        velocity.y = swimFallLimit;
         body.setVelocity(velocity);
     }
 
