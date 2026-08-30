@@ -87,9 +87,7 @@ void Player::processHorizontalMovement(float deltaTime) {
 void Player::processJump() {
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
-    if (m_input.jumpHeld
-        && !m_jumpWasHeldLastFrame
-        && m_physicsBody.isGrounded()) {
+    if (m_input.jumpHeld && m_physicsBody.isGrounded()) {
         velocity.y = -m_movementConfig.jumpSpeed;
         m_physicsBody.setGrounded(false);
     }
@@ -100,7 +98,6 @@ void Player::processJump() {
     }
 
     m_physicsBody.setVelocity(velocity);
-    m_jumpWasHeldLastFrame = m_input.jumpHeld;
 }
 
 const PlayerInput& Player::getInput() const noexcept {

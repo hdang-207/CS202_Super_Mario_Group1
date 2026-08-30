@@ -87,7 +87,6 @@ private:
     PlayerInput m_input{};
     PlayerMovementConfig m_movementConfig{};
     std::unique_ptr<PlayerState> m_currentState;
-    bool m_jumpWasHeldLastFrame{false};
     bool m_crouching{false};
     sf::Vector2f m_smallColliderSize{};
     std::vector<PowerType> m_powerStack;
