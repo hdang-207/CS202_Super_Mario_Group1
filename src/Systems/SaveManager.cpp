@@ -32,6 +32,7 @@ bool SaveManager::saveToFile(const std::string& filepath, const SaveData& data) 
     outFile << data.lives << "\n";
     outFile << static_cast<int>(data.selectedCharacter) << "\n";
     outFile << static_cast<int>(data.world23AllCoinsCollected) << "\n";
+    outFile << static_cast<int>(data.world13OneUpUnlocked) << "\n";
 
     outFile.close();
     std::cout << "[SaveManager] Successfully saved progress to: " << filepath << std::endl;
@@ -50,14 +51,23 @@ bool SaveManager::loadFromFile(const std::string& filepath, SaveData& outData) {
     if (inFile >> loaded.currentLevel >> loaded.score >> loaded.coins
                >> loaded.lives >> charTypeInt) {
         loaded.selectedCharacter = static_cast<CharacterType>(charTypeInt);
-        // The sixth field was added after the original save format shipped.
-        // Reaching EOF here is therefore a valid legacy save and keeps the
-        // World 3-1 bonus locked until World 2-3 is cleared perfectly.
+        // The optional flags were added after the original five-field format.
+        // Reaching EOF at either point is a valid legacy save and keeps that
+        // bonus locked until its coin challenge is cleared in this playthrough.
         int world23AllCoinsInt = 0;
         bool optionalFieldValid = true;
         if (inFile >> world23AllCoinsInt) {
             optionalFieldValid = world23AllCoinsInt == 0 || world23AllCoinsInt == 1;
             loaded.world23AllCoinsCollected = world23AllCoinsInt == 1;
+
+            int world13OneUpInt = 0;
+            if (inFile >> world13OneUpInt) {
+                optionalFieldValid = optionalFieldValid
+                                  && (world13OneUpInt == 0 || world13OneUpInt == 1);
+                loaded.world13OneUpUnlocked = world13OneUpInt == 1;
+            } else if (!inFile.eof()) {
+                optionalFieldValid = false;
+            }
         } else if (!inFile.eof()) {
             optionalFieldValid = false;
         }

@@ -43,6 +43,7 @@ private:
     int coins{0};
     int lives{3};
     int levelCoinsCollected{0};
+    bool world13OneUpUnlocked{false};
     bool world23AllCoinsCollected{false};
     UI::HUD hud;
 
@@ -75,6 +76,9 @@ private:
     /// World 2-3 launches red fish from below the bridge instead of placing
     /// static enemy markers in the map file.
     float flyingCheepSpawnTimer{0.8f};
+
+    /// World 2-2 continuously sends Cheep-Cheeps in from beyond the right edge.
+    float world22CheepSpawnTimer{1.2f};
 
     /**
      * The original game does not cut away the instant Mario is hit: he stops,
@@ -143,8 +147,8 @@ private:
     /**
      * @brief How a lift travels.
      *
-     * World 1-3's lifts swing sideways. World 3-3 adds one that rides up and
-     * down and two pairs slung over a pulley: standing on one end lowers it
+     * World 1-3's four lifts ride up and down. World 3-3 adds two pairs slung
+     * over a pulley: standing on one end lowers it
      * and hauls the other end up by the same amount, until the rising end
      * reaches its wheel.
      */
@@ -209,6 +213,7 @@ private:
     void respawnAvatar();
     bool loadLevel(int level);
     bool tryEnterWorld22WaterPipe();
+    bool tryLeaveWorld22WaterPipe();
 
     /// @brief Ducking on the marked pipe drops the avatar into the hidden room.
     bool tryEnterSecretRoom();
@@ -278,6 +283,7 @@ private:
     void spawnWalkingEnemies();
     void spawnAquaticEnemies();
     void updateAquaticEnemyTargets();
+    void updateWorld22CheepSpawner(sf::Time dt);
     void updateFlyingCheepSpawner(sf::Time dt);
     void spawnPiranhas();
     void spawnMovingPlatforms();
