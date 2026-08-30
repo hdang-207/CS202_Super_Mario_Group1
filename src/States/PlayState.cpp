@@ -279,13 +279,7 @@ void PlayState::handleInput(const sf::Event& event) {
 
         heldKeys.insert(keyPressed->scancode);
 
-        if (keyPressed->scancode == sf::Keyboard::Scancode::X) {
-            if (m_player && m_player->hasFirePower()) {
-                spawnBullet();
-            }
-        } else if (keyPressed->scancode == sf::Keyboard::Scancode::C) {
-            spawnBomb();
-        } else if (keyPressed->scancode == sf::Keyboard::Scancode::P || keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
+        if (keyPressed->scancode == sf::Keyboard::Scancode::P || keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
@@ -328,6 +322,15 @@ void PlayState::update(sf::Time dt) {
     }
 
     inputHandler.update(heldKeys);
+    const PlayerInput& playerInput = inputHandler.getPlayerInput();
+
+    if (playerInput.shootPressed && m_player->hasFirePower()) {
+        spawnBullet();
+    }
+
+    if (playerInput.bombPressed) {
+        spawnBomb();
+    }
 
     // Dying and growing both take the level out of the player's hands for a
     // moment. Everything else stays frozen so the animation reads clearly and

@@ -9,15 +9,15 @@ constexpr float kBombGravity = 1400.f;
 namespace combat {
 
 Bomb::Bomb(sf::Vector2f position, bool facingRight)
-    : m_position(position),
-      m_velocity(facingRight ? kThrowSpeed : -kThrowSpeed, -kThrowUpSpeed) {}
+    : m_motion{position,
+               {facingRight ? kThrowSpeed : -kThrowSpeed, -kThrowUpSpeed},
+               {0.f, kBombGravity}} {}
 
 void Bomb::update(float deltaTime) {
     if (!m_active) {
         return;
     }
-    m_velocity.y += kBombGravity * deltaTime;
-    m_position += m_velocity * deltaTime;
+    m_motion.integrate(deltaTime);
     m_fuseRemaining -= deltaTime;
 }
 
@@ -26,7 +26,7 @@ void Bomb::render(sf::RenderTarget& target) const {
         return;
     }
     sf::CircleShape shape(kSize * 0.5f);
-    shape.setPosition(m_position);
+    shape.setPosition(m_motion.position);
     shape.setFillColor(sf::Color(35, 35, 35));
     shape.setOutlineColor(sf::Color(255, 140, 0));
     shape.setOutlineThickness(2.f);
@@ -34,11 +34,11 @@ void Bomb::render(sf::RenderTarget& target) const {
 }
 
 sf::FloatRect Bomb::getBounds() const {
-    return {m_position, {kSize, kSize}};
+    return {m_motion.position, {kSize, kSize}};
 }
 
 const sf::Vector2f& Bomb::getPosition() const noexcept {
-    return m_position;
+    return m_motion.position;
 }
 
 bool Bomb::isActive() const noexcept {
