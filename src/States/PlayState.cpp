@@ -1611,8 +1611,12 @@ void PlayState::spawnWalkingEnemies() {
     const auto& goombaTex = assets.getTexture(underground ? "GoombaUnderground" : "Goomba");
     const auto& blueKoopaTex = assets.getTexture("BlueKoopaUnderground");
     const auto& blueShellTex = assets.getTexture("BlueShell");
-    const auto& greenKoopaTex = assets.getTexture("GreenKoopa");
-    const auto& shellTex = assets.getTexture("GreenShell");
+    // World 1-2's three Green Koopas use the underground cyan palette while
+    // keeping Green Koopa behavior (unlike Red Koopas, they walk off ledges).
+    const auto& greenKoopaTex = assets.getTexture(
+        underground ? "BlueKoopaUnderground" : "GreenKoopa");
+    const auto& shellTex = assets.getTexture(
+        underground ? "BlueShell" : "GreenShell");
     const auto& paratroopaTex = assets.getTexture("GreenParatroopa");
     const auto& redKoopaTex = assets.getTexture("RedKoopa");
     const auto& redParatroopaTex = assets.getTexture("RedParatroopa");
