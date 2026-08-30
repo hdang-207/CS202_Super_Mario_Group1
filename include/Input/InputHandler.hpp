@@ -29,6 +29,7 @@ private:
     ShootCommand m_shootCommand{};
     BombCommand m_bombCommand{};
 
+    bool m_jumpHeldLastFrame{false};
     bool m_shootHeldLastFrame{false};
     bool m_bombHeldLastFrame{false};
 };
