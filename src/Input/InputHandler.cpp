@@ -29,6 +29,7 @@ void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
     if (jump) {
         m_jumpCommand.execute(m_playerInput);
     }
+    m_playerInput.jumpPressed = jump && !m_jumpHeldLastFrame;
 
     if (crouch) {
         m_crouchCommand.execute(m_playerInput);
@@ -42,12 +43,14 @@ void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
         m_bombCommand.execute(m_playerInput);
     }
 
+    m_jumpHeldLastFrame = jump;
     m_shootHeldLastFrame = shoot;
     m_bombHeldLastFrame = bomb;
 }
 
 void InputHandler::reset() {
     m_playerInput = PlayerInput{};
+    m_jumpHeldLastFrame = false;
     m_shootHeldLastFrame = false;
     m_bombHeldLastFrame = false;
 }

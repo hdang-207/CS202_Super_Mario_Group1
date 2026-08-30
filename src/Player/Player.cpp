@@ -33,7 +33,7 @@ void Player::update(float deltaTime) {
     }
 
     processHorizontalMovement(deltaTime);
-    processJump();
+    processJump(deltaTime);
 }
 
 void Player::render(sf::RenderTarget& target) const {
@@ -84,12 +84,37 @@ void Player::processHorizontalMovement(float deltaTime) {
     m_physicsBody.setVelocity(velocity);
 }
 
-void Player::processJump() {
+void Player::processJump(float deltaTime) {
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
-    if (m_input.jumpHeld && m_physicsBody.isGrounded()) {
+    const bool grounded = m_physicsBody.isGrounded();
+    if (grounded) {
+        m_coyoteTimeRemaining = m_movementConfig.coyoteTime;
+    } else {
+        m_coyoteTimeRemaining = std::max(
+            0.0f,
+            m_coyoteTimeRemaining - deltaTime
+        );
+    }
+
+    if (m_input.jumpPressed) {
+        m_jumpBufferRemaining = m_movementConfig.jumpBufferTime;
+    } else {
+        m_jumpBufferRemaining = std::max(
+            0.0f,
+            m_jumpBufferRemaining - deltaTime
+        );
+    }
+
+    const bool heldGroundedJump = m_input.jumpHeld && grounded;
+    const bool bufferedJump = m_jumpBufferRemaining > 0.0f
+        && (grounded || m_coyoteTimeRemaining > 0.0f);
+
+    if (heldGroundedJump || bufferedJump) {
         velocity.y = -m_movementConfig.jumpSpeed;
         m_physicsBody.setGrounded(false);
+        m_coyoteTimeRemaining = 0.0f;
+        m_jumpBufferRemaining = 0.0f;
     }
 
     if (!m_input.jumpHeld
