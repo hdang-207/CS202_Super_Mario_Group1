@@ -2,6 +2,8 @@
 
 #include <SFML/Graphics.hpp>
 
+#include "Physics/ProjectileMotion.hpp"
+
 namespace entity {
 
 class Bullet {
@@ -20,8 +22,7 @@ public:
     [[nodiscard]] bool isActive() const noexcept;
 
 private:
-    sf::Vector2f m_position;
-    sf::Vector2f m_velocity;
+    physics::ProjectileMotion m_motion;
     sf::Sprite m_sprite;
     float m_remainingLifetime;
     bool m_active{true};

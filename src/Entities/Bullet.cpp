@@ -4,8 +4,7 @@ namespace entity {
 
 Bullet::Bullet(const sf::Texture& texture, sf::Vector2f position,
                sf::Vector2f velocity, float lifetime)
-    : m_position(position),
-      m_velocity(velocity),
+    : m_motion{position, velocity, {0.f, 0.f}},
       m_sprite(texture),
       m_remainingLifetime(lifetime) {
     const sf::Vector2u textureSize = texture.getSize();
@@ -13,7 +12,7 @@ Bullet::Bullet(const sf::Texture& texture, sf::Vector2f position,
         m_sprite.setScale({kSize / static_cast<float>(textureSize.x),
                            kSize / static_cast<float>(textureSize.y)});
     }
-    m_sprite.setPosition(m_position);
+    m_sprite.setPosition(m_motion.position);
 }
 
 void Bullet::update(sf::Time dt) {
@@ -22,8 +21,8 @@ void Bullet::update(sf::Time dt) {
     }
 
     const float seconds = dt.asSeconds();
-    m_position += m_velocity * seconds;
-    m_sprite.setPosition(m_position);
+    m_motion.integrate(seconds);
+    m_sprite.setPosition(m_motion.position);
 
     m_remainingLifetime -= seconds;
     if (m_remainingLifetime <= 0.f) {
@@ -46,7 +45,7 @@ sf::FloatRect Bullet::bounds() const {
 }
 
 sf::Vector2f Bullet::position() const noexcept {
-    return m_position;
+    return m_motion.position;
 }
 
 bool Bullet::isActive() const noexcept {
