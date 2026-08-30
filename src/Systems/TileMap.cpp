@@ -281,7 +281,11 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 continue;
             }
             if (symbol == 'j') {
-                bloopers.push_back(worldPos);
+                // The guide anchors underwater enemies halfway down a tile.
+                // Keeping the inset here lets the text map stay on its 16 px
+                // grid while matching the six visible World 2-2 spawns.
+                bloopers.push_back(
+                    worldPos + sf::Vector2f(0.f, tileSizePx * 0.5f));
                 continue;
             }
             if (symbol == 'h') {

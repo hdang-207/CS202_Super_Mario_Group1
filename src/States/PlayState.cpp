@@ -69,13 +69,17 @@ namespace {
 
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
-    constexpr int kWorld22EntrancePipeColumn = 15;
+    constexpr int kWorld22EntrancePipeColumn = 9;
     constexpr int kWorld22WaterStartColumn = 37;
-    constexpr int kWorld22WaterEndColumn = 197;
+    constexpr int kWorld22WaterEndColumn = 229;
     constexpr int kWorld22WaterSurfaceRow = 2;
     constexpr int kWorld22WaterFloorRow = 13;
     constexpr int kWorld22WaterSpawnColumn = 39;
     constexpr int kWorld22WaterSpawnRow = 9;
+    constexpr int kWorld22ExitMouthColumn = 224;
+    constexpr int kWorld22ExitMouthRow = 8;
+    constexpr int kWorld22OutdoorPipeColumn = 232;
+    constexpr int kWorld22OutdoorPipeArrivalRow = 10;
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
     constexpr int kWorld23CoinTotal = 35;
@@ -374,7 +378,8 @@ void PlayState::update(sf::Time dt) {
         Systems::SoundController::getInstance().update();
         return;
     }
-    if (tryEnterWorld22WaterPipe() || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
+    if (tryEnterWorld22WaterPipe() || tryLeaveWorld22WaterPipe()
+        || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
         return;
@@ -445,7 +450,7 @@ void PlayState::render(sf::RenderWindow& window) {
     // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
     const bool world33 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 3;
-    const sf::Color outdoorSky = (world21 || world22 || world23)
+    const sf::Color outdoorSky = (world21 || world23)
         ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
     sky.setFillColor(underground || world31 || world32 || world33
                          ? sf::Color(0, 0, 0) : outdoorSky);
@@ -1031,6 +1036,39 @@ bool PlayState::tryEnterWorld22WaterPipe() {
     m_cameraSystem.centreCamera({m_cameraSystem.getMaxCameraCenterX(), Config::kViewHeight / 2.f}, tileMap.pixelWidth(), tileMap.pixelHeight());
 
     std::cout << "[Core Engine] World 2-2 entrance pipe: entered underwater room.\n";
+    return true;
+}
+
+bool PlayState::tryLeaveWorld22WaterPipe() {
+    if (Config::worldNumber(currentLevel) != 2
+        || Config::stageNumber(currentLevel) != 2 || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f
+        && !heldKeys.count(sf::Keyboard::Scancode::D)
+        && !heldKeys.count(sf::Keyboard::Scancode::Right)) {
+        return false;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect exitMouth(
+        {kWorld22ExitMouthColumn * tile, kWorld22ExitMouthRow * tile},
+        {4.f * tile, 4.f * tile});
+    if (!avatarBounds().findIntersection(exitMouth).has_value()) {
+        return false;
+    }
+
+    warpAvatarTo({kWorld22OutdoorPipeColumn * tile,
+                  kWorld22OutdoorPipeArrivalRow * tile});
+    avatar.setPosition(m_player->getPhysicsBody().getPosition());
+    swimButtonHeld = false;
+    const float outdoorCameraX = (kWorld22WaterEndColumn
+                                + Config::kViewTilesX * 0.5f) * tile;
+    m_cameraSystem.setMaxCameraCenterX(outdoorCameraX);
+    m_cameraSystem.centreCamera(
+        {outdoorCameraX, Config::kViewHeight * 0.5f},
+        tileMap.pixelWidth(), tileMap.pixelHeight());
+    std::cout << "[Core Engine] World 2-2 exit pipe: returned above water.\n";
     return true;
 }
 

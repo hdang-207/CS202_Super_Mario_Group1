@@ -210,6 +210,7 @@ private:
     void respawnAvatar();
     bool loadLevel(int level);
     bool tryEnterWorld22WaterPipe();
+    bool tryLeaveWorld22WaterPipe();
 
     /// @brief Ducking on the marked pipe drops the avatar into the hidden room.
     bool tryEnterSecretRoom();
