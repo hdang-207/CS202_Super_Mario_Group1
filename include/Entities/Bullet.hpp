@@ -20,10 +20,11 @@ public:
     [[nodiscard]] bool isActive() const noexcept;
 
 private:
-    sf::Sprite sprite;
-    sf::Vector2f velocity;
-    float remainingLifetime;
-    bool active{true};
+    sf::Vector2f m_position;
+    sf::Vector2f m_velocity;
+    sf::Sprite m_sprite;
+    float m_remainingLifetime;
+    bool m_active{true};
 };
 
 } // namespace entity
