@@ -143,8 +143,8 @@ private:
     /**
      * @brief How a lift travels.
      *
-     * World 1-3's lifts swing sideways. World 3-3 adds one that rides up and
-     * down and two pairs slung over a pulley: standing on one end lowers it
+     * World 1-3's four lifts ride up and down. World 3-3 adds two pairs slung
+     * over a pulley: standing on one end lowers it
      * and hauls the other end up by the same amount, until the rising end
      * reaches its wheel.
      */
