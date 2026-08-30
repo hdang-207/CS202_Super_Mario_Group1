@@ -118,6 +118,8 @@ void PlayState::init() {
     tileMap.setTileTexture('B', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('A', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('^', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('*', assets.getTexture("BrickTile"));
+    tileMap.setTileTexture('5', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('b', assets.getTexture("BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture("HardBlockTile"));
     tileMap.setTileTexture('[', assets.getTexture("PipeTopLeft"));
@@ -125,6 +127,7 @@ void PlayState::init() {
     tileMap.setTileTexture('{', assets.getTexture("PipeBodyLeft"));
     tileMap.setTileTexture('}', assets.getTexture("PipeBodyRight"));
     tileMap.setTileTexture('?', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('!', assets.getTexture("QuestionBlock"), 4, sf::seconds(0.15f));
     tileMap.setTileTexture('U', assets.getTexture("EmptyBlock"));
     tileMap.setTileTexture('o', assets.getTexture("Coin"), 4, sf::seconds(0.12f));
     tileMap.setTileTexture('(', assets.getTexture("IslandTopLeft"));
@@ -784,12 +787,20 @@ bool PlayState::loadLevel(int level) {
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('^', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('*', assets.getTexture(
+        underground ? "BrickUndergroundTile" : "BrickTile"));
+    tileMap.setTileTexture('5', assets.getTexture(
+        underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('b', assets.getTexture(
         underground ? "BrickUndergroundTile" : "BrickTile"));
     tileMap.setTileTexture('S', assets.getTexture(
         world23 ? "World23HardBlock"
                 : (underground ? "HardBlockUndergroundTile" : "HardBlockTile")));
     tileMap.setTileTexture('?', assets.getTexture(
+        world23 ? "World23QuestionBlock"
+                : (underground ? "QuestionBlockUnderground" : "QuestionBlock")),
+        underground && !world23 ? 6 : 4, sf::seconds(0.15f));
+    tileMap.setTileTexture('!', assets.getTexture(
         world23 ? "World23QuestionBlock"
                 : (underground ? "QuestionBlockUnderground" : "QuestionBlock")),
         underground && !world23 ? 6 : 4, sf::seconds(0.15f));
@@ -2164,8 +2175,15 @@ bool PlayState::moveAvatar(sf::Time dt) {
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             const char blockSymbol = tileMap.symbolAt(col, row);
             const bool starBlock = blockSymbol == 'A';
-            const bool oneUpBlock = blockSymbol == '1';
+            const bool oneUpBlock = blockSymbol == '1' || blockSymbol == '5';
             const bool vineBlock = blockSymbol == '^';
+            const bool fixedPowerUpBlock = blockSymbol == '*'
+                                        || blockSymbol == '!'
+                                        || blockSymbol == '4';
+            const bool world12 = Config::worldNumber(currentLevel) == 1
+                              && Config::stageNumber(currentLevel) == 2;
+            const bool world21 = Config::worldNumber(currentLevel) == 2
+                              && Config::stageNumber(currentLevel) == 1;
             if (vineBlock) {
                 const bool startedGrowing = spawnGrowingVine(tile.position);
                 if (!startedGrowing) {
@@ -2183,6 +2201,20 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     spawnStar(tile.position);
                 } else if (oneUpBlock) {
                     spawnMushroom(tile.position, items::MushroomKind::OneUp);
+                } else if (fixedPowerUpBlock) {
+                    // Authored power-up blocks are deterministic: small Mario
+                    // gets a mushroom and Super Mario gets a flower.
+                    if (m_player->isSuper()) {
+                        spawnFireFlower(tile.position);
+                    } else {
+                        spawnMushroom(tile.position);
+                    }
+                } else if (world12 || world21) {
+                    // These two maps author every power-up explicitly; all
+                    // remaining ?/hidden item blocks therefore contain coins.
+                    spawnCoinPop(tile.position);
+                    Core::EventSystem::getInstance().broadcast(
+                        {Core::EventType::CoinCollected});
                 } else {
                     BlockReward reward = takeNextItemBlockReward();
                     if (reward == BlockReward::Mushroom

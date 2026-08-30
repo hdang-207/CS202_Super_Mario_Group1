@@ -14,10 +14,12 @@ namespace {
      * what a character means to the physics.
      *
      *   # ground   C cloud block   B brick   A star brick   ^ vine brick
+     *   * power-up brick   ! power-up question block   5 visible 1-Up brick
      *   b repeatable coin brick (up to 10 coins)
      *   ? question block
      *   U used block      S staircase          [] pipe top    {} pipe body
-     *   H hidden block    1 hidden 1-Up block    o coin
+     *   H hidden coin block   1 hidden 1-Up block   4 hidden power-up block
+     *   o coin
      *   g underground ground   r underground brick   p invisible pipe collider
      *   w underwater rock collider   O outdoor ground
      *   s outdoor staircase   = World 2-3 bridge deck
@@ -40,12 +42,16 @@ namespace {
         { 'B', TileType::Brick         },
         { 'A', TileType::QuestionBlock },
         { '^', TileType::Brick         },
+        { '*', TileType::QuestionBlock },
+        { '!', TileType::QuestionBlock },
+        { '5', TileType::QuestionBlock },
         { 'b', TileType::CoinBrick     },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
         { 'H', TileType::HiddenBlock   },
         { '1', TileType::HiddenBlock   },
+        { '4', TileType::HiddenBlock   },
         { '[', TileType::Pipe          },
         { ']', TileType::Pipe          },
         { '{', TileType::Pipe          },
