@@ -83,6 +83,8 @@ namespace {
     constexpr int kWorld22ExitMouthRow = 8;
     constexpr int kWorld22OutdoorPipeColumn = 232;
     constexpr int kWorld22OutdoorPipeArrivalRow = 10;
+    constexpr float kWorld22CheepMinDelay = 1.4f;
+    constexpr float kWorld22CheepDelayRange = 1.2f;
 
     struct ColumnSpan {
         int first;
@@ -422,6 +424,7 @@ void PlayState::update(sf::Time dt) {
     // Update all managed entities (Enemies, Items, CoinPops) with full Physics & Wall Collision
     updateEnemyReactions();
     updateAquaticEnemyTargets();
+    updateWorld22CheepSpawner(dt);
     updateFlyingCheepSpawner(dt);
     m_entityManager.update(
         dt,
@@ -996,6 +999,7 @@ bool PlayState::loadLevel(int level) {
     swimButtonHeld = false;
     waterAnimationElapsed = sf::Time::Zero;
     waterAnimationFrame = 0;
+    world22CheepSpawnTimer = 1.2f;
     flyingCheepSpawnTimer = 0.8f;
     levelCoinsCollected = 0;
     starPowerRemaining = 0.f;
@@ -1868,6 +1872,53 @@ void PlayState::updateAquaticEnemyTargets() {
             blooper->setTarget(target);
         }
     });
+}
+
+void PlayState::updateWorld22CheepSpawner(sf::Time dt) {
+    if (Config::worldNumber(currentLevel) != 2
+        || Config::stageNumber(currentLevel) != 2 || m_player == nullptr) {
+        return;
+    }
+
+    const float tile = tileMap.tileSize();
+    const physics::AABB player = m_player->getPhysicsBody().getAABB();
+    const float playerCentreX = player.position.x + player.size.x * 0.5f;
+    const float playerCentreY = player.position.y + player.size.y * 0.5f;
+    const float waterTop = kWorld22WaterSurfaceRow * tile;
+    const float waterRight = kWorld22WaterEndColumn * tile;
+    if (playerCentreX < kWorld22WaterStartColumn * tile
+        || playerCentreX >= waterRight - tile * 4.f
+        || playerCentreY < waterTop) {
+        return;
+    }
+
+    world22CheepSpawnTimer -= dt.asSeconds();
+    if (world22CheepSpawnTimer > 0.f) {
+        return;
+    }
+
+    const sf::FloatRect swimBounds(
+        {kWorld22WaterStartColumn * tile, waterTop},
+        {(kWorld22WaterEndColumn - kWorld22WaterStartColumn) * tile,
+         (kWorld22WaterFloorRow - kWorld22WaterSurfaceRow) * tile});
+    const float cameraRight = m_cameraSystem.getCenter().x
+                            + Config::kViewWidth * 0.5f;
+    const float spawnX = std::min(waterRight - tile,
+                                  cameraRight + tile * 0.75f);
+    constexpr int firstLaneRow = kWorld22WaterSurfaceRow + 2;
+    constexpr int laneCount = kWorld22WaterFloorRow - firstLaneRow - 1;
+    const int lane = static_cast<int>(rewardRandom() % laneCount);
+    const float spawnY = (firstLaneRow + lane) * tile;
+    const float speed = 84.f + static_cast<float>(rewardRandom() % 49U);
+
+    auto fish = entity::EntityFactory::createCheepCheep(
+        {spawnX, spawnY}, tile, swimBounds, &assets.getTexture("CheepCheep"), speed);
+    fish->setActive(true);
+    m_entityManager.addEntity(std::move(fish));
+
+    const float randomDelay = static_cast<float>(rewardRandom() % 121U) / 100.f;
+    world22CheepSpawnTimer = kWorld22CheepMinDelay
+                           + std::min(randomDelay, kWorld22CheepDelayRange);
 }
 
 void PlayState::updateFlyingCheepSpawner(sf::Time dt) {

@@ -77,6 +77,9 @@ private:
     /// static enemy markers in the map file.
     float flyingCheepSpawnTimer{0.8f};
 
+    /// World 2-2 continuously sends Cheep-Cheeps in from beyond the right edge.
+    float world22CheepSpawnTimer{1.2f};
+
     /**
      * The original game does not cut away the instant Mario is hit: he stops,
      * hangs there for a beat, hops, and only then drops off the bottom of the
@@ -280,6 +283,7 @@ private:
     void spawnWalkingEnemies();
     void spawnAquaticEnemies();
     void updateAquaticEnemyTargets();
+    void updateWorld22CheepSpawner(sf::Time dt);
     void updateFlyingCheepSpawner(sf::Time dt);
     void spawnPiranhas();
     void spawnMovingPlatforms();
