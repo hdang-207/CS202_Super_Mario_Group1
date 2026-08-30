@@ -43,6 +43,7 @@ private:
     int coins{0};
     int lives{3};
     int levelCoinsCollected{0};
+    bool world13OneUpUnlocked{false};
     bool world23AllCoinsCollected{false};
     UI::HUD hud;
 

@@ -79,6 +79,7 @@ namespace {
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
     constexpr int kWorld23CoinTotal = 35;
+    constexpr int kWorld13OneUpCoinRequirement = 21;
 }
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
@@ -95,6 +96,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->score = data.score;
     this->coins = data.coins;
     this->lives = data.lives;
+    this->world13OneUpUnlocked = data.world13OneUpUnlocked;
     this->world23AllCoinsCollected = data.world23AllCoinsCollected;
 }
 
@@ -528,6 +530,7 @@ SaveData PlayState::getSaveData() const {
     data.coins = coins;
     data.lives = lives;
     data.selectedCharacter = selectedCharacter;
+    data.world13OneUpUnlocked = world13OneUpUnlocked;
     data.world23AllCoinsCollected = world23AllCoinsCollected;
     return data;
 }
@@ -536,7 +539,9 @@ bool PlayState::quickLoad() {
     SaveData data;
     if (SaveManager::loadProgress("savegame.txt", data)) {
         std::cout << "[Core Engine] Quick Load loading Level " << data.currentLevel << "...\n";
+        const bool previousWorld13Reward = world13OneUpUnlocked;
         const bool previousWorld23Reward = world23AllCoinsCollected;
+        world13OneUpUnlocked = data.world13OneUpUnlocked;
         world23AllCoinsCollected = data.world23AllCoinsCollected;
         if (loadLevel(data.currentLevel)) {
             score = data.score;
@@ -556,6 +561,7 @@ bool PlayState::quickLoad() {
             playLevelMusic();
             return true;
         }
+        world13OneUpUnlocked = previousWorld13Reward;
         world23AllCoinsCollected = previousWorld23Reward;
     }
     return false;
@@ -929,10 +935,12 @@ bool PlayState::loadLevel(int level) {
         return false;
     }
 
-    // SMB Deluxe only enables this hidden 1-Up after every open-air coin in
-    // World 2-3 was collected. The marker stays in the authored World 3-1 map,
-    // but becomes empty/non-solid until that perfect-clear flag is present.
-    if (world31 && !world23AllCoinsCollected) {
+    // The hidden 1-Ups stay authored in their destination maps, but only become
+    // solid after the required coin challenge in the previous world is cleared.
+    const bool world21 = world == 2 && stage == 1;
+    const bool oneUpLocked = (world21 && !world13OneUpUnlocked)
+                          || (world31 && !world23AllCoinsCollected);
+    if (oneUpLocked) {
         const auto& grid = mapParser.getGrid();
         for (std::size_t row = 0; row < grid.size(); ++row) {
             for (std::size_t col = 0; col < grid[row].size(); ++col) {
@@ -1209,7 +1217,13 @@ bool PlayState::tryEnterNextLevel() {
 
     if (transitionPending) return false;
     transitionPending = true;
-    if (Config::worldNumber(currentLevel) == 2
+    if (Config::worldNumber(currentLevel) == 1
+        && Config::stageNumber(currentLevel) == 3) {
+        world13OneUpUnlocked = levelCoinsCollected >= kWorld13OneUpCoinRequirement;
+        std::cout << "[Core Engine] World 1-3 coin challenge: "
+                  << levelCoinsCollected << "/23 collected; World 2-1 hidden 1-Up "
+                  << (world13OneUpUnlocked ? "unlocked.\n" : "remains locked.\n");
+    } else if (Config::worldNumber(currentLevel) == 2
         && Config::stageNumber(currentLevel) == 3) {
         world23AllCoinsCollected = levelCoinsCollected >= kWorld23CoinTotal;
         std::cout << "[Core Engine] World 2-3 coin challenge: "
