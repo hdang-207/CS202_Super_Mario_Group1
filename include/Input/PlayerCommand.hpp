@@ -38,3 +38,17 @@ public:
         input.crouchHeld = true;
     }
 };
+
+class ShootCommand final : public PlayerCommand {
+public:
+    void execute(PlayerInput& input) const override {
+        input.shootPressed = true;
+    }
+};
+
+class BombCommand final : public PlayerCommand {
+public:
+    void execute(PlayerInput& input) const override {
+        input.bombPressed = true;
+    }
+};

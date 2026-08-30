@@ -1,7 +1,7 @@
 #include "Input/InputHandler.hpp"
 
 void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
-    reset();
+    m_playerInput = PlayerInput{};
 
     const auto holding = [&heldKeys](sf::Keyboard::Scancode key) {
         return heldKeys.count(key) > 0;
@@ -15,6 +15,8 @@ void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
                    || holding(sf::Keyboard::Scancode::Up);
     const bool crouch = holding(sf::Keyboard::Scancode::S)
                      || holding(sf::Keyboard::Scancode::Down);
+    const bool shoot = holding(sf::Keyboard::Scancode::X);
+    const bool bomb = holding(sf::Keyboard::Scancode::C);
 
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);
@@ -31,10 +33,23 @@ void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
     if (crouch) {
         m_crouchCommand.execute(m_playerInput);
     }
+
+    if (shoot && !m_shootHeldLastFrame) {
+        m_shootCommand.execute(m_playerInput);
+    }
+
+    if (bomb && !m_bombHeldLastFrame) {
+        m_bombCommand.execute(m_playerInput);
+    }
+
+    m_shootHeldLastFrame = shoot;
+    m_bombHeldLastFrame = bomb;
 }
 
 void InputHandler::reset() {
     m_playerInput = PlayerInput{};
+    m_shootHeldLastFrame = false;
+    m_bombHeldLastFrame = false;
 }
 
 const PlayerInput& InputHandler::getPlayerInput() const noexcept {

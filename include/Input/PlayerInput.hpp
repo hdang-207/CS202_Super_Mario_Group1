@@ -10,5 +10,11 @@ struct PlayerInput {
 
     // True while the player holds the crouch key (Super and Fire forms duck)
     bool crouchHeld{false};
+
+    // True only on the frame the player presses the shoot key
+    bool shootPressed{false};
+
+    // True only on the frame the player presses the bomb key
+    bool bombPressed{false};
 };
 
