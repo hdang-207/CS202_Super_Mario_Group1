@@ -1437,10 +1437,10 @@ void PlayState::spawnBullet() {
 
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
 
-    // Position bullet at character's upper body / gun height (about 1/3 from top)
+    // Position bullet at character's hand / lower-body level so it aligns with 1-tile enemies
     const physics::AABB player = m_player->getPhysicsBody().getAABB();
     float bulletX = facingRight ? player.right() : player.left() - entity::Bullet::kSize;
-    float bulletY = player.top() + player.size.y * 0.3f;
+    float bulletY = player.bottom() - std::min(player.size.y * 0.5f, tileMap.tileSize() * 0.55f);
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
