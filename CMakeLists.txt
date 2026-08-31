@@ -16,8 +16,8 @@ if(NOT SFML_DIR)
     endif()
 endif()
 
-# Bật liên kết tĩnh (Static Link) cho SFML trên Windows để tránh lỗi xung đột DLL ABI (0xc0e90002)
-if(WIN32)
+# Bật liên kết tĩnh (Static Link) cho SFML trên MinGW để tránh lỗi xung đột DLL ABI (0xc0e90002)
+if(MINGW)
     set(SFML_STATIC_LIBRARIES TRUE)
 endif()
 
