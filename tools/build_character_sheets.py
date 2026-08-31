@@ -19,6 +19,10 @@ the walk cycle no longer shifts sideways between frames.
 Frame order in every sheet, matching entity::PlayerAnimator:
 
     idle, walk1, walk2, skid, jump, crouch, death, climb1, climb2, swim x6
+
+The two climbing cells are also emitted as ``*_pole.png`` sheets so flagpole
+sequences can use the original poses without depending on the full sheet's
+frame indices.
 """
 
 from pathlib import Path
@@ -113,6 +117,10 @@ def main():
             path = ART / f"{character}_{form}.png"
             build_sheet(frames).save(path)
             written.append((path, len(frames)))
+
+            pole_path = ART / f"{character}_{form}_pole.png"
+            build_sheet(frames[7:9]).save(pole_path)
+            written.append((pole_path, 2))
 
         # The menus show a single standing sprite rather than a sheet, so they
         # get their own tightly cropped copy with no empty cell around it.

@@ -479,7 +479,7 @@ void PlayState::render(sf::RenderWindow& window) {
     const bool world33 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 3;
     const sf::Color outdoorSky = (world21 || world23)
         ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
-    sky.setFillColor(underground || world31 || world32 || world33
+    sky.setFillColor(underground || insideSecretRoom || world31 || world32 || world33
                          ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
@@ -2319,6 +2319,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
             const bool fixedPowerUpBlock = blockSymbol == '*'
                                         || blockSymbol == '!'
                                         || blockSymbol == '4';
+            const bool world11 = Config::worldNumber(currentLevel) == 1
+                              && Config::stageNumber(currentLevel) == 1;
             const bool world12 = Config::worldNumber(currentLevel) == 1
                               && Config::stageNumber(currentLevel) == 2;
             const bool world21 = Config::worldNumber(currentLevel) == 2
@@ -2348,8 +2350,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     } else {
                         spawnMushroom(tile.position);
                     }
-                } else if (world12 || world21) {
-                    // These two maps author every power-up explicitly; all
+                } else if (world11 || world12 || world21) {
+                    // These maps author every power-up explicitly; all
                     // remaining ?/hidden item blocks therefore contain coins.
                     spawnCoinPop(tile.position);
                     Core::EventSystem::getInstance().broadcast(
