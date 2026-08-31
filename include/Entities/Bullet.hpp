@@ -8,7 +8,7 @@ namespace entity {
 
 class Bullet {
 public:
-    static constexpr float kSize = 8.f;
+    static constexpr float kSize = 32.f;
 
     Bullet(const sf::Texture& texture, sf::Vector2f position,
            sf::Vector2f velocity, float lifetime);

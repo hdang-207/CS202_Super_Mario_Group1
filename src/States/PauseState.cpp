@@ -42,6 +42,7 @@ void PauseState::init() {
         "RESTART LEVEL",
         "BGM VOLUME",
         "SFX VOLUME",
+        "ALLOW CHEATS",
         "SAVE PROGRESS",
         "SAVE & EXIT TO MAIN MENU",
         "EXIT TO MAIN MENU"
@@ -84,6 +85,8 @@ void PauseState::updateMenuLabels() {
             displayText += ": < " + std::to_string(static_cast<int>(std::round(bgmVol))) + "% >";
         } else if (i == 3) { // SFX Volume
             displayText += ": < " + std::to_string(static_cast<int>(std::round(sfxVol))) + "% >";
+        } else if (i == 4) { // ALLOW CHEATS
+            displayText += std::string(": < ") + (gsm.isCheatsEnabled() ? "ON" : "OFF") + " >";
         }
 
         menuTexts[i].setString(displayText);
@@ -132,6 +135,10 @@ void PauseState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().setSoundVolume(vol);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
+        } else if (selectedIndex == 4) { // ALLOW CHEATS
+            gsm.setCheatsEnabled(!gsm.isCheatsEnabled());
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
         }
     } else if (key == sf::Keyboard::Scancode::Right || key == sf::Keyboard::Scancode::D) {
         if (selectedIndex == 2) { // BGM Volume
@@ -142,6 +149,10 @@ void PauseState::handleInput(const sf::Event& event) {
         } else if (selectedIndex == 3) { // SFX Volume
             float vol = std::min(100.f, Systems::SoundController::getInstance().getSoundVolume() + 10.f);
             Systems::SoundController::getInstance().setSoundVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        } else if (selectedIndex == 4) { // ALLOW CHEATS
+            gsm.setCheatsEnabled(!gsm.isCheatsEnabled());
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
@@ -158,18 +169,22 @@ void PauseState::handleInput(const sf::Event& event) {
             case 2: // BGM Volume
             case 3: // SFX Volume
                 break;
-            case 4: // SAVE PROGRESS
+            case 4: // ALLOW CHEATS
+                gsm.setCheatsEnabled(!gsm.isCheatsEnabled());
+                updateMenuLabels();
+                break;
+            case 5: // SAVE PROGRESS
                 if (SaveManager::saveProgress("savegame.txt", playState.getSaveData())) {
                     saveNoticeTimer = 1.5f;
                     std::cout << "[PauseState] Game progress saved successfully.\n";
                 }
                 break;
-            case 5: // SAVE & EXIT TO MAIN MENU
+            case 6: // SAVE & EXIT TO MAIN MENU
                 SaveManager::saveProgress("savegame.txt", playState.getSaveData());
                 std::cout << "[PauseState] Saved progress and exiting to main menu...\n";
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
                 break;
-            case 6: // EXIT TO MAIN MENU
+            case 7: // EXIT TO MAIN MENU
                 std::cout << "[PauseState] Exiting to main menu without saving...\n";
                 gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
                 break;

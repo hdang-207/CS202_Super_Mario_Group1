@@ -67,6 +67,7 @@ void IntroMenuState::init() {
         "LOAD GAME PROGRESS",
         "BGM VOLUME",
         "SFX VOLUME",
+        "ALLOW CHEATS",
         "EXIT GAME"
     };
 
@@ -102,6 +103,8 @@ void IntroMenuState::updateMenuLabels() {
             displayText += ": < " + std::to_string(static_cast<int>(std::round(bgmVol))) + "% >";
         } else if (i == 3) { // SFX Volume
             displayText += ": < " + std::to_string(static_cast<int>(std::round(sfxVol))) + "% >";
+        } else if (i == 4) { // ALLOW CHEATS
+            displayText += std::string(": < ") + (gsm.isCheatsEnabled() ? "ON" : "OFF") + " >";
         }
 
         menuTexts[i].setString(displayText);
@@ -179,6 +182,10 @@ void IntroMenuState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().setSoundVolume(vol);
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
+        } else if (selectedIndex == 4) { // ALLOW CHEATS
+            gsm.setCheatsEnabled(!gsm.isCheatsEnabled());
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
         }
     } else if (key == sf::Keyboard::Scancode::Right || key == sf::Keyboard::Scancode::D) {
         if (selectedIndex == 2) { // BGM Volume
@@ -189,6 +196,10 @@ void IntroMenuState::handleInput(const sf::Event& event) {
         } else if (selectedIndex == 3) { // SFX Volume
             float vol = std::min(100.f, Systems::SoundController::getInstance().getSoundVolume() + 10.f);
             Systems::SoundController::getInstance().setSoundVolume(vol);
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        } else if (selectedIndex == 4) { // ALLOW CHEATS
+            gsm.setCheatsEnabled(!gsm.isCheatsEnabled());
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             updateMenuLabels();
         }
@@ -206,7 +217,11 @@ void IntroMenuState::handleInput(const sf::Event& event) {
                 Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("BrickCollision"));
                 std::cout << "[Core Engine] No valid save file found or failed to load.\n";
             }
-        } else if (selectedIndex == 4) { // EXIT GAME
+        } else if (selectedIndex == 4) { // ALLOW CHEATS
+            gsm.setCheatsEnabled(!gsm.isCheatsEnabled());
+            Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
+            updateMenuLabels();
+        } else if (selectedIndex == 5) { // EXIT GAME
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             std::cout << "[IntroMenuState] Exiting game...\n";
             if (gsm.getWindow()) {

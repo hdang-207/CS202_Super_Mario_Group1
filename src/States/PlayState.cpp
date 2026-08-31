@@ -115,12 +115,12 @@ namespace {
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       m_physicsSystem(kGravity, kMaxFallSpeed),
-      m_commandParser(std::make_unique<Core::CommandParser>(*this)) {}
+      m_commandParser(std::make_unique<Systems::CommandParser>(*this)) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
       m_physicsSystem(kGravity, kMaxFallSpeed),
-      m_commandParser(std::make_unique<Core::CommandParser>(*this))
+      m_commandParser(std::make_unique<Systems::CommandParser>(*this))
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
@@ -306,7 +306,7 @@ void PlayState::handleInput(const sf::Event& event) {
             }
             if (m_console.handleKeyPress(keyPressed->scancode)) {
                 std::string cmd = m_console.getAndClearInput();
-                Core::CommandResult res = m_commandParser->execute(cmd);
+                Systems::CommandResult res = m_commandParser->execute(cmd);
                 m_console.addOutput(res.message);
             }
             return;
@@ -1437,10 +1437,14 @@ void PlayState::spawnBullet() {
 
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
 
-    // Position bullet at character's hand / lower-body level so it aligns with 1-tile enemies
+    // Position bullet higher up so it doesn't scrape the ground, but still overlaps small enemies.
     const physics::AABB player = m_player->getPhysicsBody().getAABB();
     float bulletX = facingRight ? player.right() : player.left() - entity::Bullet::kSize;
-    float bulletY = player.bottom() - std::min(player.size.y * 0.5f, tileMap.tileSize() * 0.55f);
+    // Base Y so the bottom of the bullet sits exactly at the player's bottom
+    float baseY = player.bottom() - std::max(entity::Bullet::kSize, std::min(player.size.y * 0.5f, tileMap.tileSize() * 0.55f));
+    // Shift it up by an additional 12 pixels for better visual placement
+    float bulletY = baseY - 12.f;
+    
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
