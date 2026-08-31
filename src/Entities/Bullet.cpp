@@ -4,46 +4,52 @@ namespace entity {
 
 Bullet::Bullet(const sf::Texture& texture, sf::Vector2f position,
                sf::Vector2f velocity, float lifetime)
-    : sprite(texture), velocity(velocity), remainingLifetime(lifetime) {
+    : m_motion{position, velocity, {0.f, 0.f}},
+      m_sprite(texture),
+      m_remainingLifetime(lifetime) {
     const sf::Vector2u textureSize = texture.getSize();
     if (textureSize.x > 0 && textureSize.y > 0) {
-        sprite.setScale({kSize / static_cast<float>(textureSize.x),
-                         kSize / static_cast<float>(textureSize.y)});
+        m_sprite.setScale({kSize / static_cast<float>(textureSize.x),
+                           kSize / static_cast<float>(textureSize.y)});
     }
-    sprite.setPosition(position);
+    m_sprite.setPosition(m_motion.position);
 }
 
 void Bullet::update(sf::Time dt) {
-    if (!active) {
+    if (!m_active) {
         return;
     }
-    sprite.move(velocity * dt.asSeconds());
-    remainingLifetime -= dt.asSeconds();
-    if (remainingLifetime <= 0.f) {
-        active = false;
+
+    const float seconds = dt.asSeconds();
+    m_motion.integrate(seconds);
+    m_sprite.setPosition(m_motion.position);
+
+    m_remainingLifetime -= seconds;
+    if (m_remainingLifetime <= 0.f) {
+        m_active = false;
     }
 }
 
 void Bullet::draw(sf::RenderTarget& target) const {
-    if (active) {
-        target.draw(sprite);
+    if (m_active) {
+        target.draw(m_sprite);
     }
 }
 
 void Bullet::deactivate() noexcept {
-    active = false;
+    m_active = false;
 }
 
 sf::FloatRect Bullet::bounds() const {
-    return sprite.getGlobalBounds();
+    return m_sprite.getGlobalBounds();
 }
 
 sf::Vector2f Bullet::position() const noexcept {
-    return sprite.getPosition();
+    return m_motion.position;
 }
 
 bool Bullet::isActive() const noexcept {
-    return active;
+    return m_active;
 }
 
 } // namespace entity

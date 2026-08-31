@@ -42,7 +42,16 @@ namespace Systems {
          * @return Const reference to the sf::Texture object.
          */
         const sf::Texture& getTexture(const std::string& name) const { 
-            return _textures.at(name); 
+            auto it = _textures.find(name);
+            if (it != _textures.end()) {
+                return it->second;
+            }
+            std::cerr << "[AssetManager] Warning: Texture '" << name << "' not found!\n";
+            if (!_textures.empty()) {
+                return _textures.begin()->second;
+            }
+            static sf::Texture dummy;
+            return dummy;
         }
 
         /**
@@ -66,7 +75,16 @@ namespace Systems {
          * @return Const reference to the sf::Font object.
          */
         const sf::Font& getFont(const std::string& name) const { 
-            return _fonts.at(name); 
+            auto it = _fonts.find(name);
+            if (it != _fonts.end()) {
+                return it->second;
+            }
+            std::cerr << "[AssetManager] Warning: Font '" << name << "' not found!\n";
+            if (!_fonts.empty()) {
+                return _fonts.begin()->second;
+            }
+            static sf::Font dummy;
+            return dummy;
         }
 
         /**
@@ -90,7 +108,16 @@ namespace Systems {
          * @return Const reference to the sf::SoundBuffer object.
          */
         const sf::SoundBuffer& getSoundBuffer(const std::string& name) const { 
-            return _soundBuffers.at(name); 
+            auto it = _soundBuffers.find(name);
+            if (it != _soundBuffers.end()) {
+                return it->second;
+            }
+            std::cerr << "[AssetManager] Warning: SoundBuffer '" << name << "' not found!\n";
+            if (!_soundBuffers.empty()) {
+                return _soundBuffers.begin()->second;
+            }
+            static sf::SoundBuffer dummy;
+            return dummy;
         }
     };
 }

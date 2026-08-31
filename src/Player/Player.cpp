@@ -25,13 +25,15 @@ void Player::setInput(const PlayerInput& input) noexcept {
 }
 
 void Player::update(float deltaTime) {
+    setCrouching(m_input.crouchHeld);
+
     if (m_currentState) {
         m_currentState->handleInput(*this);
         m_currentState->update(*this, deltaTime);
     }
 
     processHorizontalMovement(deltaTime);
-    processJump();
+    processJump(deltaTime);
 }
 
 void Player::render(sf::RenderTarget& target) const {
@@ -50,11 +52,11 @@ const PlayerState* Player::getCurrentState() const noexcept {
 }
 
 void Player::processHorizontalMovement(float deltaTime) {
-    const float moveAxis = std::clamp(
-        m_input.moveAxis,
-        -1.0f,
-        1.0f
-    );
+    // A crouching player digs his heels in: he keeps whatever momentum he had
+    // and slides to a stop, but steering does nothing until he stands up.
+    const float moveAxis = (m_crouching && m_physicsBody.isGrounded())
+        ? 0.0f
+        : std::clamp(m_input.moveAxis, -1.0f, 1.0f);
 
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
@@ -82,14 +84,37 @@ void Player::processHorizontalMovement(float deltaTime) {
     m_physicsBody.setVelocity(velocity);
 }
 
-void Player::processJump() {
+void Player::processJump(float deltaTime) {
     sf::Vector2f velocity = m_physicsBody.getVelocity();
 
-    if (m_input.jumpHeld
-        && !m_jumpWasHeldLastFrame
-        && m_physicsBody.isGrounded()) {
+    const bool grounded = m_physicsBody.isGrounded();
+    if (grounded) {
+        m_coyoteTimeRemaining = m_movementConfig.coyoteTime;
+    } else {
+        m_coyoteTimeRemaining = std::max(
+            0.0f,
+            m_coyoteTimeRemaining - deltaTime
+        );
+    }
+
+    if (m_input.jumpPressed) {
+        m_jumpBufferRemaining = m_movementConfig.jumpBufferTime;
+    } else {
+        m_jumpBufferRemaining = std::max(
+            0.0f,
+            m_jumpBufferRemaining - deltaTime
+        );
+    }
+
+    const bool heldGroundedJump = m_input.jumpHeld && grounded;
+    const bool bufferedJump = m_jumpBufferRemaining > 0.0f
+        && (grounded || m_coyoteTimeRemaining > 0.0f);
+
+    if (heldGroundedJump || bufferedJump) {
         velocity.y = -m_movementConfig.jumpSpeed;
         m_physicsBody.setGrounded(false);
+        m_coyoteTimeRemaining = 0.0f;
+        m_jumpBufferRemaining = 0.0f;
     }
 
     if (!m_input.jumpHeld
@@ -98,7 +123,6 @@ void Player::processJump() {
     }
 
     m_physicsBody.setVelocity(velocity);
-    m_jumpWasHeldLastFrame = m_input.jumpHeld;
 }
 
 const PlayerInput& Player::getInput() const noexcept {
@@ -112,11 +136,14 @@ Player::getMovementConfig() const noexcept {
 
 void Player::applyPower(PowerType power) {
     const bool wasSuper = isSuper();
-    const auto existing = std::find(m_powerStack.begin(), m_powerStack.end(), power);
-    if (existing != m_powerStack.end()) {
-        m_powerStack.erase(existing);
+    // A power already held stays where it is. Moving it back to the top would
+    // reorder the stack - a Super mushroom taken as Fire Mario would sit above
+    // Fire, and the next hit would then shrink the collider while the Fire
+    // artwork stayed two tiles tall.
+    if (std::find(m_powerStack.begin(), m_powerStack.end(), power)
+        == m_powerStack.end()) {
+        m_powerStack.push_back(power);
     }
-    m_powerStack.push_back(power);
 
     if (!wasSuper && power == PowerType::Super) {
         setSuperCollider(true);
@@ -127,13 +154,20 @@ bool Player::removeLatestPower() {
     if (m_powerStack.empty()) {
         return false;
     }
-
-    const PowerType removed = m_powerStack.back();
-    m_powerStack.pop_back();
-    if (removed == PowerType::Super) {
+    bool wasSuper = isSuper();
+    m_powerStack.clear();
+    if (wasSuper) {
         setSuperCollider(false);
     }
     return true;
+}
+
+void Player::setCrouching(bool crouching) noexcept {
+    m_crouching = crouching && isSuper() && m_physicsBody.isGrounded();
+}
+
+bool Player::isCrouching() const noexcept {
+    return m_crouching;
 }
 
 bool Player::hasPower(PowerType power) const noexcept {

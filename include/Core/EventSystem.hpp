@@ -2,6 +2,7 @@
 #include <functional>
 #include <vector>
 #include <map>
+#include <SFML/System/Vector2.hpp>
 
 namespace Core {
 
@@ -12,19 +13,38 @@ namespace Core {
 enum class EventType {
     CoinCollected,
     MushroomCollected,
+    FireFlowerCollected,
+    StarCollected,
+    EnemyStomped,
+    EnemyDefeated,
     PlayerJumped,
+    PlayerDamaged,
     PlayerDied,
     GameOver,
-    OneMoreLife
+    OneMoreLife,
+    BlockHit,
+    BrickBroken,
+    FireballShot,
+    BombExploded,
+    LevelCompleted,
+    GameSaved,
+    GameLoaded
 };
 
 /**
  * @struct Event
- * @brief Data structure holding event information.
+ * @brief Data structure holding event information and payload.
  */
 struct Event {
     EventType type;
-    // Add additional payload data here in the future (e.g., entity ID, score amount) if needed.
+    int scoreGain{0};
+    int coinGain{0};
+    sf::Vector2f position{0.f, 0.f};
+    int extraData{0};
+
+    Event(EventType t) : type(t) {}
+    Event(EventType t, int score, int coins = 0, sf::Vector2f pos = {0.f, 0.f}, int extra = 0)
+        : type(t), scoreGain(score), coinGain(coins), position(pos), extraData(extra) {}
 };
 
 /**

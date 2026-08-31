@@ -13,15 +13,27 @@ namespace {
      * Level legend. Artwork comes from setTileTexture(); this table only decides
      * what a character means to the physics.
      *
-     *   # ground   C cloud block   B brick   A star brick   ^ vine brick   b coin brick
+     *   # ground   C cloud block   B brick   A star brick   ^ vine brick
+     *   * power-up brick   ! power-up question block   5 visible 1-Up brick
+     *   b repeatable coin brick (up to 10 coins)
      *   ? question block
      *   U used block      S staircase          [] pipe top    {} pipe body
-     *   H hidden block    1 hidden 1-Up block    o coin
+     *   H hidden coin block   1 hidden 1-Up block   4 hidden power-up block
+     *   o coin
      *   g underground ground   r underground brick   p invisible pipe collider
-     * Markers handled separately: P player spawn, E Goomba, K Blue Koopa,
-     * G Green Koopa, J Green Paratroopa, R Piranha Plant, D trampoline,
-     * L horizontal lift, and . empty sky.
-     * Scenery characters (M m V v l c F X W Q I Y Z T t f q N) carry no entry here - they are
+     *   w underwater rock collider   O outdoor ground
+     *   s outdoor staircase   = World 2-3 bridge deck
+     *   _ water surface   , water body (both drawn, neither solid)
+     *   0 Coin Heaven coin
+     * Markers handled separately: P player spawn, E Goomba, n half-tile Goomba,
+     * K Blue Koopa, G Green Koopa, u half-tile Green Koopa,
+     * 2 Red Koopa, J Green Paratroopa, 3 Red Paratroopa,
+     * k Hammer Bro, j Blooper, h Cheep-Cheep,
+     * R Piranha Plant, D trampoline,
+     * L horizontal lift, : up-and-down lift, / and \\ the two platforms of a
+     * pulley, d/e/x/i the hidden-room pipes, ^/N/>/+ the Coin
+     * Heaven route, and . empty sky.
+     * Scenery characters (M m V v l c F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
@@ -30,17 +42,22 @@ namespace {
         { 'B', TileType::Brick         },
         { 'A', TileType::QuestionBlock },
         { '^', TileType::Brick         },
+        { '*', TileType::QuestionBlock },
+        { '!', TileType::QuestionBlock },
+        { '5', TileType::QuestionBlock },
         { 'b', TileType::CoinBrick     },
         { '?', TileType::QuestionBlock },
         { 'U', TileType::UsedBlock     },
         { 'S', TileType::StairBlock    },
         { 'H', TileType::HiddenBlock   },
         { '1', TileType::HiddenBlock   },
+        { '4', TileType::HiddenBlock   },
         { '[', TileType::Pipe          },
         { ']', TileType::Pipe          },
         { '{', TileType::Pipe          },
         { '}', TileType::Pipe          },
         { 'o', TileType::Coin          },
+        { '0', TileType::Coin          },
         { '(', TileType::Ground        },
         { '-', TileType::Ground        },
         { ')', TileType::Ground        },
@@ -48,6 +65,12 @@ namespace {
         { 'g', TileType::Ground        },
         { 'r', TileType::Brick         },
         { 'p', TileType::Pipe          },
+        { 'w', TileType::Ground        },
+        { 'O', TileType::Ground        },
+        { 's', TileType::StairBlock    },
+        { '=', TileType::Ground        },
+        { '_', TileType::Decoration    },
+        { ',', TileType::Decoration    },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -174,11 +197,21 @@ bool TileMap::build(const MapParser& parser, float scale) {
     enemies.clear();
     blueKoopas.clear();
     greenKoopas.clear();
+    redKoopas.clear();
     greenParatroopas.clear();
+    redParatroopas.clear();
+    bloopers.clear();
+    cheepCheeps.clear();
+    hammerBros.clear();
     piranhas.clear();
     trampolines.clear();
     movingPlatforms.clear();
+    verticalPlatforms.clear();
+    balanceLefts.clear();
+    balanceRights.clear();
     spawn = {0.f, 0.f};
+    secret = SecretRoomWarp{};
+    coinHeaven = CoinHeavenWarp{};
     levelExitAvailable = false;
     levelExitTrigger = sf::FloatRect();
     goalAvailable = false;
@@ -195,6 +228,14 @@ bool TileMap::build(const MapParser& parser, float scale) {
         batch.vertices.clear();
     }
 
+    // The four hidden-room markers only count once every one of them is found,
+    // so a map holding half a warp simply has none.
+    int secretMarkers = 0;
+    bool foundCoinHeavenVine = false;
+    bool foundCoinHeavenArrival = false;
+    bool foundCoinHeavenExit = false;
+    bool foundCoinHeavenReturn = false;
+
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < static_cast<int>(grid[row].size()); ++col) {
             char symbol = grid[row][col];
@@ -210,6 +251,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 enemies.push_back(worldPos);
                 continue;
             }
+            if (symbol == 'n') {
+                enemies.push_back(worldPos + sf::Vector2f(tileSizePx * 0.5f, 0.f));
+                continue;
+            }
             if (symbol == 'K') {
                 blueKoopas.push_back(worldPos);
                 continue;
@@ -218,8 +263,37 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 greenKoopas.push_back(worldPos);
                 continue;
             }
+            if (symbol == 'u') {
+                greenKoopas.push_back(
+                    worldPos + sf::Vector2f(tileSizePx * 0.5f, 0.f));
+                continue;
+            }
+            if (symbol == '2') {
+                redKoopas.push_back(worldPos);
+                continue;
+            }
             if (symbol == 'J') {
                 greenParatroopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '3') {
+                redParatroopas.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'j') {
+                // The guide anchors underwater enemies halfway down a tile.
+                // Keeping the inset here lets the text map stay on its 16 px
+                // grid while matching the six visible World 2-2 spawns.
+                bloopers.push_back(
+                    worldPos + sf::Vector2f(0.f, tileSizePx * 0.5f));
+                continue;
+            }
+            if (symbol == 'h') {
+                cheepCheeps.push_back(worldPos);
+                continue;
+            }
+            if (symbol == 'k') {
+                hammerBros.push_back(worldPos);
                 continue;
             }
             if (symbol == 'R') {
@@ -233,6 +307,61 @@ bool TileMap::build(const MapParser& parser, float scale) {
             if (symbol == 'L') {
                 movingPlatforms.push_back(worldPos);
                 continue;
+            }
+            if (symbol == ':') {
+                verticalPlatforms.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '/') {
+                balanceLefts.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '\\') {
+                balanceRights.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '^') {
+                coinHeaven.vineBlock = worldPos;
+                foundCoinHeavenVine = true;
+                // Keep going: unlike the route markers, this is still a brick.
+            }
+            if (symbol == 'd') {
+                secret.entrance = sf::FloatRect(worldPos, {tileSizePx * 2.f, tileSizePx});
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == 'e') {
+                secret.arrival = worldPos;
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == 'x') {
+                secret.exitMouth = sf::FloatRect(worldPos, {tileSizePx, tileSizePx * 2.f});
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == 'i') {
+                secret.returnCell = worldPos;
+                ++secretMarkers;
+                continue;
+            }
+            if (symbol == '>') {
+                coinHeaven.exitX = worldPos.x;
+                foundCoinHeavenExit = true;
+                continue;
+            }
+            if (symbol == '+') {
+                coinHeaven.returnCell = worldPos;
+                foundCoinHeavenReturn = true;
+                continue;
+            }
+
+            if (symbol == 'N') {
+                // The vine hangs through a deliberate gap in the cloud floor.
+                // Receive Mario on the intact cloud immediately to its right.
+                coinHeaven.arrival = worldPos
+                    + sf::Vector2f(tileSizePx, tileSizePx * 3.f);
+                foundCoinHeavenArrival = true;
             }
 
             // Scenery is placed by a single character but covers whatever area its
@@ -248,9 +377,11 @@ bool TileMap::build(const MapParser& parser, float scale) {
                     drawPos.x += (kSourceTileSize - artSize.x) * 0.5f * scale;
                     drawPos.y += 2.f * scale;
                 } else if (symbol == 'N') {
-                    // The Coin Heaven vine is tightly cropped and begins one
-                    // source pixel below its map row in the reference image.
-                    drawPos.y += 1.f * scale;
+                    // World 3-1's shorter vine hangs half a tile through its
+                    // floor gap so Mario can jump and grab the lower stem. The
+                    // shared six-tile vine keeps its original one-pixel inset.
+                    const float sourceOffset = artSize.y == 79.f ? 9.f : 1.f;
+                    drawPos.y += sourceOffset * scale;
                 } else if (symbol == 'F') {
                     // The guide-map pole is centred eight source pixels left of
                     // its marker and starts halfway down the marker row.
@@ -268,6 +399,17 @@ bool TileMap::build(const MapParser& parser, float scale) {
                         const std::size_t topIndex =
                             static_cast<std::size_t>(row) * columns + col + offset;
                         types[topIndex] = TileType::Ground;
+                    }
+                } else if (symbol == 'a') {
+                    // Coral is solid for Mario, while aquatic enemies ignore
+                    // TileMap physics and may swim through it like in SMB.
+                    const int solidRows = std::max(
+                        1, static_cast<int>(std::ceil(artSize.y / kSourceTileSize)));
+                    for (int offset = 0; offset < solidRows && row + offset < rows;
+                         ++offset) {
+                        const std::size_t coralIndex =
+                            static_cast<std::size_t>(row + offset) * columns + col;
+                        types[coralIndex] = TileType::Ground;
                     }
                 } else if (symbol == 'W') {
                     levelExitAvailable = true;
@@ -301,6 +443,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
                                       static_cast<float>(batch->texture->getSize().y)}));
         }
     }
+
+    secret.available = secretMarkers == 4;
+    coinHeaven.available = foundCoinHeavenVine && foundCoinHeavenArrival
+                        && foundCoinHeavenExit && foundCoinHeavenReturn;
 
     return true;
 }
@@ -461,6 +607,7 @@ int TileMap::collectCoinsOverlapping(const sf::FloatRect& box) {
 
     if (collected > 0) {
         rebuildTileBatch('o');
+        rebuildTileBatch('0');
     }
     return collected;
 }

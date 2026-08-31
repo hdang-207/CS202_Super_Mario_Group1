@@ -94,27 +94,28 @@ void CharacterSelectionState::init() {
 
 void CharacterSelectionState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
-        if (keyPressed->code == sf::Keyboard::Key::Up || keyPressed->code == sf::Keyboard::Key::W ||
-            keyPressed->code == sf::Keyboard::Key::Num1 || keyPressed->code == sf::Keyboard::Key::Numpad1) {
+        const auto code = keyPressed->scancode;
+        if (code == sf::Keyboard::Scancode::Up || code == sf::Keyboard::Scancode::W ||
+            code == sf::Keyboard::Scancode::Num1 || code == sf::Keyboard::Scancode::Numpad1) {
             selectedIndex = 0; // Select Mario
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         } 
-        else if (keyPressed->code == sf::Keyboard::Key::Down || keyPressed->code == sf::Keyboard::Key::S ||
-                 keyPressed->code == sf::Keyboard::Key::Num2 || keyPressed->code == sf::Keyboard::Key::Numpad2) {
+        else if (code == sf::Keyboard::Scancode::Down || code == sf::Keyboard::Scancode::S ||
+                 code == sf::Keyboard::Scancode::Num2 || code == sf::Keyboard::Scancode::Numpad2) {
             selectedIndex = 1; // Select Luigi
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
         }
-        else if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space) {
+        else if (code == sf::Keyboard::Scancode::Enter || code == sf::Keyboard::Scancode::Space) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             CharacterType chosen = (selectedIndex == 0) ? CharacterType::Mario : CharacterType::Luigi;
             std::cout << "[Core Engine] Character confirmed! Transitioning to WorldSelectionState...\n";
             gsm.changeState(std::make_unique<WorldSelectionState>(gsm, assets, chosen));
         }
-        else if (keyPressed->code == sf::Keyboard::Key::B) {
+        else if (code == sf::Keyboard::Scancode::B) {
             std::cout << "[Core Engine] Going back to IntroMenuState...\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         }
-        else if (keyPressed->code == sf::Keyboard::Key::L) {
+        else if (code == sf::Keyboard::Scancode::L) {
             SaveData data;
             if (SaveManager::loadFromFile("savegame.txt", data)) {
                 std::cout << "[Core Engine] Loading saved game at World "
@@ -123,10 +124,10 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
                 gsm.changeState(std::make_unique<PlayState>(gsm, assets, data));
             }
         }
-        else if (keyPressed->code == sf::Keyboard::Key::M) {
+        else if (code == sf::Keyboard::Scancode::M) {
             Systems::SoundController::getInstance().toggleMusicMuted();
         }
-        else if (keyPressed->code == sf::Keyboard::Key::N) {
+        else if (code == sf::Keyboard::Scancode::N) {
             Systems::SoundController::getInstance().toggleSoundMuted();
         }
     }

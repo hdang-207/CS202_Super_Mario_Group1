@@ -2,6 +2,8 @@
 
 #include <SFML/Graphics.hpp>
 
+#include "Physics/ProjectileMotion.hpp"
+
 namespace combat {
 
 class Bomb {
@@ -20,8 +22,7 @@ public:
     void deactivate() noexcept;
 
 private:
-    sf::Vector2f m_position;
-    sf::Vector2f m_velocity;
+    physics::ProjectileMotion m_motion;
     float m_fuseRemaining{1.5f};
     bool m_active{true};
 };
