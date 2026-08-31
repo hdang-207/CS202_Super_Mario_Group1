@@ -602,6 +602,19 @@ bool PlayState::quickLoad() {
     return false;
 }
 
+void PlayState::restartCurrentLevel() {
+    std::cout << "[Core Engine] Restarting current level " << currentLevel << "...\n";
+    if (loadLevel(currentLevel)) {
+        m_cameraSystem.setFreeLook(false);
+        isPaused = false;
+        heldKeys.clear();
+        inputHandler.reset();
+        respawnAvatar();
+        m_cameraSystem.followTarget(m_player->getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
+        playLevelMusic();
+    }
+}
+
 std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRect& bounds) const {
     std::vector<physics::AABB> solids;
     for (const sf::FloatRect& rect : tileMap.solidTilesOverlapping(bounds)) {

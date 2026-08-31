@@ -9,6 +9,12 @@
  * to character selection.
  */
 class IntroMenuState : public State {
+public:
+    enum class MenuPhase {
+        TitleScreen,
+        ActionMenu
+    };
+
 private:
     sf::Sprite bgSprite;           ///< Background menu sprite
     sf::RectangleShape titleBox;   ///< Frame/box container for game title
@@ -16,6 +22,17 @@ private:
     sf::Text promptText;           ///< Text prompt instructing user to press key
     float blinkTimer = 0.0f;       ///< Timer for blinking text effect
     bool showPrompt = true;        ///< Toggle visibility of prompt text
+
+    MenuPhase currentPhase{MenuPhase::TitleScreen};
+    sf::RectangleShape modalOverlay;
+    sf::Text promptHintText;
+    std::vector<sf::Text> menuTexts;
+    std::vector<std::string> menuLabels;
+    int selectedIndex{0};
+    bool hasSaveAvailable{false};
+
+    void updateMenuLabels();
+    void refreshSaveStatus();
 
 public:
     /**
@@ -36,13 +53,13 @@ public:
     void init() override;
 
     /**
-     * @brief Listens for Enter key press to transition to the character selection screen.
+     * @brief Listens for keyboard input to navigate between frames and select options.
      * @param event The event being polled.
      */
     void handleInput(const sf::Event& event) override;
 
     /**
-     * @brief Updates any menu animations or logic.
+     * @brief Updates menu animations or blinking timers.
      * @param dt Time elapsed since last frame.
      */
     void update(sf::Time dt) override;

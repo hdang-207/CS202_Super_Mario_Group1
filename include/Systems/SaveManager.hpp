@@ -42,4 +42,18 @@ public:
      * @return True if load operation succeeded and parsed correctly, false otherwise.
      */
     static bool loadProgress(const std::string& filepath, SaveData& outData);
+
+    /**
+     * @brief Checks if a valid save file exists at the specified path.
+     * @param filepath Target file path to check.
+     * @return True if file exists and contains readable save data, false otherwise.
+     */
+    static bool hasSaveFile(const std::string& filepath);
+
+    /**
+     * @brief Deletes the save file at the specified path.
+     * @param filepath Target file path to delete.
+     * @return True if file was deleted successfully, false otherwise.
+     */
+    static bool deleteSaveFile(const std::string& filepath);
 };

@@ -16,6 +16,11 @@ if(NOT SFML_DIR)
     endif()
 endif()
 
+# Bật liên kết tĩnh (Static Link) cho SFML trên MinGW để tránh lỗi xung đột DLL ABI (0xc0e90002)
+if(MINGW)
+    set(SFML_STATIC_LIBRARIES TRUE)
+endif()
+
 # Tìm và tích hợp thư viện SFML (Yêu cầu các thành viên phải cài sẵn SFML trên máy)
 find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
 
@@ -40,6 +45,24 @@ target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Window SFML::
 
 if(MINGW)
     target_link_options(${PROJECT_NAME} PRIVATE -mconsole)
+    
+    # Tự động sao chép các DLL runtime của MinGW (libgcc, libstdc++, libwinpthread) vào thư mục bin
+    # để tránh lỗi Bad Image (0xc0e90002) hoặc thiếu DLL khi chạy trực tiếp trên Windows
+    get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(MINGW_RUNTIME_DLLS
+        "libgcc_s_seh-1.dll"
+        "libstdc++-6.dll"
+        "libwinpthread-1.dll"
+    )
+    foreach(DLL ${MINGW_RUNTIME_DLLS})
+        if(EXISTS "${MINGW_BIN_DIR}/${DLL}")
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${MINGW_BIN_DIR}/${DLL}"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${DLL}"
+            )
+        endif()
+    endforeach()
 endif()
 
 # Trên macOS: SFML tạo surface OpenGL ở mật độ 1x nên màn Retina bị phóng to làm mờ.
