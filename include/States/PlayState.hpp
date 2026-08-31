@@ -316,4 +316,5 @@ public:
 
     SaveData getSaveData() const;
     bool quickLoad();
+    void restartCurrentLevel();
 };

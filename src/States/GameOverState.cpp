@@ -1,6 +1,7 @@
 #include "States/GameOverState.hpp"
 #include "States/IntroMenuState.hpp"
 #include "States/GameStateManager.hpp"
+#include "Systems/SaveManager.hpp"
 #include "Core/Config.hpp"
 #include "Systems/SoundController.hpp"
 #include <iostream>
@@ -9,7 +10,8 @@ GameOverState::GameOverState(GameStateManager& gsm, Systems::AssetManager& asset
     : State(gsm, assets), gameOverText(assets.getFont("MarioFont")), promptText(assets.getFont("MarioFont")) {}
 
 void GameOverState::init() {
-    std::cout << "[Core Engine] GameOverState Initialized.\n";
+    std::cout << "[Core Engine] GameOverState Initialized. Clearing save progress...\n";
+    SaveManager::deleteSaveFile("savegame.txt");
 
     Systems::SoundController::getInstance().stopMusic();
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("GameOverSound"));

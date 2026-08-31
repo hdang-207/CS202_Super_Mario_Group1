@@ -93,3 +93,21 @@ bool SaveManager::saveProgress(const std::string& filepath, const SaveData& data
 bool SaveManager::loadProgress(const std::string& filepath, SaveData& outData) {
     return loadFromFile(filepath, outData);
 }
+
+bool SaveManager::hasSaveFile(const std::string& filepath) {
+    std::ifstream inFile(filepath);
+    if (!inFile.is_open()) {
+        return false;
+    }
+    inFile.close();
+    SaveData dummy;
+    return loadFromFile(filepath, dummy);
+}
+
+bool SaveManager::deleteSaveFile(const std::string& filepath) {
+    if (std::remove(filepath.c_str()) == 0) {
+        std::cout << "[SaveManager] Successfully deleted save file: " << filepath << std::endl;
+        return true;
+    }
+    return false;
+}
