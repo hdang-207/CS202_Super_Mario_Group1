@@ -16,8 +16,10 @@ if(NOT SFML_DIR)
     endif()
 endif()
 
-# Bật liên kết tĩnh (Static Link) cho SFML để tránh lỗi xung đột DLL ABI (0xc0e90002)
-set(SFML_STATIC_LIBRARIES TRUE)
+# Bật liên kết tĩnh (Static Link) cho SFML trên Windows để tránh lỗi xung đột DLL ABI (0xc0e90002)
+if(WIN32)
+    set(SFML_STATIC_LIBRARIES TRUE)
+endif()
 
 # Tìm và tích hợp thư viện SFML (Yêu cầu các thành viên phải cài sẵn SFML trên máy)
 find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
