@@ -267,6 +267,19 @@ public:
     /// @brief World-space area occupied by the final flagpole or castle axe.
     sf::FloatRect goalBounds() const { return goalTrigger; }
 
+    /// @brief World-space rectangle the flagpole artwork is actually drawn in.
+    ///
+    /// The pole hangs half a tile left of and below its marker cell, so the
+    /// finishing animation - which has to know where the shaft, the pennant
+    /// and the base block are - measures from this rather than goalBounds().
+    sf::FloatRect goalArtBounds() const { return goalArt; }
+
+    /// @brief True when the map draws a castle anywhere ('X' or 'Z').
+    bool hasEndCastle() const { return endCastleAvailable; }
+
+    /// @brief World-space rectangle of the rightmost castle in the map.
+    sf::FloatRect endCastleBounds() const { return endCastle; }
+
 private:
     /// Every tile written with the same map character, batched into one buffer.
     struct TileBatch {
@@ -329,4 +342,7 @@ private:
     sf::FloatRect levelExitTrigger;
     bool goalAvailable{false};
     sf::FloatRect goalTrigger;
+    sf::FloatRect goalArt;
+    bool endCastleAvailable{false};
+    sf::FloatRect endCastle;
 };

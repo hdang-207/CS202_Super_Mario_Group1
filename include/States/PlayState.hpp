@@ -228,6 +228,29 @@ private:
     };
     CastleClearSequence castleClear;
 
+    /**
+     * @struct FlagpoleSequence
+     * @brief The outdoor finish: pole ride, flag drop, walk into the castle.
+     *
+     * Touching the pole hands the stage over to this, exactly as touching the
+     * axe hands a castle over to CastleClearSequence. The player keeps no
+     * control until the results screen opens.
+     */
+    struct FlagpoleSequence {
+        enum class Phase { Slide, Dismount, Walk, Finish };
+        bool active{false};
+        Phase phase{Phase::Slide};
+        float shaftCentreX{0.f};  ///< Middle of the two-pixel pole shaft.
+        float slideEndY{0.f};     ///< Feet position that ends the ride down.
+        float flagY{0.f};         ///< Current top of the pennant.
+        float flagEndY{0.f};      ///< Where the pennant comes to rest.
+        float doorX{0.f};         ///< Castle doorway the walk finishes at.
+        float fallSpeed{0.f};     ///< Stepping off the pole's base block.
+        float timer{0.f};
+        bool hidden{false};       ///< True once Mario is inside the castle.
+    };
+    FlagpoleSequence flagpole;
+
     enum class TrampolineState { Normal, Compressed, Launch };
     struct TrampolineEntity {
         float x;
@@ -244,6 +267,11 @@ private:
     /// True while the avatar is inside the stage's hidden room, which swaps the
     /// music and decides which of the two warp pipes is listening for input.
     bool insideSecretRoom{false};
+
+    /// World 1-2 starts and finishes outdoors, with its main course in between.
+    /// This flag follows the two authored pipe transitions so the backdrop and
+    /// music change with the area instead of merely keying off "stage 2".
+    bool insideWorld12Underground{false};
     std::set<sf::Keyboard::Scancode> heldKeys;
 
     UI::ConsoleOverlay m_console;
@@ -278,6 +306,8 @@ private:
     void playLevelMusic();
     void respawnAvatar();
     bool loadLevel(int level);
+    bool tryEnterWorld12UndergroundPipe();
+    bool tryLeaveWorld12UndergroundPipe();
     bool tryEnterWorld22WaterPipe();
     bool tryLeaveWorld22WaterPipe();
 
@@ -307,6 +337,10 @@ private:
     void spawnMushroom(sf::Vector2f blockPosition, items::MushroomKind kind = items::MushroomKind::Super);
     void spawnFireFlower(sf::Vector2f blockPosition);
     void spawnStar(sf::Vector2f blockPosition);
+
+    /// @brief Turns round any mushroom standing on a block Mario has bumped.
+    void reverseMushroomsOnBlock(const sf::FloatRect& tile);
+
     bool spawnGrowingVine(sf::Vector2f blockPosition);
     void updateGrowingVines(sf::Time dt);
     void drawGrowingVines(sf::RenderWindow& window) const;
@@ -374,6 +408,12 @@ private:
     bool damagePlayerFromCastleHazard();
     void startCastleClearSequence();
     void updateCastleClearSequence(sf::Time dt);
+
+    /// @brief Top of the first solid tile at or below @p y in @p x's column.
+    [[nodiscard]] float surfaceUnder(float x, float y) const;
+    void startFlagpoleSequence();
+    void updateFlagpoleSequence(sf::Time dt);
+    void drawFlagpoleSequence(sf::RenderWindow& window) const;
 
     bool moveAvatar(sf::Time dt);
 

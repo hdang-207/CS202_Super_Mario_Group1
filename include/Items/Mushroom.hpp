@@ -37,6 +37,17 @@ public:
     void render(sf::RenderWindow& window, const sf::Texture& texture,
                 float scale) const override;
 
+    /**
+     * @brief Sends the mushroom back the way it came.
+     *
+     * Used when Mario head-butts the block it is walking along. The heading
+     * lives in the physics body once the mushroom is moving, so flipping only
+     * @ref m_velocity would be overwritten by the next update; this keeps the
+     * two in step. Does nothing while the mushroom is still rising out of its
+     * block, which has no heading yet.
+     */
+    void reverseDirection();
+
     [[nodiscard]] sf::FloatRect getBounds() const override;
     [[nodiscard]] bool isCollectible() const noexcept override;
     [[nodiscard]] bool hasFallenOut(float worldHeight) const noexcept;

@@ -57,8 +57,8 @@ enum class PlayerAction {
  */
 class PlayerAnimator {
 public:
-    /// Cells per sheet: nine land poses, followed by six NES swim poses.
-    static constexpr int kFrameCount = 15;
+    /// Cells per sheet: ten land poses, followed by six NES swim poses.
+    static constexpr int kFrameCount = 16;
 
     /// @brief Looks up the three form sheets belonging to one character.
     void init(const Systems::AssetManager& assets, CharacterType character);

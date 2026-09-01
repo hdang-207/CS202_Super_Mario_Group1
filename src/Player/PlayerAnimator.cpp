@@ -15,22 +15,23 @@ namespace {
     constexpr int kFrameIdle = 0;
     constexpr int kFrameWalk1 = 1;
     constexpr int kFrameWalk2 = 2;
-    constexpr int kFrameSkid = 3;
-    constexpr int kFrameJump = 4;
-    constexpr int kFrameCrouch = 5;
-    constexpr int kFrameDead = 6;
-    constexpr int kFrameClimbStart = 7;
+    constexpr int kFrameWalk3 = 3;
+    constexpr int kFrameSkid = 4;
+    constexpr int kFrameJump = 5;
+    constexpr int kFrameCrouch = 6;
+    constexpr int kFrameDead = 7;
+    constexpr int kFrameClimbStart = 8;
 
     /**
-     * Walk cycle. Passing back through the standing pose between strides is
-     * what gives the two drawn stride frames a readable gait, and puts the two
-     * footfalls an even half-cycle apart.
+     * Walk cycle: the three drawn strides in the order the NES plays them. The
+     * standing pose is not part of it - the original never passes back through
+     * it while running, and the middle stride already reads as the leg swap.
      */
-    constexpr int kWalkCycle[] = {kFrameIdle, kFrameWalk1, kFrameIdle, kFrameWalk2};
-    constexpr int kWalkCycleLength = 4;
+    constexpr int kWalkCycle[] = {kFrameWalk1, kFrameWalk2, kFrameWalk3};
+    constexpr int kWalkCycleLength = 3;
 
     /// Exact six-pose swimming cycle from the original NES character sheet.
-    constexpr int kFrameSwimStart = 9;
+    constexpr int kFrameSwimStart = 10;
     constexpr int kSwimCycleLength = 6;
     constexpr float kSwimFrameDuration = 0.16f;
 
@@ -166,9 +167,9 @@ void PlayerAnimator::update(sf::Time dt) {
         while (m_walkTimer >= frameDuration) {
             m_walkTimer -= frameDuration;
             m_walkStep = (m_walkStep + 1) % kWalkCycleLength;
-            // Both stride frames land a foot; the standing frames between them
-            // are the lift, so only half the steps make a sound.
-            m_footstep = m_footstep || m_walkStep % 2 == 1;
+            // The outer two strides plant a foot; the middle one is the leg
+            // passing through, so it is the only step that makes no sound.
+            m_footstep = m_footstep || m_walkStep != 1;
         }
     } else if (m_action == PlayerAction::Swim) {
         m_swimTimer += seconds;

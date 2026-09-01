@@ -37,7 +37,7 @@ namespace {
      * / and \\ the two platforms of a
      * pulley, d/e/x/i the hidden-room pipes, ^/N/>/+ the Coin
      * Heaven route, and . empty sky.
-     * Scenery characters (M m V v l c F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
+     * Scenery characters (M m V v y l c < F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {
@@ -229,6 +229,9 @@ bool TileMap::build(const MapParser& parser, float scale) {
     levelExitTrigger = sf::FloatRect();
     goalAvailable = false;
     goalTrigger = sf::FloatRect();
+    goalArt = sf::FloatRect();
+    endCastleAvailable = false;
+    endCastle = sf::FloatRect();
 
     // Rebuilding restarts every animation, so the baked texture coordinates below
     // (which all point at frame 0) stay in step with what update() thinks is shown.
@@ -451,6 +454,15 @@ bool TileMap::build(const MapParser& parser, float scale) {
                 } else if (symbol == 'F') {
                     goalAvailable = true;
                     goalTrigger = sf::FloatRect(worldPos, drawSize);
+                    goalArt = sf::FloatRect(drawPos, drawSize);
+                } else if (symbol == 'X' || symbol == 'Z') {
+                    // A stage draws its opening castle at the far left and the
+                    // one it finishes at on the right, in either character, so
+                    // the rightmost of the two is the one Mario walks into.
+                    if (!endCastleAvailable || drawPos.x > endCastle.position.x) {
+                        endCastleAvailable = true;
+                        endCastle = sf::FloatRect(drawPos, drawSize);
+                    }
                 } else if (symbol == '$') {
                     // Castle stages end at the axe rather than a flagpole.
                     goalAvailable = true;

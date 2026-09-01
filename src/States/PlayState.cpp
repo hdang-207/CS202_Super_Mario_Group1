@@ -40,6 +40,9 @@ namespace {
     constexpr float kVineClimbDistanceTiles = 4.f;
     constexpr float kVineLowerOffsetTiles = 0.5f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
+    /// How far a mushroom's feet may sit from a block's surface and still
+    /// count as standing on it, absorbing the sub-pixel drift of gravity.
+    constexpr float kMushroomRestTolerance = 4.f;
     constexpr float kStarPowerDuration = 10.f;
     constexpr int kCoinBlockCapacity = 10;
 
@@ -82,6 +85,19 @@ namespace {
         return Config::stageNumber(level) == 4;
     }
 
+    /// Which cut of the goal pole a stage finishes on. The flagpole animation
+    /// takes the pole apart and redraws it, so it has to reach for the same
+    /// image the level legend does - hence one lookup, used by both.
+    const char* goalPoleArt(int level) {
+        const int world = Config::worldNumber(level);
+        const int stage = Config::stageNumber(level);
+        if (world == 2 && stage == 3) return "World23GoalPole";
+        if (world == 3 && stage == 1) return "World31GoalPole";
+        if (world == 3 && stage == 2) return "World32GoalPole";
+        if (world == 3 && stage == 3) return "World33GoalPole";
+        return "Flagpole";
+    }
+
     constexpr int kFireBarBallCount = 6;
     constexpr float kFireBarAngularSpeed = 1.8f;
     constexpr float kCastleBossWalkSpeed = 54.f;
@@ -101,8 +117,43 @@ namespace {
     constexpr float kCastleClearFinishDelay = 0.8f;
     constexpr float kTwoPi = 6.28318530718f;
 
+    /// The outdoor finish. Mario rides the pole down, waits for the pennant to
+    /// land beside him, hops to the far side and walks off into the castle.
+    constexpr float kFlagSlideSpeed = 260.f;
+    constexpr float kFlagDismountDelay = 0.4f;
+    constexpr float kFlagWalkSpeed = 170.f;
+    constexpr float kFlagFinishDelay = 1.2f;
+    /// How far Mario walks when the stage draws no castle to walk into.
+    constexpr float kFlagWalkFallbackTiles = 5.f;
+    /// Goal_Pole.png and every world's recut of it share one 24x168 layout: a
+    /// two-pixel green shaft at x15, a 16x16 pennant painted over the left half
+    /// of that shaft across rows 9..24, and the base block starting at row 152.
+    /// Because the pennant covers the shaft rather than sitting beside it, the
+    /// green behind it has to be borrowed from the clean run underneath.
+    constexpr int kFlagpoleShaftX = 15;
+    constexpr int kFlagpoleShaftWidth = 2;
+    constexpr int kFlagpoleFlagTop = 9;
+    constexpr int kFlagpoleFlagSize = 16;
+    constexpr int kFlagpoleCleanShaftTop = kFlagpoleFlagTop + kFlagpoleFlagSize;
+    constexpr int kFlagpoleBaseTop = 152;
+
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
+
+    // World 1-2 is stored as four camera-isolated areas in one text map:
+    // opening, underground/Warp Zone, outdoor goal, and the coin room. These
+    // are the two route pipes that connect the first three areas.
+    constexpr int kWorld12OpeningPipeColumn = 10;
+    constexpr int kWorld12OpeningPipeRow = 9;
+    constexpr int kWorld12UndergroundStartColumn = 24;
+    constexpr int kWorld12UndergroundSpawnColumn = 27;
+    constexpr int kWorld12UndergroundSpawnRow = 12;
+    constexpr int kWorld12ExitPipeColumn = 190;
+    constexpr int kWorld12ExitPipeRow = 8;
+    constexpr int kWorld12OutdoorStartColumn = 224;
+    constexpr int kWorld12OutdoorPipeColumn = 226;
+    constexpr int kWorld12OutdoorPipeArrivalRow = 10;
+
     constexpr int kWorld22EntrancePipeColumn = 9;
     constexpr int kWorld22WaterStartColumn = 37;
     constexpr int kWorld22WaterEndColumn = 229;
@@ -222,8 +273,10 @@ void PlayState::init() {
     tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
     tileMap.setDecorationTexture('V', assets.getTexture("BushBig"));
     tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
+    tileMap.setDecorationTexture('y', assets.getTexture("BushMedium"));
     tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
+    tileMap.setDecorationTexture('<', assets.getTexture("CloudWide"));
     tileMap.setDecorationTexture('I', assets.getTexture("Island"));
     tileMap.setDecorationTexture('Y', assets.getTexture("CastleWorld1_3"));
     tileMap.setDecorationTexture('Z', assets.getTexture("CastleWorld2_1"));
@@ -312,7 +365,8 @@ void PlayState::registerEvents() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
-    if (transitionPending || death.active || castleClear.active) {
+    if (transitionPending || death.active || castleClear.active
+        || flagpole.active) {
         return;
     }
 
@@ -428,6 +482,13 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    if (flagpole.active) {
+        updateFlagpoleSequence(dt);
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
     if (animator.isTransforming()) {
         animator.update(dt);
         tileMap.update(dt);
@@ -459,7 +520,8 @@ void PlayState::update(sf::Time dt) {
         Systems::SoundController::getInstance().update();
         return;
     }
-    if (tryEnterWorld22WaterPipe() || tryLeaveWorld22WaterPipe()
+    if (tryEnterWorld12UndergroundPipe() || tryLeaveWorld12UndergroundPipe()
+        || tryEnterWorld22WaterPipe() || tryLeaveWorld22WaterPipe()
         || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -545,11 +607,17 @@ void PlayState::render(sf::RenderWindow& window) {
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
     const int outdoorStartColumn = std::max(0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     const bool world21 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 1;
+    const bool world12 = Config::worldNumber(currentLevel) == 1 && Config::stageNumber(currentLevel) == 2;
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
     const bool world23 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 3;
     const bool world32 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 2;
     bool underground = Config::stageNumber(currentLevel) == 2 && !world22 && !world32
-                    && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
+                    && (world12
+                            ? insideWorld12Underground
+                            : (m_player
+                                   ? m_player->getPhysicsBody().getPosition().x
+                                         < outdoorStartColumn * Config::kTileSize
+                                   : false));
     // World 3 is played at night, so its sky stays black from the castle all
     // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
@@ -605,6 +673,7 @@ void PlayState::render(sf::RenderWindow& window) {
     }
 
     window.draw(tileMap);
+    drawFlagpoleSequence(window);
     drawGrowingVines(window);
     drawTrampolines(window);
     drawMovingPlatforms(window);
@@ -619,7 +688,9 @@ void PlayState::render(sf::RenderWindow& window) {
     drawHammers(window);
     drawBullets(window);
     drawBlocks(window);
-    animator.draw(window, avatarFeetCentre());
+    if (!flagpole.hidden) {
+        animator.draw(window, avatarFeetCentre());
+    }
     drawExplosions(window);
 
     // Nightfall Mode: draw darkness overlay after all world elements
@@ -882,11 +953,15 @@ void PlayState::playLevelMusic() {
     // theme its stage number would otherwise trade for the underground one.
     const bool world32 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 2;
+    const bool world12 = Config::worldNumber(currentLevel) == 1
+                      && Config::stageNumber(currentLevel) == 2;
     const bool world23 = Config::worldNumber(currentLevel) == 2
                       && Config::stageNumber(currentLevel) == 3;
     const bool castle = isCastleStage(currentLevel);
     std::string theme = "assets/audio/Theme.mp3";
-    if ((Config::stageNumber(currentLevel) == 2 && !world32) || insideSecretRoom) {
+    if ((Config::stageNumber(currentLevel) == 2 && !world32
+         && (!world12 || insideWorld12Underground))
+        || insideSecretRoom) {
         theme = "assets/audio/Theme2.mp3";
     } else if ((Config::stageNumber(currentLevel) == 3 && !world23) || castle) {
         theme = "assets/audio/Theme3.mp3";
@@ -977,8 +1052,7 @@ bool PlayState::loadLevel(int level) {
         world23 ? "World23StartCastle" : "Castle"));
     tileMap.setDecorationTexture('Z', assets.getTexture(
         world23 ? "World23EndCastle" : "CastleWorld2_1"));
-    tileMap.setDecorationTexture('F', assets.getTexture(
-        world23 ? "World23GoalPole" : "Flagpole"));
+    tileMap.setDecorationTexture('F', assets.getTexture(goalPoleArt(level)));
 
     // World 3-1 is the night stage. Almost nothing it draws is shared with the
     // daylight stages - white pipes, white trees, pink stone, a black sky - so
@@ -1016,7 +1090,6 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('c', assets.getTexture("World31CloudSmall"));
         tileMap.setDecorationTexture('Z', assets.getTexture("World31StartCastle"));
         tileMap.setDecorationTexture('X', assets.getTexture("World31EndCastle"));
-        tileMap.setDecorationTexture('F', assets.getTexture("World31GoalPole"));
         tileMap.setDecorationTexture('Q', assets.getTexture("World31RoomPipe"));
         tileMap.setDecorationTexture('N', assets.getTexture("World31Vine"));
     }
@@ -1048,7 +1121,6 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('c', assets.getTexture("World32CloudSmall"));
         tileMap.setDecorationTexture('X', assets.getTexture("World32StartCastle"));
         tileMap.setDecorationTexture('Z', assets.getTexture("World32EndCastle"));
-        tileMap.setDecorationTexture('F', assets.getTexture("World32GoalPole"));
     }
 
     // World 3-3 hangs over a single bottomless pit. Its ground only exists at
@@ -1071,7 +1143,6 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('c', assets.getTexture("World33CloudSmall"));
         tileMap.setDecorationTexture('X', assets.getTexture("World33StartCastle"));
         tileMap.setDecorationTexture('Z', assets.getTexture("World33EndCastle"));
-        tileMap.setDecorationTexture('F', assets.getTexture("World33GoalPole"));
         tileMap.setDecorationTexture('@', assets.getTexture("World33PulleyWide"));
         tileMap.setDecorationTexture('&', assets.getTexture("World33PulleyShort"));
     }
@@ -1132,6 +1203,7 @@ bool PlayState::loadLevel(int level) {
     m_cameraSystem.reset();
     growingVines.clear();
     insideSecretRoom = false;
+    insideWorld12Underground = false;
     climbingCoinHeavenVine = false;
     insideCoinHeaven = false;
     coinHeavenClimbElapsed = 0.f;
@@ -1152,6 +1224,7 @@ bool PlayState::loadLevel(int level) {
     castleBoss = CastleBossEntity{};
     castleBossFire.clear();
     castleClear = CastleClearSequence{};
+    flagpole = FlagpoleSequence{};
 
     spawnWalkingEnemies();
     spawnAquaticEnemies();
@@ -1181,6 +1254,83 @@ bool PlayState::loadLevel(int level) {
               << tileMap.podobooSpawns().size() << " Podoboos, "
               << std::min(tileMap.balanceLeftSpawns().size(),
                           tileMap.balanceRightSpawns().size()) << " pulleys\n";
+    return true;
+}
+
+bool PlayState::tryEnterWorld12UndergroundPipe() {
+    if (Config::worldNumber(currentLevel) != 1
+        || Config::stageNumber(currentLevel) != 2
+        || insideWorld12Underground || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f
+        && !heldKeys.count(sf::Keyboard::Scancode::D)
+        && !heldKeys.count(sf::Keyboard::Scancode::Right)) {
+        return false;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect pipeEntrance(
+        {kWorld12OpeningPipeColumn * tile, kWorld12OpeningPipeRow * tile},
+        {4.f * tile, 4.f * tile});
+    if (!avatarBounds().findIntersection(pipeEntrance).has_value()) {
+        return false;
+    }
+
+    insideWorld12Underground = true;
+    warpAvatarTo({kWorld12UndergroundSpawnColumn * tile,
+                  kWorld12UndergroundSpawnRow * tile});
+    avatar.setPosition(m_player->getPhysicsBody().getPosition());
+
+    const float undergroundCameraX =
+        (kWorld12UndergroundStartColumn + Config::kViewTilesX * 0.5f) * tile;
+    m_cameraSystem.setMaxCameraCenterX(undergroundCameraX);
+    m_cameraSystem.centreCamera(
+        {undergroundCameraX, Config::kViewHeight * 0.5f},
+        tileMap.pixelWidth(), tileMap.pixelHeight());
+    playLevelMusic();
+
+    std::cout << "[Core Engine] World 1-2 opening pipe: entered the underground course.\n";
+    return true;
+}
+
+bool PlayState::tryLeaveWorld12UndergroundPipe() {
+    if (Config::worldNumber(currentLevel) != 1
+        || Config::stageNumber(currentLevel) != 2
+        || !insideWorld12Underground || insideSecretRoom
+        || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f
+        && !heldKeys.count(sf::Keyboard::Scancode::D)
+        && !heldKeys.count(sf::Keyboard::Scancode::Right)) {
+        return false;
+    }
+
+    const float tile = tileMap.tileSize();
+    // Only the horizontal mouth listens. Running over the ceiling stays above
+    // this rectangle and can continue into the Warp Zone, as in the NES map.
+    const sf::FloatRect exitMouth(
+        {kWorld12ExitPipeColumn * tile, kWorld12ExitPipeRow * tile},
+        {4.f * tile, 2.f * tile});
+    if (!avatarBounds().findIntersection(exitMouth).has_value()) {
+        return false;
+    }
+
+    insideWorld12Underground = false;
+    warpAvatarTo({kWorld12OutdoorPipeColumn * tile,
+                  kWorld12OutdoorPipeArrivalRow * tile});
+    avatar.setPosition(m_player->getPhysicsBody().getPosition());
+
+    const float outdoorCameraX =
+        (kWorld12OutdoorStartColumn + Config::kViewTilesX * 0.5f) * tile;
+    m_cameraSystem.setMaxCameraCenterX(outdoorCameraX);
+    m_cameraSystem.centreCamera(
+        {outdoorCameraX, Config::kViewHeight * 0.5f},
+        tileMap.pixelWidth(), tileMap.pixelHeight());
+    playLevelMusic();
+
+    std::cout << "[Core Engine] World 1-2 exit pipe: returned above ground.\n";
     return true;
 }
 
@@ -1430,8 +1580,14 @@ bool PlayState::tryEnterNextLevel() {
         return false;
     }
 
-    if (isCastleStage(currentLevel) && reachedStageGoal) {
-        startCastleClearSequence();
+    if (reachedStageGoal) {
+        // Both finishes play out in the level before the results screen opens:
+        // the castles drop their bridge, everything else rides the flagpole.
+        if (isCastleStage(currentLevel)) {
+            startCastleClearSequence();
+        } else {
+            startFlagpoleSequence();
+        }
         return true;
     }
 
@@ -1509,6 +1665,28 @@ PlayState::BlockReward PlayState::takeNextItemBlockReward() {
         return BlockReward::Coin;
     }
     return blockRewards[nextBlockReward++];
+}
+
+void PlayState::reverseMushroomsOnBlock(const sf::FloatRect& tile) {
+    const float blockTop = tile.position.y;
+    const sf::FloatRect above({tile.position.x, blockTop - tileMap.tileSize()},
+                              {tile.size.x, tileMap.tileSize()});
+
+    for (entity::Entity* candidate : m_entityManager.queryOverlapping(above)) {
+        auto* mushroom = dynamic_cast<items::Mushroom*>(candidate);
+        if (mushroom == nullptr) {
+            continue;
+        }
+
+        // Only what is resting on the block feels the knock; a mushroom
+        // falling past the space above it keeps its course.
+        const sf::FloatRect bounds = mushroom->getBounds();
+        const float feet = bounds.position.y + bounds.size.y;
+        if (feet >= blockTop - kMushroomRestTolerance
+            && feet <= blockTop + kMushroomRestTolerance) {
+            mushroom->reverseDirection();
+        }
+    }
 }
 
 void PlayState::spawnMushroom(sf::Vector2f blockPosition, items::MushroomKind kind) {
@@ -2903,6 +3081,206 @@ void PlayState::updateCastleClearSequence(sf::Time dt) {
         gsm, assets, getSaveData()));
 }
 
+float PlayState::surfaceUnder(float x, float y) const {
+    const float tile = tileMap.tileSize();
+    const int column = static_cast<int>(x / tile);
+    for (int row = std::max(0, static_cast<int>(y / tile));
+         row < static_cast<int>(mapParser.getHeight()); ++row) {
+        if (tileMap.isSolid(column, row)) {
+            return row * tile;
+        }
+    }
+    return tileMap.pixelHeight();
+}
+
+void PlayState::startFlagpoleSequence() {
+    if (flagpole.active || !m_player) {
+        return;
+    }
+
+    const sf::FloatRect art = tileMap.goalArtBounds();
+    const float zoom = Config::kZoom;
+    const float tile = tileMap.tileSize();
+    auto& playerBody = m_player->getPhysicsBody();
+    const sf::Vector2f size = playerBody.getColliderSize();
+
+    flagpole = FlagpoleSequence{};
+    flagpole.active = true;
+    flagpole.shaftCentreX = art.position.x
+                         + (kFlagpoleShaftX + kFlagpoleShaftWidth * 0.5f) * zoom;
+    flagpole.slideEndY = art.position.y + kFlagpoleBaseTop * zoom;
+    flagpole.flagY = art.position.y + kFlagpoleFlagTop * zoom;
+    flagpole.flagEndY = flagpole.slideEndY - kFlagpoleFlagSize * zoom;
+
+    // Stages that draw a castle send Mario in through its doorway; World 1-3
+    // finishes on bare ground, so there he just walks off to the right.
+    flagpole.doorX = flagpole.shaftCentreX + kFlagWalkFallbackTiles * tile;
+    if (tileMap.hasEndCastle()
+        && tileMap.endCastleBounds().position.x > art.position.x) {
+        const sf::FloatRect castle = tileMap.endCastleBounds();
+        flagpole.doorX = castle.position.x + castle.size.x * 0.5f;
+    }
+
+    // He catches the pole at whatever height he touched it, but never above
+    // the pennant he is about to bring down. Touching it at ground level, below
+    // where the shaft ends, is left alone: he simply has nothing left to slide.
+    const float feet = std::max(playerBody.getPosition().y + size.y,
+                                art.position.y + kFlagpoleCleanShaftTop * zoom);
+    playerBody.setPosition({flagpole.shaftCentreX - size.x, feet - size.y});
+    playerBody.setVelocity({0.f, 0.f});
+    playerBody.clearAcceleration();
+    playerBody.setGrounded(false);
+    facingRight = true;
+    avatar.setPosition(playerBody.getPosition());
+
+    heldKeys.clear();
+    inputHandler.reset();
+    // From here the pole is drawn by hand, in pieces, so the pennant can come
+    // down the shaft on its own instead of staying baked into the scenery.
+    tileMap.hideDecoration('F');
+    Systems::SoundController::getInstance().stopMusic();
+    std::cout << "[Core Engine] Flagpole grabbed; riding it down.\n";
+}
+
+void PlayState::updateFlagpoleSequence(sf::Time dt) {
+    if (!flagpole.active || !m_player) {
+        return;
+    }
+
+    const float seconds = dt.asSeconds();
+    auto& playerBody = m_player->getPhysicsBody();
+    const sf::Vector2f size = playerBody.getColliderSize();
+    sf::Vector2f position = playerBody.getPosition();
+    playerBody.setVelocity({0.f, 0.f});
+    playerBody.clearAcceleration();
+
+    switch (flagpole.phase) {
+    case FlagpoleSequence::Phase::Slide:
+        animator.setAction(entity::PlayerAction::Climb);
+        if (position.y < flagpole.slideEndY - size.y) {
+            position.y = std::min(flagpole.slideEndY - size.y,
+                                  position.y + kFlagSlideSpeed * seconds);
+        }
+        flagpole.flagY = std::min(flagpole.flagEndY,
+                                  flagpole.flagY + kFlagSlideSpeed * seconds);
+        // A high grab lands Mario well before the pennant does; he holds on
+        // at the foot of the pole until it has caught up with him.
+        if (position.y >= flagpole.slideEndY - size.y
+            && flagpole.flagY >= flagpole.flagEndY) {
+            // He swings round to the far side of the shaft to walk away.
+            position.x = flagpole.shaftCentreX;
+            flagpole.phase = FlagpoleSequence::Phase::Dismount;
+            flagpole.timer = 0.f;
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("VictorySound"));
+        }
+        break;
+
+    case FlagpoleSequence::Phase::Dismount:
+        animator.setAction(entity::PlayerAction::Idle);
+        animator.setSpeedRatio(0.f);
+        flagpole.timer += seconds;
+        if (flagpole.timer >= kFlagDismountDelay) {
+            flagpole.phase = FlagpoleSequence::Phase::Walk;
+        }
+        break;
+
+    case FlagpoleSequence::Phase::Walk:
+        animator.setAction(entity::PlayerAction::Walk);
+        animator.setSpeedRatio(1.f);
+        position.x += kFlagWalkSpeed * seconds;
+        if (position.x + size.x >= flagpole.doorX) {
+            // Through the doorway: he is out of sight for the last beat.
+            flagpole.hidden = true;
+            flagpole.phase = FlagpoleSequence::Phase::Finish;
+            flagpole.timer = 0.f;
+        }
+        break;
+
+    case FlagpoleSequence::Phase::Finish:
+        flagpole.timer += seconds;
+        break;
+    }
+
+    // Off the pole he answers to the ground again: the pole's base block is
+    // solid and stands a tile proud of it, so he drops off its edge as he
+    // walks rather than gliding along at the height he landed at.
+    bool grounded = flagpole.phase != FlagpoleSequence::Phase::Slide;
+    if (grounded) {
+        const float surface = surfaceUnder(position.x + size.x * 0.5f,
+                                           position.y + size.y);
+        if (position.y + size.y < surface) {
+            flagpole.fallSpeed = std::min(
+                kMaxFallSpeed, flagpole.fallSpeed + kGravity * seconds);
+            position.y += flagpole.fallSpeed * seconds;
+            grounded = false;
+        }
+        if (position.y + size.y >= surface) {
+            position.y = surface - size.y;
+            flagpole.fallSpeed = 0.f;
+            grounded = true;
+        }
+    }
+
+    playerBody.setPosition(position);
+    playerBody.setGrounded(grounded);
+    avatar.setPosition(position);
+    animator.setFacingRight(true);
+    animator.setForm(currentPlayerForm());
+    animator.update(dt);
+    m_cameraSystem.followTarget(position, tileMap.pixelWidth(),
+                                tileMap.pixelHeight());
+
+    if (flagpole.phase != FlagpoleSequence::Phase::Finish
+        || flagpole.timer < kFlagFinishDelay) {
+        return;
+    }
+
+    transitionPending = true;
+    std::cout << "[Core Engine] Flagpole finish complete; opening results.\n";
+    gsm.changeState(std::make_unique<LevelCompleteState>(
+        gsm, assets, getSaveData()));
+}
+
+void PlayState::drawFlagpoleSequence(sf::RenderWindow& window) const {
+    if (!flagpole.active) {
+        return;
+    }
+
+    // hideDecoration() took the whole pole out of the map, pennant and all, so
+    // it is put back together here out of the pieces that stay put - ball,
+    // shaft and base block - plus the pennant wherever it has slid to. With
+    // the pennant at rest the four draws below are pixel-for-pixel the image
+    // the map was drawing, so grabbing the pole changes nothing on screen.
+    const sf::FloatRect art = tileMap.goalArtBounds();
+    const sf::Texture& texture = assets.getTexture(goalPoleArt(currentLevel));
+    const int width = static_cast<int>(texture.getSize().x);
+    const int height = static_cast<int>(texture.getSize().y);
+    const float zoom = Config::kZoom;
+
+    sf::Sprite piece(texture);
+    piece.setScale({zoom, zoom});
+    const auto drawPiece = [&](sf::IntRect rect, int sourceX, float y) {
+        piece.setTextureRect(rect);
+        piece.setPosition({art.position.x + sourceX * zoom, y});
+        window.draw(piece);
+    };
+
+    // Ball, then the shaft: its clean run, and a second copy of that run
+    // standing in for the stretch the pennant is painted over.
+    drawPiece({{0, 0}, {width, kFlagpoleFlagTop}}, 0, art.position.y);
+    drawPiece({{kFlagpoleShaftX, kFlagpoleCleanShaftTop},
+               {kFlagpoleShaftWidth, kFlagpoleBaseTop - kFlagpoleCleanShaftTop}},
+              kFlagpoleShaftX, art.position.y + kFlagpoleCleanShaftTop * zoom);
+    drawPiece({{kFlagpoleShaftX, kFlagpoleCleanShaftTop},
+               {kFlagpoleShaftWidth, kFlagpoleFlagSize}},
+              kFlagpoleShaftX, art.position.y + kFlagpoleFlagTop * zoom);
+    drawPiece({{0, kFlagpoleBaseTop}, {width, height - kFlagpoleBaseTop}},
+              0, art.position.y + kFlagpoleBaseTop * zoom);
+    drawPiece({{0, kFlagpoleFlagTop}, {kFlagpoleFlagSize, kFlagpoleFlagSize}},
+              0, flagpole.flagY);
+}
+
 bool PlayState::moveAvatar(sf::Time dt) {
     float seconds = dt.asSeconds();
 
@@ -3005,6 +3383,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
         headBounds.size.y = 8.0f;
 
         for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(headBounds)) {
+            // The knock carries through whatever the block is made of, so a
+            // mushroom walking along the top turns round even on a hard block
+            // that has no bounce of its own.
+            reverseMushroomsOnBlock(tile);
+
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             const char blockSymbol = tileMap.symbolAt(col, row);
