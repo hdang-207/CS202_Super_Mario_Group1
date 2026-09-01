@@ -23,14 +23,23 @@ private:
     sf::Sprite musicIconSprite;    ///< Music toggle icon sprite
     sf::Sprite soundIconSprite;    ///< Sound effect toggle icon sprite
     int selectedIndex = 0;         ///< 0 for Mario, 1 for Luigi
+    bool nightfallMode{false};     ///< Whether Nightfall game mode is selected
 
 public:
     /**
-     * @brief Constructor for CharacterSelectionState.
+     * @brief Constructor for CharacterSelectionState (default, no nightfall).
      * @param gsm Reference to the GameStateManager.
      * @param assets Reference to the central AssetManager.
      */
     CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets);
+
+    /**
+     * @brief Constructor for CharacterSelectionState with game mode.
+     * @param gsm Reference to the GameStateManager.
+     * @param assets Reference to the central AssetManager.
+     * @param nightfall Whether Nightfall mode is enabled.
+     */
+    CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets, bool nightfall);
 
     /**
      * @brief Destructor.

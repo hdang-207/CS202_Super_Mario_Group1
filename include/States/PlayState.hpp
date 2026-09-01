@@ -25,6 +25,7 @@
 #include <set>
 #include <vector>
 #include "UI/ConsoleOverlay.hpp"
+#include "UI/NightfallOverlay.hpp"
 #include "Systems/CommandParser.hpp"
 
 /**
@@ -249,6 +250,8 @@ private:
     bool m_godMode{false};
     bool m_destroyerMode{false};
     bool m_musicLocked{false};
+    bool m_nightfallMode{false};
+    std::optional<UI::NightfallOverlay> m_nightfallOverlay;
 
     std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
     sf::FloatRect avatarBounds() const;

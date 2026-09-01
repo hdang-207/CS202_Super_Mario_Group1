@@ -18,6 +18,7 @@ private:
 
     CharacterType selectedCharacter;
     SelectionOption selectedOption{SelectionOption::World1};
+    bool nightfallMode{false};
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
@@ -35,8 +36,12 @@ private:
     void startSelectedOption();
 
 public:
-    WorldSelectionState(GameStateManager& gsm, Systems::AssetManager& assets,
-                        CharacterType character);
+    WorldSelectionState(
+    GameStateManager& gsm,
+    Systems::AssetManager& assets,
+    CharacterType character,
+    bool nightfall = false
+    );
     ~WorldSelectionState() override = default;
 
     void init() override;

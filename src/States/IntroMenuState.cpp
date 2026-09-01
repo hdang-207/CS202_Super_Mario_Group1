@@ -1,6 +1,7 @@
 #include "States/IntroMenuState.hpp"
 #include "Core/Config.hpp"
 #include "States/CharacterSelectionState.hpp"
+#include "States/GameModeSelectionState.hpp"
 #include "States/PlayState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Systems/ResourcePath.hpp"
@@ -206,7 +207,7 @@ void IntroMenuState::handleInput(const sf::Event& event) {
     } else if (key == sf::Keyboard::Scancode::Enter || key == sf::Keyboard::Scancode::Space) {
         if (selectedIndex == 0) { // START NEW GAME
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
-            gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
+            gsm.changeState(std::make_unique<GameModeSelectionState>(gsm, assets));
         } else if (selectedIndex == 1) { // LOAD GAME PROGRESS
             SaveData data;
             if (SaveManager::loadProgress("savegame.txt", data)) {
