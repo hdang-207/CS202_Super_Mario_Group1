@@ -1,6 +1,6 @@
 #include "States/CharacterSelectionState.hpp"
 #include "Core/Config.hpp"
-#include "States/IntroMenuState.hpp"
+#include "States/GameModeSelectionState.hpp"
 #include "States/PlayState.hpp"
 #include "States/WorldSelectionState.hpp"
 #include "States/GameStateManager.hpp"
@@ -10,7 +10,17 @@
 #include <iostream>
 #include <cmath>
 
-CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets) 
+CharacterSelectionState::CharacterSelectionState(
+    GameStateManager& gsm,
+    Systems::AssetManager& assets
+)
+    : CharacterSelectionState(gsm, assets, GameMode::Normal) {}
+
+CharacterSelectionState::CharacterSelectionState(
+    GameStateManager& gsm,
+    Systems::AssetManager& assets,
+    GameMode mode
+)
     : State(gsm, assets),
       bgSprite(assets.getTexture("MenuBackground")),
       headerText(assets.getFont("MarioFont")),
@@ -20,19 +30,9 @@ CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems:
       backHintText(assets.getFont("MarioFont")),
       previewSprite(assets.getTexture("MarioPreview")),
       musicIconSprite(assets.getTexture("MusicSymbol")),
-      soundIconSprite(assets.getTexture("SoundSymbol")) {}
+      soundIconSprite(assets.getTexture("SoundSymbol")),
+      gameMode(mode) {}
 
-CharacterSelectionState::CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets, GameMode mode) 
-    : State(gsm, assets), gameMode(mode),
-      bgSprite(assets.getTexture("MenuBackground")),
-      headerText(assets.getFont("MarioFont")),
-      marioOptionText(assets.getFont("MarioFont")),
-      luigiOptionText(assets.getFont("MarioFont")),
-      descText(assets.getFont("MarioFont")),
-      backHintText(assets.getFont("MarioFont")),
-      previewSprite(assets.getTexture("MarioPreview")),
-      musicIconSprite(assets.getTexture("MusicSymbol")),
-      soundIconSprite(assets.getTexture("SoundSymbol")) {}
 
 void CharacterSelectionState::init() {
     std::cout << "[Core Engine] CharacterSelectionState Initialized.\n";
@@ -78,7 +78,7 @@ void CharacterSelectionState::init() {
     luigiOptionText.setOutlineColor(sf::Color::Black);
     luigiOptionText.setOutlineThickness(2.f);
 
-    backHintText.setString("B: MENU | ENTER/SPACE: NEXT | L: LOAD SAVE\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
+    backHintText.setString("B/ESC: MODE | ENTER/SPACE: NEXT | L: LOAD SAVE\nM: TOGGLE MUSIC | N: TOGGLE SOUND");
     backHintText.setCharacterSize(13);
     backHintText.setFillColor(sf::Color::White);
     backHintText.setOutlineColor(sf::Color::Black);
@@ -123,9 +123,11 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
             std::cout << "[Core Engine] Character confirmed! Transitioning to WorldSelectionState...\n";
             gsm.changeState(std::make_unique<WorldSelectionState>(gsm, assets, chosen, gameMode));
         }
-        else if (code == sf::Keyboard::Scancode::B) {
-            std::cout << "[Core Engine] Going back to IntroMenuState...\n";
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+        else if (code == sf::Keyboard::Scancode::B
+                 || code == sf::Keyboard::Scancode::Escape) {
+            std::cout << "[Core Engine] Going back to GameModeSelectionState...\n";
+            gsm.changeState(std::make_unique<GameModeSelectionState>(
+                gsm, assets, gameMode));
         }
         else if (code == sf::Keyboard::Scancode::L) {
             SaveData data;

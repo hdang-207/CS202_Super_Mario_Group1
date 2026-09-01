@@ -34,7 +34,7 @@ void WorldSelectionState::init() {
     darkOverlay.setSize({Config::kViewWidth, Config::kViewHeight});
     darkOverlay.setFillColor(sf::Color(0, 0, 0, 175));
 
-    headerText.setString("SELECT LEVEL MODE");
+    headerText.setString("SELECT WORLD");
     headerText.setCharacterSize(38);
     headerText.setFillColor(sf::Color::Yellow);
     headerText.setOutlineColor(sf::Color::Black);
@@ -56,7 +56,8 @@ void WorldSelectionState::init() {
     routeText.setOutlineColor(sf::Color::Black);
     routeText.setOutlineThickness(2.f);
 
-    hintText.setString("UP/DOWN OR 1/2/3: SELECT  |  ENTER: START  |  B: BACK");
+    hintText.setString(
+        "UP/DOWN OR 1/2/3: SELECT  |  ENTER/SPACE: START  |  B/ESC: BACK");
     hintText.setCharacterSize(15);
     hintText.setFillColor(sf::Color::White);
     hintText.setOutlineColor(sf::Color::Black);
@@ -114,7 +115,8 @@ void WorldSelectionState::handleInput(const sf::Event& event) {
                    || key == sf::Keyboard::Scancode::Escape) {
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("SelectSound"));
-            gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets));
+            gsm.changeState(std::make_unique<CharacterSelectionState>(
+                gsm, assets, gameMode));
         }
         return;
     }
@@ -144,20 +146,17 @@ void WorldSelectionState::update(sf::Time) {
     sf::Text* options[] = {&world1Text, &world2Text, &world3Text};
     for (int index = 0; index < Config::kWorldCount; ++index) {
         const int world = index + 1;
-        sf::Text& option = *options[index];
+        sf::Text& optionText = *options[index];
         const std::string prefix = selectedWorld == world ? "> " : "  ";
-        option.setString(prefix + "LEVEL " + std::to_string(world)
-                         + "    WORLD " + std::to_string(world)
-                         + "-1 TO " + std::to_string(world) + "-"
-                         + std::to_string(Config::stageCount(world)));
-        option.setFillColor(selectedWorld == world
+        optionText.setString(prefix + "WORLD " + std::to_string(world));
+        optionText.setFillColor(selectedWorld == world
             ? sf::Color::Yellow : sf::Color(180, 180, 180));
 
-        const sf::FloatRect bounds = option.getLocalBounds();
-        option.setOrigin({bounds.position.x + bounds.size.x / 2.f,
-                          bounds.position.y + bounds.size.y / 2.f});
-        option.setPosition({Config::kViewWidth / 2.f,
-                            Config::kViewHeight * (0.36f + index * 0.12f)});
+        const sf::FloatRect bounds = optionText.getLocalBounds();
+        optionText.setOrigin({bounds.position.x + bounds.size.x / 2.f,
+                              bounds.position.y + bounds.size.y / 2.f});
+        optionText.setPosition({Config::kViewWidth / 2.f,
+                                Config::kViewHeight * (0.36f + index * 0.12f)});
     }
 
     std::string route = "ROUTE: ";

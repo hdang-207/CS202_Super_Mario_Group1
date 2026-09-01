@@ -27,8 +27,13 @@ private:
     void startSelectedWorld();
 
 public:
-    WorldSelectionState(GameStateManager& gsm, Systems::AssetManager& assets,
-                        CharacterType character, GameMode mode = GameMode::Normal);
+    WorldSelectionState(
+        GameStateManager& gsm,
+        Systems::AssetManager& assets,
+        CharacterType character,
+        GameMode mode = GameMode::Normal
+    );
+
     ~WorldSelectionState() override = default;
 
     void init() override;

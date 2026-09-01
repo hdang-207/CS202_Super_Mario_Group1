@@ -1,22 +1,40 @@
 #include "Input/InputHandler.hpp"
 
+#include <algorithm>
+#include <utility>
+
+namespace {
+
+bool holdsAny(
+    const std::set<sf::Keyboard::Scancode>& heldKeys,
+    const std::vector<sf::Keyboard::Scancode>& bindings
+) {
+    return std::any_of(
+        bindings.begin(),
+        bindings.end(),
+        [&heldKeys](sf::Keyboard::Scancode key) {
+            return heldKeys.count(key) > 0;
+        }
+    );
+}
+
+} // namespace
+
+InputHandler::InputHandler()
+    : InputHandler(PlayerKeyBindings::campaign()) {}
+
+InputHandler::InputHandler(PlayerKeyBindings bindings)
+    : m_bindings(std::move(bindings)) {}
+
 void InputHandler::update(const std::set<sf::Keyboard::Scancode>& heldKeys) {
     m_playerInput = PlayerInput{};
 
-    const auto holding = [&heldKeys](sf::Keyboard::Scancode key) {
-        return heldKeys.count(key) > 0;
-    };
-    const bool left = holding(sf::Keyboard::Scancode::A)
-                   || holding(sf::Keyboard::Scancode::Left);
-    const bool right = holding(sf::Keyboard::Scancode::D)
-                    || holding(sf::Keyboard::Scancode::Right);
-    const bool jump = holding(sf::Keyboard::Scancode::Space)
-                   || holding(sf::Keyboard::Scancode::W)
-                   || holding(sf::Keyboard::Scancode::Up);
-    const bool crouch = holding(sf::Keyboard::Scancode::S)
-                     || holding(sf::Keyboard::Scancode::Down);
-    const bool shoot = holding(sf::Keyboard::Scancode::X);
-    const bool bomb = holding(sf::Keyboard::Scancode::C);
+    const bool left = holdsAny(heldKeys, m_bindings.left);
+    const bool right = holdsAny(heldKeys, m_bindings.right);
+    const bool jump = holdsAny(heldKeys, m_bindings.jump);
+    const bool crouch = holdsAny(heldKeys, m_bindings.crouch);
+    const bool shoot = holdsAny(heldKeys, m_bindings.shoot);
+    const bool bomb = holdsAny(heldKeys, m_bindings.bomb);
 
     if (left) {
         m_moveLeftCommand.execute(m_playerInput);

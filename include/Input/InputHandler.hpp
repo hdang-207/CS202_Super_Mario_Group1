@@ -1,12 +1,16 @@
 #pragma once
 
-#include "PlayerInput.hpp"
 #include "Input/PlayerCommand.hpp"
+#include "Input/PlayerInput.hpp"
+#include "Input/PlayerKeyBindings.hpp"
 #include <SFML/Window/Keyboard.hpp>
 #include <set>
 
 class InputHandler {
 public:
+    InputHandler();
+    explicit InputHandler(PlayerKeyBindings bindings);
+
     /**
      * @brief Converts event-tracked keys into the current gameplay command state.
      *
@@ -20,6 +24,7 @@ public:
     //getter
     const PlayerInput& getPlayerInput() const noexcept;
 private:
+    PlayerKeyBindings m_bindings;
     PlayerInput m_playerInput{};
 
     MoveCommand m_moveLeftCommand{-1.0f};

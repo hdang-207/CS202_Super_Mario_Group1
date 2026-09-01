@@ -72,6 +72,7 @@ Game::Game()
 
     // Items and projectiles
     assets.loadTexture("FireFlower", Systems::resourcePath("assets/textures/FireFlower.png"));
+    assets.loadTexture("ManaOrb", Systems::resourcePath("assets/textures/duel_mana_orb.png"));
     assets.loadTexture("Bullet", Systems::resourcePath("assets/textures/Bullet.png"));
     assets.loadTexture("Explosion", Systems::resourcePath("assets/textures/explosion.png"));
 

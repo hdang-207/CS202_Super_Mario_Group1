@@ -7,7 +7,7 @@
  * @brief Represents the character selection screen of the game.
  *
  * Implements the State interface. It allows the player to choose their character
- * (Mario or Luigi) using keyboard numbers, or press 'B' to return to the main menu.
+ * (Mario or Luigi) using keyboard numbers, or return to game-mode selection.
  */
 class CharacterSelectionState : public State {
 private:

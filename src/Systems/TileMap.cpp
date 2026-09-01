@@ -202,6 +202,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
 
     types.assign(static_cast<std::size_t>(columns) * rows, TileType::Empty);
     symbols.assign(static_cast<std::size_t>(columns) * rows, '.');
+    spawns.clear();
     enemies.clear();
     blueKoopas.clear();
     greenKoopas.clear();
@@ -222,7 +223,6 @@ bool TileMap::build(const MapParser& parser, float scale) {
     verticalPlatforms.clear();
     balanceLefts.clear();
     balanceRights.clear();
-    spawn = {0.f, 0.f};
     secret = SecretRoomWarp{};
     coinHeaven = CoinHeavenWarp{};
     levelExitAvailable = false;
@@ -260,7 +260,7 @@ bool TileMap::build(const MapParser& parser, float scale) {
             symbols[index] = symbol;
 
             if (symbol == 'P') {
-                spawn = worldPos;
+                spawns.push_back(worldPos);
                 continue;
             }
             if (symbol == 'E') {
