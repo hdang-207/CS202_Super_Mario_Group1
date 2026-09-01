@@ -9,8 +9,15 @@
  */
 class WorldSelectionState : public State {
 private:
+    enum class SelectionOption {
+        World1,
+        World2,
+        World3,
+        Duel
+    };
+
     CharacterType selectedCharacter;
-    int selectedWorld{1};
+    SelectionOption selectedOption{SelectionOption::World1};
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
@@ -18,11 +25,14 @@ private:
     sf::Text world1Text;
     sf::Text world2Text;
     sf::Text world3Text;
+    sf::Text duelText;
     sf::Text routeText;
     sf::Text hintText;
 
-    void chooseWorld(int world);
-    void startSelectedWorld();
+    void selectPreviousOption();
+    void selectNextOption();
+    void chooseOption(SelectionOption option);
+    void startSelectedOption();
 
 public:
     WorldSelectionState(GameStateManager& gsm, Systems::AssetManager& assets,
