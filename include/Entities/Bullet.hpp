@@ -2,11 +2,13 @@
 
 #include <SFML/Graphics.hpp>
 
+#include "Physics/ProjectileMotion.hpp"
+
 namespace entity {
 
 class Bullet {
 public:
-    static constexpr float kSize = 8.f;
+    static constexpr float kSize = 32.f;
 
     Bullet(const sf::Texture& texture, sf::Vector2f position,
            sf::Vector2f velocity, float lifetime);
@@ -20,10 +22,10 @@ public:
     [[nodiscard]] bool isActive() const noexcept;
 
 private:
-    sf::Sprite sprite;
-    sf::Vector2f velocity;
-    float remainingLifetime;
-    bool active{true};
+    physics::ProjectileMotion m_motion;
+    sf::Sprite m_sprite;
+    float m_remainingLifetime;
+    bool m_active{true};
 };
 
 } // namespace entity

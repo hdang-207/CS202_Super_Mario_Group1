@@ -39,11 +39,17 @@ private:
      */
     void applyPendingChanges();
 
+private:
+    bool cheatsEnabled{false}; ///< Global flag to enable/disable cheats
+
 public:
     /**
      * @brief Default constructor.
      */
     GameStateManager() = default;
+
+    void setCheatsEnabled(bool enabled) { cheatsEnabled = enabled; }
+    bool isCheatsEnabled() const { return cheatsEnabled; }
 
     void setWindow(sf::RenderWindow* win) { window = win; }
     sf::RenderWindow* getWindow() const { return window; }

@@ -4,7 +4,7 @@
 
 class PlayState;   // forward declaration
 
-namespace Core {
+namespace Systems {
 
 struct CommandResult {
     bool success;
@@ -34,4 +34,4 @@ private:
     CommandResult handleDestroyer(const std::vector<std::string>& args);
 };
 
-} // namespace Core
+} // namespace Systems

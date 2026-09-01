@@ -25,7 +25,7 @@
 #include <set>
 #include <vector>
 #include "UI/ConsoleOverlay.hpp"
-#include "Core/CommandParser.hpp"
+#include "Systems/CommandParser.hpp"
 
 /**
  * @class PlayState
@@ -33,7 +33,7 @@
  */
 class PlayState : public State {
 public:
-    friend class Core::CommandParser;
+    friend class Systems::CommandParser;
 private:
     CharacterType selectedCharacter;
     MapParser mapParser;
@@ -244,7 +244,7 @@ private:
     std::set<sf::Keyboard::Scancode> heldKeys;
 
     UI::ConsoleOverlay m_console;
-    std::unique_ptr<Core::CommandParser> m_commandParser;
+    std::unique_ptr<Systems::CommandParser> m_commandParser;
     bool m_flyMode{false};
     bool m_godMode{false};
     bool m_destroyerMode{false};
@@ -386,4 +386,5 @@ public:
 
     SaveData getSaveData() const;
     bool quickLoad();
+    void restartCurrentLevel();
 };

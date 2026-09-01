@@ -4,6 +4,10 @@
 
 namespace physics {
 
+namespace {
+constexpr float kContactEpsilon = 0.001f;
+}
+
 PhysicsSystem::PhysicsSystem(float gravity, float maxFallSpeed) noexcept : m_gravity(gravity), m_maxFallSpeed(maxFallSpeed) {}
 
 void PhysicsSystem::update(
@@ -78,6 +82,7 @@ void PhysicsSystem::moveAndResolveHorizontal(PhysicsBody& body, const std::vecto
     }
 
     const float movementDirection = velocity.x;
+    const AABB previousBox = body.getAABB();
 
     // Move along X axis only.
     sf::Vector2f position =
@@ -90,9 +95,19 @@ void PhysicsSystem::moveAndResolveHorizontal(PhysicsBody& body, const std::vecto
     bool collided = false;
 
     for (const AABB& solid : solidColliders) {
-        AABB bodyBox = body.getAABB();
+        const AABB bodyBox = body.getAABB();
 
         if (!bodyBox.intersects(solid)) {
+            continue;
+        }
+
+        const bool enteredFromSide = movementDirection > 0.0f
+            ? previousBox.right() <= solid.left() + kContactEpsilon
+                && bodyBox.right() > solid.left()
+            : previousBox.left() >= solid.right() - kContactEpsilon
+                && bodyBox.left() < solid.right();
+
+        if (!enteredFromSide) {
             continue;
         }
 
@@ -139,6 +154,7 @@ void PhysicsSystem::moveAndResolveVertical(
     }
 
     const float movementDirection = velocity.y;
+    const AABB previousBox = body.getAABB();
 
     // Move along Y axis only.
     sf::Vector2f position =
@@ -151,9 +167,19 @@ void PhysicsSystem::moveAndResolveVertical(
     bool collided = false;
 
     for (const AABB& solid : solidColliders) {
-        AABB bodyBox = body.getAABB();
+        const AABB bodyBox = body.getAABB();
 
         if (!bodyBox.intersects(solid)) {
+            continue;
+        }
+
+        const bool enteredFromVertical = movementDirection > 0.0f
+            ? previousBox.bottom() <= solid.top() + kContactEpsilon
+                && bodyBox.bottom() > solid.top()
+            : previousBox.top() >= solid.bottom() - kContactEpsilon
+                && bodyBox.top() < solid.bottom();
+
+        if (!enteredFromVertical) {
             continue;
         }
 

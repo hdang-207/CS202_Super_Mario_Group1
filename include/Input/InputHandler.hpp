@@ -26,4 +26,10 @@ private:
     MoveCommand m_moveRightCommand{1.0f};
     JumpCommand m_jumpCommand{};
     CrouchCommand m_crouchCommand{};
+    ShootCommand m_shootCommand{};
+    BombCommand m_bombCommand{};
+
+    bool m_jumpHeldLastFrame{false};
+    bool m_shootHeldLastFrame{false};
+    bool m_bombHeldLastFrame{false};
 };

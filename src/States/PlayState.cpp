@@ -3,6 +3,8 @@
 #include "Entities/PiranhaPlant.hpp"
 #include "Core/Config.hpp"
 #include "Core/EventSystem.hpp"
+#include "Physics/Broadphase.hpp"
+#include "Physics/PlatformContact.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/GameOverState.hpp"
 #include "States/IntroMenuState.hpp"
@@ -24,6 +26,7 @@ namespace {
     constexpr float kGroundFriction = 2000.f;
     constexpr float kJumpSpeed = 1000.f;
     constexpr float kMaxFallSpeed = 1400.f;
+    constexpr float kBroadphaseSafetyMargin = 1.f;
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
@@ -64,6 +67,8 @@ namespace {
     constexpr float kMovingPlatformSpeed = 90.f;
     constexpr float kMovingPlatformRangeTiles = 3.f;
     constexpr float kMovingPlatformWidthTiles = 3.f;
+    constexpr float kMovingPlatformHorizontalInset = 2.f;
+    constexpr float kMovingPlatformSupportTolerance = 2.f;
     /// World 3-3's lifts: the up-and-down one, and the pulleys, which take a
     /// beat longer so there is time to hop off before the rope runs out.
     constexpr float kVerticalLiftSpeed = 66.f;
@@ -132,6 +137,7 @@ namespace {
                 return column >= current.first && column < current.pastLast;
             });
     }
+
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
     constexpr int kWorld23CoinTotal = 35;
@@ -141,12 +147,12 @@ namespace {
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       m_physicsSystem(kGravity, kMaxFallSpeed),
-      m_commandParser(std::make_unique<Core::CommandParser>(*this)) {}
+      m_commandParser(std::make_unique<Systems::CommandParser>(*this)) {}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
       m_physicsSystem(kGravity, kMaxFallSpeed),
-      m_commandParser(std::make_unique<Core::CommandParser>(*this))
+      m_commandParser(std::make_unique<Systems::CommandParser>(*this))
 {
     this->currentLevel = data.currentLevel;
     this->score = data.score;
@@ -332,7 +338,7 @@ void PlayState::handleInput(const sf::Event& event) {
             }
             if (m_console.handleKeyPress(keyPressed->scancode)) {
                 std::string cmd = m_console.getAndClearInput();
-                Core::CommandResult res = m_commandParser->execute(cmd);
+                Systems::CommandResult res = m_commandParser->execute(cmd);
                 m_console.addOutput(res.message);
             }
             return;
@@ -340,13 +346,7 @@ void PlayState::handleInput(const sf::Event& event) {
 
         heldKeys.insert(keyPressed->scancode);
 
-        if (keyPressed->scancode == sf::Keyboard::Scancode::X) {
-            if (m_player && m_player->hasFirePower()) {
-                spawnBullet();
-            }
-        } else if (keyPressed->scancode == sf::Keyboard::Scancode::C) {
-            spawnBomb();
-        } else if (keyPressed->scancode == sf::Keyboard::Scancode::P || keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
+        if (keyPressed->scancode == sf::Keyboard::Scancode::P || keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
             std::cout << "[Core Engine] Pause requested. Pushing PauseState...\n";
             gsm.pushState(std::make_unique<PauseState>(gsm, assets, *this));
             return;
@@ -389,6 +389,15 @@ void PlayState::update(sf::Time dt) {
     }
 
     inputHandler.update(heldKeys);
+    const PlayerInput& playerInput = inputHandler.getPlayerInput();
+
+    if (playerInput.shootPressed && m_player->hasFirePower()) {
+        spawnBullet();
+    }
+
+    if (playerInput.bombPressed) {
+        spawnBomb();
+    }
 
     // Dying and growing both take the level out of the player's hands for a
     // moment. Everything else stays frozen so the animation reads clearly and
@@ -649,6 +658,19 @@ bool PlayState::quickLoad() {
     return false;
 }
 
+void PlayState::restartCurrentLevel() {
+    std::cout << "[Core Engine] Restarting current level " << currentLevel << "...\n";
+    if (loadLevel(currentLevel)) {
+        m_cameraSystem.setFreeLook(false);
+        isPaused = false;
+        heldKeys.clear();
+        inputHandler.reset();
+        respawnAvatar();
+        m_cameraSystem.followTarget(m_player->getPosition(), tileMap.pixelWidth(), tileMap.pixelHeight());
+        playLevelMusic();
+    }
+}
+
 std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRect& bounds) const {
     std::vector<physics::AABB> solids;
     for (const sf::FloatRect& rect : tileMap.solidTilesOverlapping(bounds)) {
@@ -658,7 +680,8 @@ std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRe
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
-    return sf::FloatRect(m_player->getPhysicsBody().getPosition(), avatar.getSize());
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return sf::FloatRect(bounds.position, bounds.size);
 }
 
 void PlayState::syncAvatarPowerVisuals() {
@@ -1514,10 +1537,14 @@ void PlayState::spawnBullet() {
 
     Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("FireSound"));
 
-    // Position bullet at character's upper body / gun height (about 1/3 from top)
+    // Position bullet higher up so it doesn't scrape the ground, but still overlaps small enemies.
     const physics::AABB player = m_player->getPhysicsBody().getAABB();
     float bulletX = facingRight ? player.right() : player.left() - entity::Bullet::kSize;
-    float bulletY = player.top() + player.size.y * 0.3f;
+    // Base Y so the bottom of the bullet sits exactly at the player's bottom
+    float baseY = player.bottom() - std::max(entity::Bullet::kSize, std::min(player.size.y * 0.5f, tileMap.tileSize() * 0.55f));
+    // Shift it up by an additional 12 pixels for better visual placement
+    float bulletY = baseY - 12.f;
+    
     bullets.emplace_back(assets.getTexture("Bullet"), sf::Vector2f{bulletX, bulletY},
                          sf::Vector2f{facingRight ? kBulletSpeed : -kBulletSpeed, 0.f},
                          kBulletLifetime);
@@ -2184,13 +2211,24 @@ bool PlayState::isStandingOnPlatform(sf::Vector2f position,
     if (!m_player || death.active) {
         return false;
     }
-    const sf::FloatRect player = avatarBounds();
-    const float feet = player.position.y + player.size.y;
-    const float right = position.x + tileMap.tileSize() * widthTiles;
-    return player.position.x + player.size.x > position.x + 2.f
-        && player.position.x < right - 2.f
-        && feet >= position.y - 4.f
-        && feet <= position.y + tileMap.tileSize() * 0.5f;
+
+    // The lifts are not all three tiles wide - the castle courses carry a
+    // two-tile one over their bridge and a narrower elevator still - so the
+    // width travels with the platform instead of being assumed here.
+    const auto& body = m_player->getPhysicsBody();
+    const float tile = tileMap.tileSize();
+    const physics::AABB platformBounds(
+        position,
+        {tile * widthTiles, tile}
+    );
+    return physics::isSupportedByPlatform(
+        body.getAABB(),
+        body.isGrounded(),
+        body.getVelocity().y,
+        platformBounds,
+        kMovingPlatformHorizontalInset,
+        kMovingPlatformSupportTolerance
+    );
 }
 
 float PlayState::pulleyRopeTop(sf::Vector2f platformPos) const {
@@ -2841,7 +2879,12 @@ bool PlayState::moveAvatar(sf::Time dt) {
     const bool inStrongCurrent = underwater
                               && isWorld22CurrentColumn(playerCentreX, tileMap.tileSize());
     const bool wasGrounded = body.isGrounded();
-    m_player->setInput(playerInput);
+    PlayerInput movementInput = playerInput;
+    if (underwater || m_flyMode) {
+        movementInput.jumpHeld = false;
+        movementInput.jumpPressed = false;
+    }
+    m_player->setInput(movementInput);
     m_player->update(seconds);
 
     bool swimStroke = false;
@@ -2878,12 +2921,15 @@ bool PlayState::moveAvatar(sf::Time dt) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
 
-    // Collect solid tile colliders in broadphase area
-    sf::FloatRect broadBounds = avatarBounds();
-    broadBounds.position.x -= 16.0f;
-    broadBounds.position.y -= 16.0f;
-    broadBounds.size.x += 32.0f;
-    broadBounds.size.y += 32.0f;
+    // Query every tile the collider can reach during the upcoming physics step.
+    const physics::AABB sweptBounds = physics::sweptBroadphaseBounds(
+        body,
+        seconds,
+        kGravity,
+        kMaxFallSpeed,
+        kBroadphaseSafetyMargin
+    );
+    const sf::FloatRect broadBounds(sweptBounds.position, sweptBounds.size);
     std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
 
     // Kinematics and collision resolution

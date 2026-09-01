@@ -1,5 +1,6 @@
-#include "Core/CommandParser.hpp"
+#include "Systems/CommandParser.hpp"
 #include "States/PlayState.hpp"
+#include "States/GameStateManager.hpp"
 #include "Entities/EntityFactory.hpp"
 #include "Systems/SoundController.hpp"
 #include "Systems/ResourcePath.hpp"
@@ -7,7 +8,7 @@
 #include <algorithm>
 #include <cctype>
 
-namespace Core {
+namespace Systems {
 
 CommandParser::CommandParser(PlayState& state) : playState(state) {}
 
@@ -29,14 +30,22 @@ CommandResult CommandParser::execute(const std::string& input) {
     
     const std::string& cmd = tokens[0];
     
+    if (cmd == "music") return handleMusic(tokens);
+    if (cmd == "help") return handleHelp();
+    if (cmd == "reset") return handleReset(tokens);
+    
+    // Check cheats
+    if (cmd == "fly" || cmd == "god" || cmd == "tp" || cmd == "summon" || cmd == "form" || cmd == "lives" || cmd == "destroyer") {
+        if (!playState.gsm.isCheatsEnabled()) {
+            return {false, "Error: Cheats are disabled in settings."};
+        }
+    }
+    
     if (cmd == "fly") return handleFly(tokens);
     if (cmd == "god") return handleGod(tokens);
     if (cmd == "tp") return handleTp(tokens);
     if (cmd == "summon") return handleSummon(tokens);
     if (cmd == "form") return handleForm(tokens);
-    if (cmd == "music") return handleMusic(tokens);
-    if (cmd == "help") return handleHelp();
-    if (cmd == "reset") return handleReset(tokens);
     if (cmd == "lives") return handleLives(tokens);
     if (cmd == "destroyer") return handleDestroyer(tokens);
     
@@ -67,10 +76,7 @@ CommandResult CommandParser::handleTp(const std::vector<std::string>& args) {
         return {false, "Usage: tp spawn"};
     }
     if (playState.m_player) {
-        const sf::Vector2f spawn = playState.tileMap.playerSpawn();
-        const sf::Vector2f position{spawn.x, spawn.y + playState.tileMap.tileSize() - playState.avatar.getSize().y};
-        playState.m_player->getPhysicsBody().setPosition(position);
-        playState.m_player->getPhysicsBody().setVelocity({0.f, 0.f});
+        playState.warpAvatarTo(playState.tileMap.playerSpawn());
     }
     return {true, "Teleported to spawn"};
 }
@@ -205,4 +211,4 @@ CommandResult CommandParser::handleHelp() {
     return {true, help};
 }
 
-} // namespace Core
+} // namespace Systems
