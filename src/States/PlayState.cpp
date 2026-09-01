@@ -75,9 +75,9 @@ namespace {
     constexpr float kBalanceLiftSpeed = 54.f;
     constexpr float kBalanceRopeWidth = 2.f;
 
-    /// The castle courses (World 1-4 and 2-4) share one legend, one palette,
-    /// one set of hazards and one fake Bowser waiting on a collapsing bridge,
-    /// so everything castle-specific keys off this rather than off a world.
+    /// The castle courses (World 1-4, 2-4 and 3-4) share one legend, one
+    /// palette, one set of hazards and one fake Bowser waiting on a collapsing
+    /// bridge, so everything castle-specific keys off this rather than a world.
     bool isCastleStage(int level) {
         return Config::stageNumber(level) == 4;
     }
@@ -1036,7 +1036,7 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('&', assets.getTexture("World33PulleyShort"));
     }
 
-    // Both castle courses are lit by the same torchlit palette, so their whole
+    // Every castle course is lit by the same torchlit palette, so their whole
     // legend is repointed at the shared crops taken from their guides.
     if (castle) {
         tileMap.setTileTexture('#', assets.getTexture("CastleWall"));
@@ -2715,11 +2715,13 @@ void PlayState::drawCastleHazards(sf::RenderWindow& window) const {
         window.draw(bowser);
     } else if (castleBoss.available && castleBoss.revealedGoomba
                && castleBoss.revealTimer > 0.f) {
-        // World 1-4's Bowser was a Little Goomba; World 2-4's was a green
-        // Koopa Troopa, which stands a half-tile taller.
+        // World 1-4's Bowser was a Little Goomba, World 2-4's a green Koopa
+        // Troopa - which stands a half-tile taller - and World 3-4's a Buzzy
+        // Beetle.
+        const int world = Config::worldNumber(currentLevel);
         const sf::Texture& art = assets.getTexture(
-            Config::worldNumber(currentLevel) == 1 ? "CastleGoomba"
-                                                   : "CastleKoopa");
+            world == 1 ? "CastleGoomba"
+                       : (world == 2 ? "CastleKoopa" : "CastleBuzzy"));
         const int height = static_cast<int>(art.getSize().y);
         sf::Sprite unmasked(art);
         const int frame = static_cast<int>(castleBoss.revealTimer / 0.12f) % 2;
