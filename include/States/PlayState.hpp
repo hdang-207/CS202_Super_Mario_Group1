@@ -264,6 +264,11 @@ private:
     /// True while the avatar is inside the stage's hidden room, which swaps the
     /// music and decides which of the two warp pipes is listening for input.
     bool insideSecretRoom{false};
+
+    /// World 1-2 starts and finishes outdoors, with its main course in between.
+    /// This flag follows the two authored pipe transitions so the backdrop and
+    /// music change with the area instead of merely keying off "stage 2".
+    bool insideWorld12Underground{false};
     std::set<sf::Keyboard::Scancode> heldKeys;
 
     UI::ConsoleOverlay m_console;
@@ -295,6 +300,8 @@ private:
     void playLevelMusic();
     void respawnAvatar();
     bool loadLevel(int level);
+    bool tryEnterWorld12UndergroundPipe();
+    bool tryLeaveWorld12UndergroundPipe();
     bool tryEnterWorld22WaterPipe();
     bool tryLeaveWorld22WaterPipe();
 

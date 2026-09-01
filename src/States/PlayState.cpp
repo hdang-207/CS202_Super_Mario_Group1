@@ -139,6 +139,21 @@ namespace {
 
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
+
+    // World 1-2 is stored as four camera-isolated areas in one text map:
+    // opening, underground/Warp Zone, outdoor goal, and the coin room. These
+    // are the two route pipes that connect the first three areas.
+    constexpr int kWorld12OpeningPipeColumn = 10;
+    constexpr int kWorld12OpeningPipeRow = 9;
+    constexpr int kWorld12UndergroundStartColumn = 24;
+    constexpr int kWorld12UndergroundSpawnColumn = 27;
+    constexpr int kWorld12UndergroundSpawnRow = 12;
+    constexpr int kWorld12ExitPipeColumn = 190;
+    constexpr int kWorld12ExitPipeRow = 8;
+    constexpr int kWorld12OutdoorStartColumn = 224;
+    constexpr int kWorld12OutdoorPipeColumn = 226;
+    constexpr int kWorld12OutdoorPipeArrivalRow = 10;
+
     constexpr int kWorld22EntrancePipeColumn = 9;
     constexpr int kWorld22WaterStartColumn = 37;
     constexpr int kWorld22WaterEndColumn = 229;
@@ -492,7 +507,8 @@ void PlayState::update(sf::Time dt) {
         Systems::SoundController::getInstance().update();
         return;
     }
-    if (tryEnterWorld22WaterPipe() || tryLeaveWorld22WaterPipe()
+    if (tryEnterWorld12UndergroundPipe() || tryLeaveWorld12UndergroundPipe()
+        || tryEnterWorld22WaterPipe() || tryLeaveWorld22WaterPipe()
         || tryEnterSecretRoom() || tryLeaveSecretRoom()) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
@@ -562,11 +578,17 @@ void PlayState::render(sf::RenderWindow& window) {
     sf::RectangleShape sky({Config::kViewWidth, Config::kViewHeight});
     const int outdoorStartColumn = std::max(0, static_cast<int>(mapParser.getWidth()) - kOutdoorGoalColumns);
     const bool world21 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 1;
+    const bool world12 = Config::worldNumber(currentLevel) == 1 && Config::stageNumber(currentLevel) == 2;
     const bool world22 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 2;
     const bool world23 = Config::worldNumber(currentLevel) == 2 && Config::stageNumber(currentLevel) == 3;
     const bool world32 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 2;
     bool underground = Config::stageNumber(currentLevel) == 2 && !world22 && !world32
-                    && (m_player ? m_player->getPhysicsBody().getPosition().x < outdoorStartColumn * Config::kTileSize : false);
+                    && (world12
+                            ? insideWorld12Underground
+                            : (m_player
+                                   ? m_player->getPhysicsBody().getPosition().x
+                                         < outdoorStartColumn * Config::kTileSize
+                                   : false));
     // World 3 is played at night, so its sky stays black from the castle all
     // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
@@ -891,11 +913,15 @@ void PlayState::playLevelMusic() {
     // theme its stage number would otherwise trade for the underground one.
     const bool world32 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 2;
+    const bool world12 = Config::worldNumber(currentLevel) == 1
+                      && Config::stageNumber(currentLevel) == 2;
     const bool world23 = Config::worldNumber(currentLevel) == 2
                       && Config::stageNumber(currentLevel) == 3;
     const bool castle = isCastleStage(currentLevel);
     std::string theme = "assets/audio/Theme.mp3";
-    if ((Config::stageNumber(currentLevel) == 2 && !world32) || insideSecretRoom) {
+    if ((Config::stageNumber(currentLevel) == 2 && !world32
+         && (!world12 || insideWorld12Underground))
+        || insideSecretRoom) {
         theme = "assets/audio/Theme2.mp3";
     } else if ((Config::stageNumber(currentLevel) == 3 && !world23) || castle) {
         theme = "assets/audio/Theme3.mp3";
@@ -1137,6 +1163,7 @@ bool PlayState::loadLevel(int level) {
     m_cameraSystem.reset();
     growingVines.clear();
     insideSecretRoom = false;
+    insideWorld12Underground = false;
     climbingCoinHeavenVine = false;
     insideCoinHeaven = false;
     coinHeavenClimbElapsed = 0.f;
@@ -1187,6 +1214,83 @@ bool PlayState::loadLevel(int level) {
               << tileMap.podobooSpawns().size() << " Podoboos, "
               << std::min(tileMap.balanceLeftSpawns().size(),
                           tileMap.balanceRightSpawns().size()) << " pulleys\n";
+    return true;
+}
+
+bool PlayState::tryEnterWorld12UndergroundPipe() {
+    if (Config::worldNumber(currentLevel) != 1
+        || Config::stageNumber(currentLevel) != 2
+        || insideWorld12Underground || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f
+        && !heldKeys.count(sf::Keyboard::Scancode::D)
+        && !heldKeys.count(sf::Keyboard::Scancode::Right)) {
+        return false;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::FloatRect pipeEntrance(
+        {kWorld12OpeningPipeColumn * tile, kWorld12OpeningPipeRow * tile},
+        {4.f * tile, 4.f * tile});
+    if (!avatarBounds().findIntersection(pipeEntrance).has_value()) {
+        return false;
+    }
+
+    insideWorld12Underground = true;
+    warpAvatarTo({kWorld12UndergroundSpawnColumn * tile,
+                  kWorld12UndergroundSpawnRow * tile});
+    avatar.setPosition(m_player->getPhysicsBody().getPosition());
+
+    const float undergroundCameraX =
+        (kWorld12UndergroundStartColumn + Config::kViewTilesX * 0.5f) * tile;
+    m_cameraSystem.setMaxCameraCenterX(undergroundCameraX);
+    m_cameraSystem.centreCamera(
+        {undergroundCameraX, Config::kViewHeight * 0.5f},
+        tileMap.pixelWidth(), tileMap.pixelHeight());
+    playLevelMusic();
+
+    std::cout << "[Core Engine] World 1-2 opening pipe: entered the underground course.\n";
+    return true;
+}
+
+bool PlayState::tryLeaveWorld12UndergroundPipe() {
+    if (Config::worldNumber(currentLevel) != 1
+        || Config::stageNumber(currentLevel) != 2
+        || !insideWorld12Underground || insideSecretRoom
+        || m_player == nullptr) {
+        return false;
+    }
+    if (inputHandler.getPlayerInput().moveAxis <= 0.f
+        && !heldKeys.count(sf::Keyboard::Scancode::D)
+        && !heldKeys.count(sf::Keyboard::Scancode::Right)) {
+        return false;
+    }
+
+    const float tile = tileMap.tileSize();
+    // Only the horizontal mouth listens. Running over the ceiling stays above
+    // this rectangle and can continue into the Warp Zone, as in the NES map.
+    const sf::FloatRect exitMouth(
+        {kWorld12ExitPipeColumn * tile, kWorld12ExitPipeRow * tile},
+        {4.f * tile, 2.f * tile});
+    if (!avatarBounds().findIntersection(exitMouth).has_value()) {
+        return false;
+    }
+
+    insideWorld12Underground = false;
+    warpAvatarTo({kWorld12OutdoorPipeColumn * tile,
+                  kWorld12OutdoorPipeArrivalRow * tile});
+    avatar.setPosition(m_player->getPhysicsBody().getPosition());
+
+    const float outdoorCameraX =
+        (kWorld12OutdoorStartColumn + Config::kViewTilesX * 0.5f) * tile;
+    m_cameraSystem.setMaxCameraCenterX(outdoorCameraX);
+    m_cameraSystem.centreCamera(
+        {outdoorCameraX, Config::kViewHeight * 0.5f},
+        tileMap.pixelWidth(), tileMap.pixelHeight());
+    playLevelMusic();
+
+    std::cout << "[Core Engine] World 1-2 exit pipe: returned above ground.\n";
     return true;
 }
 
