@@ -24,6 +24,7 @@ namespace {
     constexpr float kGroundFriction = 2000.f;
     constexpr float kJumpSpeed = 1000.f;
     constexpr float kMaxFallSpeed = 1400.f;
+    constexpr float kBroadphaseSafetyMargin = 1.f;
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
@@ -106,6 +107,48 @@ namespace {
                 return column >= current.first && column < current.pastLast;
             });
     }
+
+    sf::FloatRect sweptBroadphaseBounds(
+        const physics::PhysicsBody& body,
+        float deltaTime
+    ) {
+        const float physicsDelta = std::max(0.f, deltaTime);
+        const physics::AABB currentBounds = body.getAABB();
+        sf::Vector2f predictedVelocity = body.getVelocity();
+        const sf::Vector2f& acceleration = body.getAcceleration();
+
+        // Match PhysicsSystem's upcoming integration before sizing the query.
+        predictedVelocity.x += acceleration.x * physicsDelta;
+        predictedVelocity.y += (acceleration.y + kGravity) * physicsDelta;
+        predictedVelocity.y = std::min(predictedVelocity.y, kMaxFallSpeed);
+
+        const sf::Vector2f displacement = predictedVelocity * physicsDelta;
+        const float left = std::min(
+            currentBounds.left(),
+            currentBounds.left() + displacement.x
+        );
+        const float right = std::max(
+            currentBounds.right(),
+            currentBounds.right() + displacement.x
+        );
+        const float top = std::min(
+            currentBounds.top(),
+            currentBounds.top() + displacement.y
+        );
+        const float bottom = std::max(
+            currentBounds.bottom(),
+            currentBounds.bottom() + displacement.y
+        );
+
+        return sf::FloatRect(
+            {left - kBroadphaseSafetyMargin, top - kBroadphaseSafetyMargin},
+            {
+                right - left + 2.f * kBroadphaseSafetyMargin,
+                bottom - top + 2.f * kBroadphaseSafetyMargin
+            }
+        );
+    }
+
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
     constexpr int kWorld23CoinTotal = 35;
@@ -2302,12 +2345,8 @@ bool PlayState::moveAvatar(sf::Time dt) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
 
-    // Collect solid tile colliders in broadphase area
-    sf::FloatRect broadBounds = avatarBounds();
-    broadBounds.position.x -= 16.0f;
-    broadBounds.position.y -= 16.0f;
-    broadBounds.size.x += 32.0f;
-    broadBounds.size.y += 32.0f;
+    // Query every tile the collider can reach during the upcoming physics step.
+    const sf::FloatRect broadBounds = sweptBroadphaseBounds(body, seconds);
     std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
 
     // Kinematics and collision resolution
