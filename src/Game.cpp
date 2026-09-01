@@ -328,6 +328,36 @@ Game::Game()
     assets.loadTexture("World33GoalPole",
                        Systems::resourcePath("assets/textures/world33_goal_pole.png"));
 
+    // World 1-4 is the first castle course. Its stone, lava, Fire-Bar pivots,
+    // bridge room and boss artwork all come from the supplied 160x15 NES map
+    // and matching sprite sheets, and every piece of it is cut so the other
+    // castle courses can share it.
+    assets.loadTexture("CastleWall",
+                       Systems::resourcePath("assets/textures/castle_wall.png"));
+    assets.loadTexture("CastleFireBarBlock",
+                       Systems::resourcePath("assets/textures/castle_firebar_block.png"));
+    assets.loadTexture("CastleLavaSurface",
+                       Systems::resourcePath("assets/textures/castle_lava_surface.png"));
+    assets.loadTexture("CastleLava",
+                       Systems::resourcePath("assets/textures/castle_lava.png"));
+    assets.loadTexture("CastleBridge",
+                       Systems::resourcePath("assets/textures/castle_bridge.png"));
+    assets.loadTexture("CastleLift",
+                       Systems::resourcePath("assets/textures/castle_lift.png"));
+    assets.loadTexture("CastleAxe",
+                       Systems::resourcePath("assets/textures/castle_axe.png"));
+    assets.loadTexture("CastleQuestionBlock",
+                       Systems::resourcePath("assets/textures/castle_question_block.png"));
+    assets.loadTexture("CastleEmptyBlock",
+                       Systems::resourcePath("assets/textures/castle_empty_block.png"));
+    assets.loadTexture("CastleCoin",
+                       Systems::resourcePath("assets/textures/castle_coin.png"));
+    assets.loadTexture("CastleBowser",
+                       Systems::resourcePath("assets/textures/castle_bowser.png"));
+    // What the fake Bowser turns back into once it is beaten.
+    assets.loadTexture("CastleGoomba",
+                       Systems::resourcePath("assets/textures/castle_goomba.png"));
+
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));
     assets.loadTexture("Castle", Systems::resourcePath("assets/textures/Fortress.png"));

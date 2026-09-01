@@ -5,7 +5,7 @@
 
 /**
  * @class WorldSelectionState
- * @brief Lets a new game choose one of the three independent three-stage worlds.
+ * @brief Lets a new game choose one of the three independent world routes.
  */
 class WorldSelectionState : public State {
 private:

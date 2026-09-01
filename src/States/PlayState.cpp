@@ -70,6 +70,27 @@ namespace {
     constexpr float kBalanceLiftSpeed = 54.f;
     constexpr float kBalanceRopeWidth = 2.f;
 
+    /// A castle course is the fourth stage of a world: its own legend, its own
+    /// palette, lava and Fire-Bars, and a fake Bowser on a collapsing bridge.
+    /// Everything castle-specific keys off this rather than off a world.
+    bool isCastleStage(int level) {
+        return Config::stageNumber(level) == 4;
+    }
+
+    constexpr int kFireBarBallCount = 6;
+    constexpr float kFireBarAngularSpeed = 1.8f;
+    constexpr float kCastleBossWalkSpeed = 54.f;
+    constexpr float kCastleBossJumpSpeed = 620.f;
+    constexpr float kCastleBossFireSpeed = 190.f;
+    constexpr float kCastleBossFrameDuration = 0.18f;
+    constexpr float kCastleBossJumpInterval = 2.1f;
+    constexpr float kCastleBossFireInterval = 1.65f;
+    /// The bridge-room lift is narrower than the standard three tiles.
+    constexpr float kCastleLiftWidthTiles = 2.f;
+    constexpr float kCastleBridgeStepDuration = 0.085f;
+    constexpr float kCastleClearFinishDelay = 0.8f;
+    constexpr float kTwoPi = 6.28318530718f;
+
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
     constexpr int kWorld22EntrancePipeColumn = 9;
@@ -267,7 +288,7 @@ void PlayState::registerEvents() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
-    if (transitionPending || death.active) {
+    if (transitionPending || death.active || castleClear.active) {
         return;
     }
 
@@ -373,6 +394,13 @@ void PlayState::update(sf::Time dt) {
         return;
     }
 
+    if (castleClear.active) {
+        updateCastleClearSequence(dt);
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
     if (animator.isTransforming()) {
         animator.update(dt);
         tileMap.update(dt);
@@ -411,6 +439,12 @@ void PlayState::update(sf::Time dt) {
         return;
     }
     if (!moveAvatar(dt)) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+    updateCastleHazards(dt);
+    if (death.active) {
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
         return;
@@ -477,9 +511,10 @@ void PlayState::render(sf::RenderWindow& window) {
     // the way to the flagpole - and through the hidden room behind 3-1's pipe.
     const bool world31 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 1;
     const bool world33 = Config::worldNumber(currentLevel) == 3 && Config::stageNumber(currentLevel) == 3;
+    const bool castle = isCastleStage(currentLevel);
     const sf::Color outdoorSky = (world21 || world23)
         ? sf::Color(146, 144, 255) : sf::Color(92, 148, 252);
-    sky.setFillColor(underground || insideSecretRoom || world31 || world32 || world33
+    sky.setFillColor(underground || insideSecretRoom || castle || world31 || world32 || world33
                          ? sf::Color(0, 0, 0) : outdoorSky);
     window.draw(sky);
 
@@ -519,6 +554,13 @@ void PlayState::render(sf::RenderWindow& window) {
     // Draw Piranhas BEFORE tileMap so they slide into the pipes cleanly behind pipe tiles
     m_entityManager.renderPiranhas(window);
 
+    // During the axe sequence Bowser drops behind the bridge and lava tiles.
+    // Drawing him before the map lets those foreground surfaces cover him as
+    // he sinks, rather than leaving the sprite floating on top of the lava.
+    if (castleClear.active && castleClear.bossFalling) {
+        drawCastleHazards(window);
+    }
+
     window.draw(tileMap);
     drawGrowingVines(window);
     drawTrampolines(window);
@@ -526,6 +568,9 @@ void PlayState::render(sf::RenderWindow& window) {
 
     // Polymorphic rendering of all managed entities
     m_entityManager.render(window);
+    if (!castleClear.active || !castleClear.bossFalling) {
+        drawCastleHazards(window);
+    }
 
     drawBomb(window);
     drawHammers(window);
@@ -771,10 +816,11 @@ void PlayState::playLevelMusic() {
                       && Config::stageNumber(currentLevel) == 2;
     const bool world23 = Config::worldNumber(currentLevel) == 2
                       && Config::stageNumber(currentLevel) == 3;
+    const bool castle = isCastleStage(currentLevel);
     std::string theme = "assets/audio/Theme.mp3";
     if ((Config::stageNumber(currentLevel) == 2 && !world32) || insideSecretRoom) {
         theme = "assets/audio/Theme2.mp3";
-    } else if (Config::stageNumber(currentLevel) == 3 && !world23) {
+    } else if ((Config::stageNumber(currentLevel) == 3 && !world23) || castle) {
         theme = "assets/audio/Theme3.mp3";
     }
     sounds.playMusic(Systems::resourcePath(theme));
@@ -816,6 +862,7 @@ bool PlayState::loadLevel(int level) {
     // 2-3 has a dedicated palette cropped from its supplied guide image.
     const bool underground = stage == 2;
     const bool world23 = world == 2 && stage == 3;
+    const bool castle = isCastleStage(level);
     tileMap.setTileTexture('#', assets.getTexture(
         world23 ? "World23Ground"
                 : (underground ? "GroundUndergroundTile" : "GroundTile")));
@@ -961,6 +1008,25 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('&', assets.getTexture("World33PulleyShort"));
     }
 
+    // Both castle courses are lit by the same torchlit palette, so their whole
+    // legend is repointed at the shared crops taken from their guides.
+    if (castle) {
+        tileMap.setTileTexture('#', assets.getTexture("CastleWall"));
+        tileMap.setTileTexture('7', assets.getTexture("CastleFireBarBlock"));
+        tileMap.setTileTexture('8', assets.getTexture("CastleFireBarBlock"));
+        tileMap.setTileTexture('9', assets.getTexture("CastleLavaSurface"));
+        tileMap.setTileTexture('%', assets.getTexture("CastleLava"));
+        tileMap.setTileTexture('=', assets.getTexture("CastleBridge"));
+        tileMap.setTileTexture('?', assets.getTexture("CastleQuestionBlock"),
+                               4, sf::seconds(0.15f));
+        tileMap.setTileTexture('!', assets.getTexture("CastleQuestionBlock"),
+                               4, sf::seconds(0.15f));
+        tileMap.setTileTexture('U', assets.getTexture("CastleEmptyBlock"));
+        tileMap.setTileTexture('o', assets.getTexture("CastleCoin"),
+                               4, sf::seconds(0.12f));
+        tileMap.setDecorationTexture('$', assets.getTexture("CastleAxe"));
+    }
+
     if (!tileMap.build(mapParser, Config::kZoom)) {
         std::cerr << "[Core Engine] Warning: World " << world << "-" << stage
                   << " map is empty, nothing to play!\n";
@@ -986,7 +1052,8 @@ bool PlayState::loadLevel(int level) {
 
     currentLevel = level;
     hud.setWorld(currentLevel);
-    hud.setTime((world == 1 && stage == 3) || world23 || world32 || world33
+    hud.setTime((world == 1 && stage == 3) || castle
+                    || world23 || world32 || world33
                     ? 300.f : 400.f);
 
     m_entityManager.clear();
@@ -1008,12 +1075,17 @@ bool PlayState::loadLevel(int level) {
     coinBlockUsages.clear();
     brickDebris.clear();
     hammers.clear();
+    fireBars.clear();
+    castleBoss = CastleBossEntity{};
+    castleBossFire.clear();
+    castleClear = CastleClearSequence{};
 
     spawnWalkingEnemies();
     spawnAquaticEnemies();
     spawnPiranhas();
     spawnMovingPlatforms();
     spawnTrampolines();
+    spawnCastleHazards();
     prepareItemBlockRewards();
 
     std::cout << "[Core Engine] World " << world << "-" << stage << " loaded: "
@@ -1030,6 +1102,7 @@ bool PlayState::loadLevel(int level) {
               << tileMap.trampolineSpawns().size() << " trampolines, "
               << tileMap.movingPlatformSpawns().size() << " moving lifts, "
               << tileMap.verticalPlatformSpawns().size() << " up-and-down lifts, "
+              << tileMap.fireBarSpawns().size() << " Fire-Bars, "
               << std::min(tileMap.balanceLeftSpawns().size(),
                           tileMap.balanceRightSpawns().size()) << " pulleys\n";
     return true;
@@ -1281,6 +1354,11 @@ bool PlayState::tryEnterNextLevel() {
         return false;
     }
 
+    if (isCastleStage(currentLevel) && reachedStageGoal) {
+        startCastleClearSequence();
+        return true;
+    }
+
     if (transitionPending) return false;
     transitionPending = true;
     if (Config::worldNumber(currentLevel) == 1
@@ -1312,7 +1390,9 @@ void PlayState::spawnCoinPop(sf::Vector2f blockPosition) {
                       && Config::stageNumber(currentLevel) == 2;
     const char* coinArt = world23 ? "World23Coin"
                         : (world31 ? "World31Coin"
-                                   : (world32 ? "World32Coin" : "Coin"));
+                                   : (world32 ? "World32Coin"
+                                              : (isCastleStage(currentLevel)
+                                                     ? "CastleCoin" : "Coin")));
     m_entityManager.addEntity(entity::EntityFactory::createCoinPop(
         blockPosition, tileMap.tileSize(), &assets.getTexture(coinArt)));
 }
@@ -1443,16 +1523,38 @@ void PlayState::updateBullets(sf::Time dt) {
         const sf::FloatRect bulletBounds = bullet.bounds();
         bool hitEnemy = false;
 
-        auto hitEntities = m_entityManager.queryOverlapping(bulletBounds);
-        for (auto* ent : hitEntities) {
-            if (!ent || !ent->isAlive() || !ent->isActive()) continue;
-            if (dynamic_cast<entity::Character*>(ent)) {
-                ent->setAlive(false);
-                score += 200;
-                hud.setScore(score);
-                Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
-                hitEnemy = true;
-                break;
+        if (castleBoss.available && castleBoss.alive && castleBoss.active
+            && bulletBounds.findIntersection(castleBossBounds()).has_value()) {
+            --castleBoss.health;
+            score += castleBoss.health <= 0 ? 5000 : 200;
+            if (castleBoss.health <= 0) {
+                castleBoss.alive = false;
+                castleBoss.revealedGoomba = true;
+                castleBoss.revealTimer = 1.35f;
+                castleBoss.revealPosition = castleBoss.position
+                    + sf::Vector2f{tileMap.tileSize() * 0.5f,
+                                   tileMap.tileSize()};
+                castleBoss.revealVelocity = {0.f, -180.f};
+                castleBossFire.clear();
+            }
+            hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("StompSound"));
+            hitEnemy = true;
+        }
+
+        if (!hitEnemy) {
+            auto hitEntities = m_entityManager.queryOverlapping(bulletBounds);
+            for (auto* ent : hitEntities) {
+                if (!ent || !ent->isAlive() || !ent->isActive()) continue;
+                if (dynamic_cast<entity::Character*>(ent)) {
+                    ent->setAlive(false);
+                    score += 200;
+                    hud.setScore(score);
+                    Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("StompSound"));
+                    hitEnemy = true;
+                    break;
+                }
             }
         }
 
@@ -1627,6 +1729,7 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
                       && Config::stageNumber(currentLevel) == 1;
     const bool world32 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 2;
+    const bool castle = isCastleStage(currentLevel);
     const bool underground = Config::stageNumber(currentLevel) == 2 && !world32;
     const char* brickArt = world31 ? "World31Brick"
                          : (world32 ? "World32Brick"
@@ -1642,23 +1745,25 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
         if (drawSymbol == 'B' || drawSymbol == '^' || drawSymbol == 'A'
             || drawSymbol == 'b') {
             tex = &assets.getTexture(brickArt);
-        } else if (drawSymbol == '?') {
+        } else if (drawSymbol == '?' || drawSymbol == '!') {
             const char* questionArt = world23 ? "World23QuestionBlock"
                                     : (world31 ? "World31QuestionBlock"
                                                : (world32 ? "World32QuestionBlock"
-                                                          : (underground ? "QuestionBlockUnderground" : "QuestionBlock")));
+                                                          : (castle ? "CastleQuestionBlock"
+                                                                    : (underground ? "QuestionBlockUnderground" : "QuestionBlock"))));
             tex = &assets.getTexture(questionArt);
             rect = sf::IntRect({0, 0}, {16, 16});
         } else if (drawSymbol == 'U') {
             const char* emptyArt = world23 ? "World23EmptyBlock"
                                  : (world31 ? "World31EmptyBlock"
-                                            : (world32 ? "World32EmptyBlock" : "EmptyBlock"));
+                                            : (world32 ? "World32EmptyBlock"
+                                                       : (castle ? "CastleEmptyBlock" : "EmptyBlock")));
             tex = &assets.getTexture(emptyArt);
         }
         
         if (tex) {
             sf::Sprite sprite(*tex);
-            if (drawSymbol == '?') {
+            if (drawSymbol == '?' || drawSymbol == '!') {
                 sprite.setTextureRect(rect);
             }
             float scale = tileMap.tileSize() / 16.f;
@@ -2000,14 +2105,27 @@ void PlayState::spawnPiranhas() {
 
 void PlayState::spawnMovingPlatforms() {
     movingPlatforms.clear();
+    const bool castle = isCastleStage(currentLevel);
+    const float tile = tileMap.tileSize();
     for (sf::Vector2f pos : tileMap.movingPlatformSpawns()) {
-        movingPlatforms.push_back({pos, pos, pos, {kMovingPlatformSpeed, 0.f},
-                                   LiftMotion::Horizontal, -1, 0.f});
+        MovingPlatform platform{
+            pos, pos, pos, {kMovingPlatformSpeed, 0.f},
+            LiftMotion::Horizontal, -1, 0.f,
+            castle ? kCastleLiftWidthTiles : kMovingPlatformWidthTiles};
+        if (castle) {
+            // Both guides catch the bridge-room lift at the right end of its
+            // pass. Centre its normal six-tile range three cells to the left
+            // so it stays above the bridge instead of running into the axe.
+            platform.origin.x -= kMovingPlatformRangeTiles * tile;
+            platform.velocity.x = -kMovingPlatformSpeed;
+        }
+        movingPlatforms.push_back(platform);
     }
     for (sf::Vector2f pos : tileMap.verticalPlatformSpawns()) {
         movingPlatforms.push_back({pos, pos, pos, {0.f, kVerticalLiftSpeed},
                                    LiftMotion::Vertical, -1, 0.f});
     }
+
 
     // A stage may carry several pulleys, so the two ends are matched left to
     // right: the leftmost '/' belongs to the leftmost '\', and so on.
@@ -2031,17 +2149,18 @@ void PlayState::spawnMovingPlatforms() {
     }
 }
 
-bool PlayState::isStandingOnPlatform(sf::Vector2f platformPos) const {
+bool PlayState::isStandingOnPlatform(sf::Vector2f position,
+                                     float widthTiles) const {
     if (!m_player || death.active) {
         return false;
     }
     const sf::FloatRect player = avatarBounds();
     const float feet = player.position.y + player.size.y;
-    const float right = platformPos.x + tileMap.tileSize() * kMovingPlatformWidthTiles;
-    return player.position.x + player.size.x > platformPos.x + 2.f
+    const float right = position.x + tileMap.tileSize() * widthTiles;
+    return player.position.x + player.size.x > position.x + 2.f
         && player.position.x < right - 2.f
-        && feet >= platformPos.y - 4.f
-        && feet <= platformPos.y + tileMap.tileSize() * 0.5f;
+        && feet >= position.y - 4.f
+        && feet <= position.y + tileMap.tileSize() * 0.5f;
 }
 
 float PlayState::pulleyRopeTop(sf::Vector2f platformPos) const {
@@ -2107,8 +2226,10 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
                 break;
             }
             MovingPlatform& other = movingPlatforms[plat.partner];
-            const bool ridingThis = isStandingOnPlatform(plat.previousPosition);
-            const bool ridingOther = isStandingOnPlatform(other.previousPosition);
+            const bool ridingThis = isStandingOnPlatform(
+                plat.previousPosition, plat.widthTiles);
+            const bool ridingOther = isStandingOnPlatform(
+                other.previousPosition, other.widthTiles);
             if (ridingThis == ridingOther) {
                 break; // empty, or weighed down at both ends: the pair hangs still
             }
@@ -2136,8 +2257,10 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
     }
     for (const MovingPlatform& plat : movingPlatforms) {
         const sf::Vector2f delta = plat.position - plat.previousPosition;
-        if ((delta.x == 0.f && delta.y == 0.f)
-            || !isStandingOnPlatform(plat.previousPosition)) {
+        if (delta.x == 0.f && delta.y == 0.f) {
+            continue;
+        }
+        if (!isStandingOnPlatform(plat.previousPosition, plat.widthTiles)) {
             continue;
         }
         auto& body = m_player->getPhysicsBody();
@@ -2153,10 +2276,12 @@ void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
                       && Config::stageNumber(currentLevel) == 1;
     const bool world33 = Config::worldNumber(currentLevel) == 3
                       && Config::stageNumber(currentLevel) == 3;
+    const bool castle = isCastleStage(currentLevel);
     const bool coinHeaven = world21 || world31;
     const char* textureKey = world31 ? "World31CoinHeavenLift"
                            : (world21 ? "CoinHeavenLift"
-                                      : (world33 ? "World33Lift" : "MovingPlatform"));
+                                      : (world33 ? "World33Lift"
+                                                 : (castle ? "CastleLift" : "MovingPlatform")));
 
     // The rope pays out and reels in as the pulley turns, so it is drawn to
     // whatever length the platform hangs at rather than baked into the map.
@@ -2167,7 +2292,7 @@ void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
             continue;
         }
         const float centre = plat.position.x
-                           + tileMap.tileSize() * kMovingPlatformWidthTiles * 0.5f;
+                           + tileMap.tileSize() * plat.widthTiles * 0.5f;
         rope.setSize({kBalanceRopeWidth * Config::kZoom, plat.position.y - plat.ropeTopY});
         rope.setPosition({centre - Config::kZoom, plat.ropeTopY});
         window.draw(rope);
@@ -2220,6 +2345,368 @@ void PlayState::drawTrampolines(sf::RenderWindow& window) const {
         sprite.setPosition({tramp.x, tramp.bottomY - tileMap.tileSize()});
         window.draw(sprite);
     }
+}
+
+void PlayState::spawnCastleHazards() {
+    fireBars.clear();
+    const auto& pivots = tileMap.fireBarSpawns();
+    fireBars.reserve(pivots.size());
+    for (std::size_t index = 0; index < pivots.size(); ++index) {
+        const float phase = static_cast<float>(index % 4) * kTwoPi * 0.25f;
+        const float direction = index % 2 == 0 ? 1.f : -1.f;
+        fireBars.push_back({pivots[index], phase,
+                            direction * kFireBarAngularSpeed});
+    }
+
+    castleBoss = CastleBossEntity{};
+    castleBossFire.clear();
+    if (tileMap.castleBossSpawns().empty()) {
+        return;
+    }
+
+    const float tile = tileMap.tileSize();
+    const sf::Vector2f spawn = tileMap.castleBossSpawns().front();
+    castleBoss.available = true;
+    castleBoss.alive = true;
+    castleBoss.position = spawn;
+    castleBoss.velocity = {-kCastleBossWalkSpeed, 0.f};
+    castleBoss.leftLimit = spawn.x - tile * 7.f;
+    castleBoss.rightLimit = spawn.x + tile * 4.f;
+    castleBoss.groundY = spawn.y;
+    castleBoss.jumpTimer = kCastleBossJumpInterval * 0.5f;
+    castleBoss.fireTimer = kCastleBossFireInterval * 0.45f;
+}
+
+sf::FloatRect PlayState::castleBossBounds() const {
+    if (!castleBoss.available || !castleBoss.alive) {
+        return sf::FloatRect();
+    }
+    const float side = tileMap.tileSize() * 2.f;
+    return sf::FloatRect(castleBoss.position, {side, side});
+}
+
+bool PlayState::damagePlayerFromCastleHazard() {
+    if (!m_player || death.active || m_godMode || starPowerRemaining > 0.f
+        || damageProtectionRemaining > 0.f || invincibleTimer > 0.f) {
+        return false;
+    }
+
+    if (m_player->removeLatestPower()) {
+        syncAvatarPowerVisuals();
+        damageProtectionRemaining = kDamageProtectionDuration;
+        invincibleTimer = 1.5f;
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("DowngradeSound"));
+        return false;
+    }
+
+    handlePlayerDeath();
+    return true;
+}
+
+void PlayState::updateCastleHazards(sf::Time dt) {
+    if (!isCastleStage(currentLevel) || !m_player) {
+        return;
+    }
+
+    const float seconds = dt.asSeconds();
+    const float fireballSize = 8.f * Config::kZoom;
+    const sf::FloatRect player = avatarBounds();
+
+    for (FireBarEntity& bar : fireBars) {
+        bar.angle = std::fmod(bar.angle + bar.angularSpeed * seconds + kTwoPi,
+                              kTwoPi);
+        for (int index = 1; index <= kFireBarBallCount; ++index) {
+            const float distance = fireballSize * static_cast<float>(index);
+            const sf::Vector2f centre(
+                bar.pivot.x + std::cos(bar.angle) * distance,
+                bar.pivot.y + std::sin(bar.angle) * distance);
+            const sf::FloatRect ball(
+                centre - sf::Vector2f{fireballSize * 0.5f, fireballSize * 0.5f},
+                {fireballSize, fireballSize});
+            if (ball.findIntersection(player).has_value()) {
+                if (damagePlayerFromCastleHazard()) {
+                    return;
+                }
+                break;
+            }
+        }
+    }
+
+    if (!castleBoss.available) {
+        castleBossFire.clear();
+        return;
+    }
+
+    if (!castleBoss.alive) {
+        castleBossFire.clear();
+        if (castleBoss.revealedGoomba && castleBoss.revealTimer > 0.f) {
+            castleBoss.revealTimer = std::max(
+                0.f, castleBoss.revealTimer - seconds);
+            castleBoss.revealVelocity.y = std::min(
+                kMaxFallSpeed,
+                castleBoss.revealVelocity.y + kGravity * seconds);
+            castleBoss.revealPosition += castleBoss.revealVelocity * seconds;
+        }
+        return;
+    }
+
+    if (!castleBoss.active) {
+        castleBoss.active = player.position.x
+            >= castleBoss.leftLimit - Config::kViewWidth * 0.75f;
+    }
+    if (!castleBoss.active) {
+        return;
+    }
+
+    castleBoss.animationElapsed += seconds;
+    while (castleBoss.animationElapsed >= kCastleBossFrameDuration) {
+        castleBoss.animationElapsed -= kCastleBossFrameDuration;
+        castleBoss.frame = (castleBoss.frame + 1) % 4;
+    }
+
+    castleBoss.jumpTimer += seconds;
+    castleBoss.fireTimer += seconds;
+    castleBoss.velocity.y = std::min(
+        kMaxFallSpeed, castleBoss.velocity.y + kGravity * seconds);
+    castleBoss.position += castleBoss.velocity * seconds;
+
+    if (castleBoss.position.x < castleBoss.leftLimit) {
+        castleBoss.position.x = castleBoss.leftLimit;
+        castleBoss.velocity.x = kCastleBossWalkSpeed;
+    } else if (castleBoss.position.x > castleBoss.rightLimit) {
+        castleBoss.position.x = castleBoss.rightLimit;
+        castleBoss.velocity.x = -kCastleBossWalkSpeed;
+    }
+
+    if (castleBoss.position.y >= castleBoss.groundY) {
+        castleBoss.position.y = castleBoss.groundY;
+        castleBoss.velocity.y = 0.f;
+        if (castleBoss.jumpTimer >= kCastleBossJumpInterval) {
+            castleBoss.velocity.y = -kCastleBossJumpSpeed;
+            castleBoss.jumpTimer = 0.f;
+        }
+    }
+
+    if (castleBoss.fireTimer >= kCastleBossFireInterval) {
+        castleBoss.fireTimer = 0.f;
+        const sf::Vector2f start(
+            castleBoss.position.x,
+            castleBoss.position.y + tileMap.tileSize() * 0.75f);
+        const float playerCentreY = player.position.y + player.size.y * 0.5f;
+        const float verticalSpeed = std::clamp(
+            (playerCentreY - start.y) * 0.6f, -90.f, 90.f);
+        castleBossFire.push_back(
+            {start, {-kCastleBossFireSpeed, verticalSpeed}});
+    }
+
+    for (CastleBossFire& fire : castleBossFire) {
+        fire.position += fire.velocity * seconds;
+        const sf::FloatRect bounds(
+            fire.position, {fireballSize, fireballSize});
+        if (bounds.findIntersection(player).has_value()) {
+            if (damagePlayerFromCastleHazard()) {
+                return;
+            }
+        }
+    }
+
+    const float cameraLeft = m_cameraSystem.getCenter().x - Config::kViewWidth;
+    castleBossFire.erase(
+        std::remove_if(castleBossFire.begin(), castleBossFire.end(),
+            [cameraLeft](const CastleBossFire& fire) {
+                return fire.position.x < cameraLeft;
+            }),
+        castleBossFire.end());
+
+    if (castleBossBounds().findIntersection(player).has_value()) {
+        if (starPowerRemaining > 0.f || m_destroyerMode) {
+            castleBoss.alive = false;
+            castleBossFire.clear();
+            score += 5000;
+            hud.setScore(score);
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("StompSound"));
+        } else {
+            damagePlayerFromCastleHazard();
+        }
+    }
+}
+
+void PlayState::drawCastleHazards(sf::RenderWindow& window) const {
+    if (!isCastleStage(currentLevel)) {
+        return;
+    }
+
+    const float fireballSize = 8.f * Config::kZoom;
+    sf::Sprite fireball(assets.getTexture("Bullet"));
+    fireball.setScale({Config::kZoom, Config::kZoom});
+    for (const FireBarEntity& bar : fireBars) {
+        for (int index = 1; index <= kFireBarBallCount; ++index) {
+            const float distance = fireballSize * static_cast<float>(index);
+            const sf::Vector2f centre(
+                bar.pivot.x + std::cos(bar.angle) * distance,
+                bar.pivot.y + std::sin(bar.angle) * distance);
+            fireball.setPosition(
+                centre - sf::Vector2f{fireballSize * 0.5f, fireballSize * 0.5f});
+            window.draw(fireball);
+        }
+    }
+
+    for (const CastleBossFire& fire : castleBossFire) {
+        fireball.setPosition(fire.position);
+        window.draw(fireball);
+    }
+
+
+    if (castleBoss.available && castleBoss.alive) {
+        sf::Sprite bowser(assets.getTexture("CastleBowser"));
+        bowser.setTextureRect(sf::IntRect(
+            {castleBoss.frame * 32, 0}, {32, 32}));
+        bowser.setScale({Config::kZoom, Config::kZoom});
+        bowser.setPosition(castleBoss.position);
+        window.draw(bowser);
+    } else if (castleBoss.available && castleBoss.revealedGoomba
+               && castleBoss.revealTimer > 0.f) {
+        // World 1-4's Bowser was a Little Goomba all along.
+        sf::Sprite goomba(assets.getTexture("CastleGoomba"));
+        const int frame = static_cast<int>(castleBoss.revealTimer / 0.12f) % 2;
+        goomba.setTextureRect(sf::IntRect({frame * 16, 0}, {16, 16}));
+        goomba.setScale({Config::kZoom, Config::kZoom});
+        goomba.setPosition(castleBoss.revealPosition);
+        window.draw(goomba);
+    }
+}
+
+void PlayState::startCastleClearSequence() {
+    if (castleClear.active || !m_player) {
+        return;
+    }
+
+    castleClear = CastleClearSequence{};
+    castleClear.active = true;
+
+    // Locate the authored bridge rather than baking its coordinates into the
+    // sequence. This keeps the collapse tied to the map's '=' tiles.
+    for (int row = 0; row < static_cast<int>(mapParser.getHeight()); ++row) {
+        for (int col = 0; col < static_cast<int>(mapParser.getWidth()); ++col) {
+            if (tileMap.symbolAt(col, row) != '=') {
+                continue;
+            }
+            if (castleClear.bridgeRow < 0) {
+                castleClear.bridgeRow = row;
+                castleClear.firstBridgeColumn = col;
+            }
+            if (row == castleClear.bridgeRow) {
+                castleClear.firstBridgeColumn = std::min(
+                    castleClear.firstBridgeColumn, col);
+                castleClear.nextBridgeColumn = std::max(
+                    castleClear.nextBridgeColumn, col);
+            }
+        }
+    }
+
+    heldKeys.clear();
+    inputHandler.reset();
+    auto& body = m_player->getPhysicsBody();
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(true);
+    facingRight = true;
+    animator.setFacingRight(true);
+    animator.setAction(entity::PlayerAction::Idle);
+    animator.setSpeedRatio(0.f);
+
+    tileMap.hideDecoration('$');
+    castleBossFire.clear();
+    castleBoss.revealedGoomba = false;
+    castleBoss.revealTimer = 0.f;
+    if (castleBoss.alive) {
+        castleBoss.velocity = {0.f, 0.f};
+    }
+
+    Systems::SoundController::getInstance().stopMusic();
+    Systems::SoundController::getInstance().playSound(
+        assets.getSoundBuffer("BrickCollision"));
+    std::cout << "[Core Engine] Castle axe touched; collapsing the bridge.\n";
+}
+
+void PlayState::updateCastleClearSequence(sf::Time dt) {
+    if (!castleClear.active || !m_player) {
+        return;
+    }
+
+    const float seconds = dt.asSeconds();
+    auto& body = m_player->getPhysicsBody();
+    body.setVelocity({0.f, 0.f});
+    body.clearAcceleration();
+    body.setGrounded(true);
+    avatar.setPosition(body.getPosition());
+    animator.setAction(entity::PlayerAction::Idle);
+    animator.setFacingRight(true);
+    animator.setSpeedRatio(0.f);
+    animator.update(dt);
+
+    if (!castleClear.bridgeCollapsed) {
+        castleClear.bridgeTimer += seconds;
+        while (castleClear.bridgeTimer >= kCastleBridgeStepDuration
+               && castleClear.nextBridgeColumn
+                    >= castleClear.firstBridgeColumn) {
+            castleClear.bridgeTimer -= kCastleBridgeStepDuration;
+            if (tileMap.removeTile(castleClear.nextBridgeColumn,
+                                   castleClear.bridgeRow)) {
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("BrickBreak"));
+            }
+            --castleClear.nextBridgeColumn;
+        }
+
+        if (castleClear.nextBridgeColumn < castleClear.firstBridgeColumn) {
+            castleClear.bridgeCollapsed = true;
+            castleClear.bossFalling = castleBoss.alive;
+            castleBoss.velocity = {0.f, 0.f};
+        }
+        if (!castleClear.bridgeCollapsed) {
+            return;
+        }
+    }
+
+    if (castleClear.bossFalling) {
+        castleBoss.animationElapsed += seconds;
+        while (castleBoss.animationElapsed >= kCastleBossFrameDuration) {
+            castleBoss.animationElapsed -= kCastleBossFrameDuration;
+            castleBoss.frame = (castleBoss.frame + 1) % 4;
+        }
+        castleBoss.velocity.y = std::min(
+            kMaxFallSpeed, castleBoss.velocity.y + kGravity * seconds);
+        castleBoss.position += castleBoss.velocity * seconds;
+
+        if (castleBoss.position.y > tileMap.pixelHeight()) {
+            castleBoss.alive = false;
+            castleClear.bossFalling = false;
+        }
+    }
+
+    if (!castleClear.bossFalling && !castleClear.victoryPlayed) {
+        castleClear.victoryPlayed = true;
+        castleClear.finishTimer = 0.f;
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("VictorySound"));
+    }
+
+    if (!castleClear.victoryPlayed) {
+        return;
+    }
+
+    castleClear.finishTimer += seconds;
+    if (castleClear.finishTimer < kCastleClearFinishDelay) {
+        return;
+    }
+
+    transitionPending = true;
+    std::cout << "[Core Engine] Castle bridge clear complete; opening results.\n";
+    gsm.changeState(std::make_unique<LevelCompleteState>(
+        gsm, assets, getSaveData()));
 }
 
 bool PlayState::moveAvatar(sf::Time dt) {
@@ -2325,6 +2812,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
                               && Config::stageNumber(currentLevel) == 2;
             const bool world21 = Config::worldNumber(currentLevel) == 2
                               && Config::stageNumber(currentLevel) == 1;
+            const bool castle = isCastleStage(currentLevel);
             if (vineBlock) {
                 const bool startedGrowing = spawnGrowingVine(tile.position);
                 if (!startedGrowing) {
@@ -2350,7 +2838,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
                     } else {
                         spawnMushroom(tile.position);
                     }
-                } else if (world11 || world12 || world21) {
+                } else if (world11 || world12 || world21 || castle) {
                     // These maps author every power-up explicitly; all
                     // remaining ?/hidden item blocks therefore contain coins.
                     spawnCoinPop(tile.position);
@@ -2451,7 +2939,7 @@ bool PlayState::moveAvatar(sf::Time dt) {
         for (const MovingPlatform& platform : movingPlatforms) {
             const float platformTop = platform.position.y;
             const float platformRight = platform.position.x
-                + tileMap.tileSize() * kMovingPlatformWidthTiles;
+                + tileMap.tileSize() * platform.widthTiles;
             const bool horizontallyOverlapping =
                 player.position.x + player.size.x > platform.position.x + 2.f
                 && player.position.x < platformRight - 2.f;
@@ -2508,6 +2996,14 @@ bool PlayState::moveAvatar(sf::Time dt) {
     }
 
     avatar.setPosition(body.getPosition());
+
+    // Lava is not a platform: entering even its animated surface immediately
+    // starts the castle death fall. God mode remains useful for map inspection.
+    if (!m_godMode && tileMap.intersectsHazard(avatarBounds())) {
+        std::cout << "[Core Engine] Avatar touched castle lava.\n";
+        handlePlayerDeath();
+        return false;
+    }
 
     // --- Entity Interactions (Stomp enemy / Pickup Item / Take Damage) ---
     auto overlappingEntities = m_entityManager.queryOverlapping(avatarBounds());

@@ -2,6 +2,7 @@
 #include <SFML/Graphics/Rect.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 /**
@@ -21,29 +22,57 @@
  * sky fills the top, the same framing as the original Super Mario Bros.
  */
 namespace Config {
-    /// The campaign contains three worlds with three stages in each world.
+    /// The campaign keeps the original save indices for the first nine stages.
+    /// The castle courses are added afterwards and appended past them, so the
+    /// tables below are the authoritative conversion instead of arithmetic
+    /// based on a fixed number of stages per world.
     inline constexpr int kWorldCount = 3;
-    inline constexpr int kStagesPerWorld = 3;
-    inline constexpr int kFinalLevel = kWorldCount * kStagesPerWorld;
+    inline constexpr int kFinalLevel = 10;
+    inline constexpr std::array<int, kFinalLevel> kLevelWorlds{
+        1, 1, 1, 2, 2, 2, 3, 3, 3, 1
+    };
+    inline constexpr std::array<int, kFinalLevel> kLevelStages{
+        1, 2, 3, 1, 2, 3, 1, 2, 3, 4
+    };
+    inline constexpr std::array<int, kWorldCount> kStagesInWorld{4, 3, 3};
 
     /// Converts the one-based linear save/progress index to its displayed world number.
     inline constexpr int worldNumber(int level) {
-        return (level - 1) / kStagesPerWorld + 1;
+        return level >= 1 && level <= kFinalLevel ? kLevelWorlds[level - 1] : 1;
     }
 
     /// Converts the one-based linear save/progress index to its displayed stage number.
     inline constexpr int stageNumber(int level) {
-        return (level - 1) % kStagesPerWorld + 1;
+        return level >= 1 && level <= kFinalLevel ? kLevelStages[level - 1] : 1;
+    }
+
+    /// Number of playable stages currently implemented for a world.
+    inline constexpr int stageCount(int world) {
+        return world >= 1 && world <= kWorldCount ? kStagesInWorld[world - 1] : 0;
     }
 
     /// Converts a one-based world choice to the linear index of its first stage.
     inline constexpr int firstLevelOfWorld(int world) {
-        return (world - 1) * kStagesPerWorld + 1;
+        return world == 1 ? 1 : (world == 2 ? 4 : 7);
     }
 
-    /// True when a linear level is the third and final stage of its current world.
+    /// Save index of the next stage in the same route, or 0 after its castle.
+    inline constexpr int nextLevel(int level) {
+        if (level == 1 || level == 2 || level == 4 || level == 5
+            || level == 7 || level == 8) {
+            return level + 1;
+        }
+        // The castle hangs off the end of the table, so World 1-3 jumps to it
+        // rather than to the next index.
+        if (level == 3) {
+            return 10;
+        }
+        return 0;
+    }
+
+    /// True when a level is the last implemented stage of its current world.
     inline constexpr bool isLastStageOfWorld(int level) {
-        return stageNumber(level) == kStagesPerWorld;
+        return stageNumber(level) == stageCount(worldNumber(level));
     }
 
     /// Size of one tile in the atlas artwork, in pixels.

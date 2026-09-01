@@ -8,7 +8,7 @@
  * @brief Encapsulates the game progress data for serialization and deserialization.
  */
 struct SaveData {
-    int currentLevel{1};                   ///< Linear campaign index (1 through Config::kFinalLevel).
+    int currentLevel{1};                   ///< Stable save index (1 through Config::kFinalLevel).
     int score{0};                          ///< Current player score
     int coins{0};                          ///< Total coins collected
     int lives{3};                          ///< Remaining player lives
