@@ -11,6 +11,7 @@ class WorldSelectionState : public State {
 private:
     CharacterType selectedCharacter;
     int selectedWorld{1};
+    bool nightfallMode{false};
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
@@ -26,7 +27,7 @@ private:
 
 public:
     WorldSelectionState(GameStateManager& gsm, Systems::AssetManager& assets,
-                        CharacterType character);
+                        CharacterType character, bool nightfall = false);
     ~WorldSelectionState() override = default;
 
     void init() override;
