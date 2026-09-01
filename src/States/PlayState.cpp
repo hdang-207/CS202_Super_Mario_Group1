@@ -216,7 +216,7 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->world23AllCoinsCollected = data.world23AllCoinsCollected;
     this->m_gameMode = data.gameMode;
     if (m_gameMode == GameMode::Nightfall) {
-        m_nightfallOverlay.emplace(Config::kViewWidth, Config::kViewHeight, 160.f);
+        m_nightfallOverlay.emplace(Config::kViewWidth, Config::kViewHeight, 200.f);
     }
     if (m_gameMode == GameMode::Inferno) {
         this->lives = 1; // Enforce 1 life
