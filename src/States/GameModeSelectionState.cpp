@@ -13,8 +13,10 @@ GameModeSelectionState::GameModeSelectionState(GameStateManager& gsm, Systems::A
       headerText(assets.getFont("MarioFont")),
       normalText(assets.getFont("MarioFont")),
       nightfallText(assets.getFont("MarioFont")),
+      infernoText(assets.getFont("MarioFont")),
       normalDesc(assets.getFont("MarioFont")),
       nightfallDesc(assets.getFont("MarioFont")),
+      infernoDesc(assets.getFont("MarioFont")),
       hintText(assets.getFont("MarioFont")) {}
 
 void GameModeSelectionState::init() {
@@ -43,14 +45,14 @@ void GameModeSelectionState::init() {
     headerText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.15f});
 
     // Options
-    for (sf::Text* t : {&normalText, &nightfallText}) {
+    for (sf::Text* t : {&normalText, &nightfallText, &infernoText}) {
         t->setCharacterSize(28);
         t->setOutlineColor(sf::Color::Black);
         t->setOutlineThickness(2.f);
     }
 
     // Descriptions
-    for (sf::Text* t : {&normalDesc, &nightfallDesc}) {
+    for (sf::Text* t : {&normalDesc, &nightfallDesc, &infernoDesc}) {
         t->setCharacterSize(16);
         t->setOutlineColor(sf::Color::Black);
         t->setOutlineThickness(2.f);
@@ -60,6 +62,9 @@ void GameModeSelectionState::init() {
 
     nightfallDesc.setString("Darkness surrounds you. Only a small light guides your way!");
     nightfallDesc.setFillColor(sf::Color(200, 200, 200));
+
+    infernoDesc.setString("YOU HAVE ONLY ONE CHANCE TO LIVE! RUN FROM THE WALL OF DEATH!");
+    infernoDesc.setFillColor(sf::Color(200, 200, 200));
 
     // Hint
     hintText.setString("UP/DOWN: SELECT  |  ENTER: CONFIRM  |  B: BACK");
@@ -79,21 +84,20 @@ void GameModeSelectionState::handleInput(const sf::Event& event) {
 
     const auto key = keyPressed->scancode;
     if (key == sf::Keyboard::Scancode::Up || key == sf::Keyboard::Scancode::W) {
-        selectedIndex = 0;
+        selectedIndex = (selectedIndex == 0) ? 2 : selectedIndex - 1;
         Systems::SoundController::getInstance().playSound(
             assets.getSoundBuffer("SelectSound"));
     } else if (key == sf::Keyboard::Scancode::Down || key == sf::Keyboard::Scancode::S) {
-        selectedIndex = 1;
+        selectedIndex = (selectedIndex == 2) ? 0 : selectedIndex + 1;
         Systems::SoundController::getInstance().playSound(
             assets.getSoundBuffer("SelectSound"));
     } else if (key == sf::Keyboard::Scancode::Enter
                || key == sf::Keyboard::Scancode::Space) {
         Systems::SoundController::getInstance().playSound(
             assets.getSoundBuffer("SelectSound"));
-        bool nightfall = (selectedIndex == 1);
-        std::cout << "[Core Engine] Game mode selected: "
-                  << (nightfall ? "NIGHTFALL" : "NORMAL") << "\n";
-        gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets, nightfall));
+        GameMode mode = static_cast<GameMode>(selectedIndex);
+        std::cout << "[Core Engine] Game mode selected: " << selectedIndex << "\n";
+        gsm.changeState(std::make_unique<CharacterSelectionState>(gsm, assets, mode));
     } else if (key == sf::Keyboard::Scancode::B
                || key == sf::Keyboard::Scancode::Escape) {
         Systems::SoundController::getInstance().playSound(
@@ -118,7 +122,7 @@ void GameModeSelectionState::update(sf::Time) {
     normalDesc.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.44f});
 
     nightfallText.setString(selectedIndex == 1 ? "> NIGHTFALL MODE" : "  NIGHTFALL MODE");
-    nightfallText.setFillColor(selectedIndex == 1 ? sf::Color(255, 140, 0) : sf::Color(180, 180, 180));
+    nightfallText.setFillColor(selectedIndex == 1 ? sf::Color(180, 32, 255) : sf::Color(180, 180, 180));
     const sf::FloatRect nfBounds = nightfallText.getLocalBounds();
     nightfallText.setOrigin({nfBounds.position.x + nfBounds.size.x / 2.f,
                              nfBounds.position.y + nfBounds.size.y / 2.f});
@@ -129,6 +133,17 @@ void GameModeSelectionState::update(sf::Time) {
     nightfallDesc.setOrigin({nfdBounds.position.x + nfdBounds.size.x / 2.f,
                              nfdBounds.position.y + nfdBounds.size.y / 2.f});
     nightfallDesc.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.61f});
+    infernoText.setString(selectedIndex == 2 ? "> INFERNO MODE" : "  INFERNO MODE");
+    infernoText.setFillColor(selectedIndex == 2 ? sf::Color::Red : sf::Color(180, 180, 180));
+    const sf::FloatRect infBounds = infernoText.getLocalBounds();
+    infernoText.setOrigin({infBounds.position.x + infBounds.size.x / 2.f,
+                           infBounds.position.y + infBounds.size.y / 2.f});
+    infernoText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.72f});
+
+    const sf::FloatRect infdBounds = infernoDesc.getLocalBounds();
+    infernoDesc.setOrigin({infdBounds.position.x + infdBounds.size.x / 2.f,
+                           infdBounds.position.y + infdBounds.size.y / 2.f});
+    infernoDesc.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.78f});
 }
 
 void GameModeSelectionState::render(sf::RenderWindow& window) {
@@ -139,5 +154,7 @@ void GameModeSelectionState::render(sf::RenderWindow& window) {
     window.draw(normalDesc);
     window.draw(nightfallText);
     window.draw(nightfallDesc);
+    window.draw(infernoText);
+    window.draw(infernoDesc);
     window.draw(hintText);
 }

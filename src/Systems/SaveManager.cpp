@@ -33,7 +33,7 @@ bool SaveManager::saveToFile(const std::string& filepath, const SaveData& data) 
     outFile << static_cast<int>(data.selectedCharacter) << "\n";
     outFile << static_cast<int>(data.world23AllCoinsCollected) << "\n";
     outFile << static_cast<int>(data.world13OneUpUnlocked) << "\n";
-    outFile << static_cast<int>(data.nightfallMode) << "\n";
+    outFile << static_cast<int>(data.gameMode) << "\n";
 
     outFile.close();
     std::cout << "[SaveManager] Successfully saved progress to: " << filepath << std::endl;
@@ -67,11 +67,11 @@ bool SaveManager::loadFromFile(const std::string& filepath, SaveData& outData) {
                                   && (world13OneUpInt == 0 || world13OneUpInt == 1);
                 loaded.world13OneUpUnlocked = world13OneUpInt == 1;
 
-                int nightfallInt = 0;
-                if (inFile >> nightfallInt) {
+                int modeInt = 0;
+                if (inFile >> modeInt) {
                     optionalFieldValid = optionalFieldValid
-                                      && (nightfallInt == 0 || nightfallInt == 1);
-                    loaded.nightfallMode = nightfallInt == 1;
+                                      && (modeInt >= 0 && modeInt <= 2);
+                    loaded.gameMode = static_cast<GameMode>(modeInt);
                 } else if (!inFile.eof()) {
                     optionalFieldValid = false;
                 }

@@ -20,14 +20,16 @@ public:
     void render(sf::RenderWindow& window) override;
 
 private:
-    int selectedIndex{0};  ///< 0 = Normal, 1 = Nightfall
+    int selectedIndex{0};  ///< 0 = Normal, 1 = Nightfall, 2 = Inferno
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
     sf::Text headerText;
     sf::Text normalText;
     sf::Text nightfallText;
+    sf::Text infernoText;
     sf::Text normalDesc;
     sf::Text nightfallDesc;
+    sf::Text infernoDesc;
     sf::Text hintText;
 };
