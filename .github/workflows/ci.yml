@@ -1,0 +1,93 @@
+name: CI (SFML 3.x Multi-Platform Matrix)
+
+on: [push, pull_request]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.platform.name }} ${{ matrix.config.name }}
+    runs-on: ${{ matrix.platform.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - {
+              name: Windows,
+              os: windows-latest,
+              flags: "-A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows",
+            }
+          - { name: Linux GCC, os: ubuntu-latest }
+          - {
+              name: Linux Clang,
+              os: ubuntu-latest,
+              flags: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++",
+            }
+          - { name: macOS, os: macos-latest }
+        config:
+          - { name: Shared, flags: "-DBUILD_SHARED_LIBS=TRUE" }
+          - { name: Static, flags: "-DBUILD_SHARED_LIBS=FALSE" }
+
+    steps:
+      # Step 1: Checkout the project source code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Install dependencies for each platform (Targeting SFML 3.x)
+
+      # 2.1. For Linux: Install system graphics dependencies + SFML 3 via Vcpkg or CMake
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev libharfbuzz-dev libopenal-dev
+
+          # Cài đặt SFML 3.x mới nhất thông qua Vcpkg trên Linux máy ảo
+          $VCPKG_INSTALLATION_ROOT/vcpkg install sfml:x64-linux
+
+      # 2.2. For macOS: Use Homebrew (which natively serves SFML 3.x)
+      - name: Install macOS Dependencies (SFML 3.x)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install sfml
+
+      # 2.3. For Windows: Use Vcpkg in manifest mode without 2.6.x overrides (Fetches latest SFML 3.x)
+      - name: Install Windows Dependencies via Vcpkg (SFML 3.x)
+        if: runner.os == 'Windows'
+        run: |
+          # Dynamically query HEAD commit hash of pre-installed vcpkg
+          VCPKG_COMMIT=$(git -C C:/vcpkg rev-parse HEAD)
+
+          # Create a vcpkg.json manifest file allowing vcpkg to pull the latest SFML 3.x release
+          echo "{
+            \"name\": \"super-mario-ci\",
+            \"version-string\": \"1.0.0\",
+            \"dependencies\": [
+              \"sfml\"
+            ],
+            \"builtin-baseline\": \"$VCPKG_COMMIT\"
+          }" > vcpkg.json
+
+          # Run vcpkg installation
+          vcpkg install --triplet=x64-windows
+
+      # Step 3: Run CMake configuration
+      - name: Configure
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+          else
+            cmake -B build ${{ matrix.platform.flags }} ${{ matrix.config.flags }}
+          fi
+
+      # Step 4: Compile and build the project
+      - name: Build
+        run: cmake --build build --config Release
+
+      # Step 5: Run deterministic physics regression tests
+      - name: Run Physics Regression Tests
+        run: ctest --test-dir build -C Release --output-on-failure
