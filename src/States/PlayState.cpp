@@ -2894,14 +2894,20 @@ bool PlayState::moveAvatar(sf::Time dt) {
         sf::Vector2f velocity = body.getVelocity();
         if (heldKeys.count(sf::Keyboard::Scancode::W) || heldKeys.count(sf::Keyboard::Scancode::Up)) {
             velocity.y = -300.f;
+            body.addAcceleration({0.f, -kGravity});
+            body.setGrounded(false);
         } else if (heldKeys.count(sf::Keyboard::Scancode::S) || heldKeys.count(sf::Keyboard::Scancode::Down)) {
             velocity.y = 300.f;
+            body.addAcceleration({0.f, -kGravity});
+            body.setGrounded(false);
         } else {
-            velocity.y = 0.f;
+            if (!wasGrounded) {
+                velocity.y = 0.f;
+                body.addAcceleration({0.f, -kGravity});
+                body.setGrounded(false);
+            }
         }
         body.setVelocity(velocity);
-        body.addAcceleration({0.f, -kGravity});
-        body.setGrounded(false);
     } else if (underwater) {
         sf::Vector2f velocity = body.getVelocity();
         swimStroke = playerInput.jumpHeld && !swimButtonHeld;

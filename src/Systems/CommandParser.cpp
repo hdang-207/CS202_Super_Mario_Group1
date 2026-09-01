@@ -4,6 +4,7 @@
 #include "Entities/EntityFactory.hpp"
 #include "Systems/SoundController.hpp"
 #include "Systems/ResourcePath.hpp"
+#include "Core/Config.hpp"
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -35,7 +36,7 @@ CommandResult CommandParser::execute(const std::string& input) {
     if (cmd == "reset") return handleReset(tokens);
     
     // Check cheats
-    if (cmd == "fly" || cmd == "god" || cmd == "tp" || cmd == "summon" || cmd == "form" || cmd == "lives" || cmd == "destroyer") {
+    if (cmd == "fly" || cmd == "god" || cmd == "tp" || cmd == "summon" || cmd == "form" || cmd == "lives" || cmd == "destroyer" || cmd == "world") {
         if (!playState.gsm.isCheatsEnabled()) {
             return {false, "Error: Cheats are disabled in settings."};
         }
@@ -48,6 +49,7 @@ CommandResult CommandParser::execute(const std::string& input) {
     if (cmd == "form") return handleForm(tokens);
     if (cmd == "lives") return handleLives(tokens);
     if (cmd == "destroyer") return handleDestroyer(tokens);
+    if (cmd == "world") return handleWorld(tokens);
     
     return {false, "Unknown command: " + cmd + ". Type 'help' for a list."};
 }
@@ -196,19 +198,81 @@ CommandResult CommandParser::handleDestroyer(const std::vector<std::string>& arg
 }
 
 CommandResult CommandParser::handleHelp() {
-    std::string help = 
-        "Commands:\n"
-        "fly [off] - Fly without gravity\n"
-        "god [off] - Invincibility + flight\n"
-        "tp spawn - Teleport to start\n"
-        "summon <goomba|koopa|paratroopa> [count]\n"
-        "form <0|1|2> - 0=Small, 1=Super, 2=Fire\n"
-        "music <play path|stop|volume 0-100>\n"
-        "reset - Restart current level\n"
-        "lives <1-99>\n"
-        "destroyer [off] - Touch kills mobs\n"
-        "help - Show this list";
+    std::string help = "Commands:\n"
+                       "  fly [off]    - Toggle fly mode\n"
+                       "  god [off]    - Toggle god mode (invincible + fly)\n"
+                       "  tp spawn     - Teleport to spawn\n"
+                       "  summon <mob> - Summon entity (goomba, koopa, paratroopa)\n"
+                       "  form <0/1/2> - Change form (0=Small, 1=Super, 2=Fire)\n"
+                       "  music <0/1>  - Lock/Unlock bgm from changing (or stop)\n"
+                       "  lives <num>  - Set lives\n"
+                       "  destroyer [0/1] - Toggle instakill mode on touch\n"
+                       "  world <W> [S] - Warp to World W Stage S (e.g. world 1 2)\n"
+                       "  reset        - Reset current level\n"
+                       "  help         - Show this message";
     return {true, help};
+}
+
+CommandResult CommandParser::handleWorld(const std::vector<std::string>& args) {
+    if (args.size() < 2) {
+        return {false, "Usage: world <world> [stage] or world <world>-<stage>"};
+    }
+
+    int worldNum = -1;
+    int stageNum = 1;
+
+    // Support "world 1", "world 1 2", "world 1,2", "world 1-2"
+    std::string arg1 = args[1];
+    
+    // Check if it has a dash or comma
+    size_t sep = arg1.find_first_of("-.,");
+    if (sep != std::string::npos) {
+        try {
+            worldNum = std::stoi(arg1.substr(0, sep));
+            stageNum = std::stoi(arg1.substr(sep + 1));
+        } catch (...) {
+            return {false, "Invalid world format. Use world X-Y"};
+        }
+    } else {
+        try {
+            worldNum = std::stoi(arg1);
+        } catch (...) {
+            return {false, "Invalid world number."};
+        }
+        
+        if (args.size() > 2) {
+            try {
+                stageNum = std::stoi(args[2]);
+            } catch (...) {
+                return {false, "Invalid stage number."};
+            }
+        }
+    }
+    
+    if (worldNum < 1 || worldNum > Config::kWorldCount) {
+        return {false, "Invalid world. There are " + std::to_string(Config::kWorldCount) + " worlds."};
+    }
+    if (stageNum < 1 || stageNum > Config::stageCount(worldNum)) {
+        return {false, "Invalid stage. World " + std::to_string(worldNum) + " has " + std::to_string(Config::stageCount(worldNum)) + " stages."};
+    }
+    
+    // Find the linear level index
+    int levelIndex = -1;
+    for (int i = 1; i <= Config::kFinalLevel; ++i) {
+        if (Config::worldNumber(i) == worldNum && Config::stageNumber(i) == stageNum) {
+            levelIndex = i;
+            break;
+        }
+    }
+    
+    if (levelIndex == -1) {
+        return {false, "Could not find that level."};
+    }
+    
+    playState.loadLevel(levelIndex);
+    playState.warpAvatarTo(playState.tileMap.playerSpawn());
+    
+    return {true, "Teleported to World " + std::to_string(worldNum) + "-" + std::to_string(stageNum)};
 }
 
 } // namespace Systems

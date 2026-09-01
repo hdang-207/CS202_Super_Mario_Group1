@@ -32,6 +32,7 @@ private:
     CommandResult handleReset(const std::vector<std::string>& args);
     CommandResult handleLives(const std::vector<std::string>& args);
     CommandResult handleDestroyer(const std::vector<std::string>& args);
+    CommandResult handleWorld(const std::vector<std::string>& args);
 };
 
 } // namespace Systems
