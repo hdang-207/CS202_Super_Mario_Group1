@@ -3,6 +3,8 @@
 #include "Entities/PiranhaPlant.hpp"
 #include "Core/Config.hpp"
 #include "Core/EventSystem.hpp"
+#include "Physics/Broadphase.hpp"
+#include "Physics/PlatformContact.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/GameOverState.hpp"
 #include "States/IntroMenuState.hpp"
@@ -24,6 +26,7 @@ namespace {
     constexpr float kGroundFriction = 2000.f;
     constexpr float kJumpSpeed = 1000.f;
     constexpr float kMaxFallSpeed = 1400.f;
+    constexpr float kBroadphaseSafetyMargin = 1.f;
     constexpr float kWaterGravity = 360.f;
     constexpr float kSwimStrokeSpeed = 430.f;
     constexpr float kMaxSwimFallSpeed = 320.f;
@@ -64,6 +67,8 @@ namespace {
     constexpr float kMovingPlatformSpeed = 90.f;
     constexpr float kMovingPlatformRangeTiles = 3.f;
     constexpr float kMovingPlatformWidthTiles = 3.f;
+    constexpr float kMovingPlatformHorizontalInset = 2.f;
+    constexpr float kMovingPlatformSupportTolerance = 2.f;
     /// World 3-3's lifts: the up-and-down one, and the pulleys, which take a
     /// beat longer so there is time to hop off before the rope runs out.
     constexpr float kVerticalLiftSpeed = 66.f;
@@ -106,6 +111,7 @@ namespace {
                 return column >= current.first && column < current.pastLast;
             });
     }
+
     constexpr int kWorld23FishStartColumn = 13;
     constexpr int kWorld23FishEndColumn = 208;
     constexpr int kWorld23CoinTotal = 35;
@@ -624,7 +630,8 @@ std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRe
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
-    return sf::FloatRect(m_player->getPhysicsBody().getPosition(), avatar.getSize());
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return sf::FloatRect(bounds.position, bounds.size);
 }
 
 void PlayState::syncAvatarPowerVisuals() {
@@ -2055,13 +2062,21 @@ bool PlayState::isStandingOnPlatform(sf::Vector2f platformPos) const {
     if (!m_player || death.active) {
         return false;
     }
-    const sf::FloatRect player = avatarBounds();
-    const float feet = player.position.y + player.size.y;
-    const float right = platformPos.x + tileMap.tileSize() * kMovingPlatformWidthTiles;
-    return player.position.x + player.size.x > platformPos.x + 2.f
-        && player.position.x < right - 2.f
-        && feet >= platformPos.y - 4.f
-        && feet <= platformPos.y + tileMap.tileSize() * 0.5f;
+
+    const auto& body = m_player->getPhysicsBody();
+    const float tile = tileMap.tileSize();
+    const physics::AABB platformBounds(
+        platformPos,
+        {tile * kMovingPlatformWidthTiles, tile}
+    );
+    return physics::isSupportedByPlatform(
+        body.getAABB(),
+        body.isGrounded(),
+        body.getVelocity().y,
+        platformBounds,
+        kMovingPlatformHorizontalInset,
+        kMovingPlatformSupportTolerance
+    );
 }
 
 float PlayState::pulleyRopeTop(sf::Vector2f platformPos) const {
@@ -2260,7 +2275,12 @@ bool PlayState::moveAvatar(sf::Time dt) {
     const bool inStrongCurrent = underwater
                               && isWorld22CurrentColumn(playerCentreX, tileMap.tileSize());
     const bool wasGrounded = body.isGrounded();
-    m_player->setInput(playerInput);
+    PlayerInput movementInput = playerInput;
+    if (underwater || m_flyMode) {
+        movementInput.jumpHeld = false;
+        movementInput.jumpPressed = false;
+    }
+    m_player->setInput(movementInput);
     m_player->update(seconds);
 
     bool swimStroke = false;
@@ -2297,12 +2317,15 @@ bool PlayState::moveAvatar(sf::Time dt) {
         Core::EventSystem::getInstance().broadcast({Core::EventType::PlayerJumped});
     }
 
-    // Collect solid tile colliders in broadphase area
-    sf::FloatRect broadBounds = avatarBounds();
-    broadBounds.position.x -= 16.0f;
-    broadBounds.position.y -= 16.0f;
-    broadBounds.size.x += 32.0f;
-    broadBounds.size.y += 32.0f;
+    // Query every tile the collider can reach during the upcoming physics step.
+    const physics::AABB sweptBounds = physics::sweptBroadphaseBounds(
+        body,
+        seconds,
+        kGravity,
+        kMaxFallSpeed,
+        kBroadphaseSafetyMargin
+    );
+    const sf::FloatRect broadBounds(sweptBounds.position, sweptBounds.size);
     std::vector<physics::AABB> solids = getSolidAABBsOverlapping(broadBounds);
 
     // Kinematics and collision resolution

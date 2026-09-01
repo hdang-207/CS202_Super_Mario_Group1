@@ -24,6 +24,8 @@ endif()
 # Tìm và tích hợp thư viện SFML (Yêu cầu các thành viên phải cài sẵn SFML trên máy)
 find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
 
+include(CTest)
+
 # Gom tự động các file .hpp trong thư mục include để hiển thị trên các IDE (CLion, VS)
 file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h")
 
@@ -83,6 +85,24 @@ add_custom_target(copy_assets
     COMMENT "Synchronizing game assets"
 )
 add_dependencies(${PROJECT_NAME} copy_assets)
+
+if(BUILD_TESTING)
+    add_executable(physics_tests
+        tests/physics/PhysicsRegressionTests.cpp
+        src/Physics/PhysicsBody.cpp
+        src/Physics/PhysicsSystem.cpp
+        src/Physics/Broadphase.cpp
+        src/Physics/PlatformContact.cpp
+    )
+
+    target_include_directories(physics_tests PRIVATE include)
+    target_link_libraries(physics_tests PRIVATE SFML::System)
+
+    add_test(
+        NAME PhysicsRegressionTests
+        COMMAND physics_tests
+    )
+endif()
 
 # Tự động copy file DLL của SFML vào thư mục bin trên Windows (đối với liên kết động - Dynamic Link)
 if(WIN32)

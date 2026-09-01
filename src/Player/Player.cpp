@@ -106,11 +106,10 @@ void Player::processJump(float deltaTime) {
         );
     }
 
-    const bool heldGroundedJump = m_input.jumpHeld && grounded;
     const bool bufferedJump = m_jumpBufferRemaining > 0.0f
         && (grounded || m_coyoteTimeRemaining > 0.0f);
 
-    if (heldGroundedJump || bufferedJump) {
+    if (bufferedJump) {
         velocity.y = -m_movementConfig.jumpSpeed;
         m_physicsBody.setGrounded(false);
         m_coyoteTimeRemaining = 0.0f;
