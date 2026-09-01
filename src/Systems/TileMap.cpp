@@ -37,7 +37,7 @@ namespace {
      * / and \\ the two platforms of a
      * pulley, d/e/x/i the hidden-room pipes, ^/N/>/+ the Coin
      * Heaven route, and . empty sky.
-     * Scenery characters (M m V v l c F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
+     * Scenery characters (M m V v y l c < F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
      * registered through setDecorationTexture() and never touch the physics.
      */
     constexpr TileDef kTileDefs[] = {

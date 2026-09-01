@@ -214,8 +214,10 @@ void PlayState::init() {
     tileMap.setDecorationTexture('m', assets.getTexture("HillSmall"));
     tileMap.setDecorationTexture('V', assets.getTexture("BushBig"));
     tileMap.setDecorationTexture('v', assets.getTexture("BushSmall"));
+    tileMap.setDecorationTexture('y', assets.getTexture("BushMedium"));
     tileMap.setDecorationTexture('l', assets.getTexture("CloudBig"));
     tileMap.setDecorationTexture('c', assets.getTexture("CloudSmall"));
+    tileMap.setDecorationTexture('<', assets.getTexture("CloudWide"));
     tileMap.setDecorationTexture('I', assets.getTexture("Island"));
     tileMap.setDecorationTexture('Y', assets.getTexture("CastleWorld1_3"));
     tileMap.setDecorationTexture('Z', assets.getTexture("CastleWorld2_1"));

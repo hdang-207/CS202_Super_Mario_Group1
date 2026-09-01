@@ -129,8 +129,10 @@ Game::Game()
     assets.loadTexture("HillSmall", Systems::resourcePath("assets/textures/hill_small.png"));
     assets.loadTexture("BushBig", Systems::resourcePath("assets/textures/bush_big.png"));
     assets.loadTexture("BushSmall", Systems::resourcePath("assets/textures/bush_small.png"));
+    assets.loadTexture("BushMedium", Systems::resourcePath("assets/textures/bush_medium.png"));
     assets.loadTexture("CloudBig", Systems::resourcePath("assets/textures/cloud_big.png"));
     assets.loadTexture("CloudSmall", Systems::resourcePath("assets/textures/cloud_small.png"));
+    assets.loadTexture("CloudWide", Systems::resourcePath("assets/textures/cloud_wide.png"));
     assets.loadTexture("Island", Systems::resourcePath("assets/textures/island.png"));
     assets.loadTexture("IslandTopLeft", Systems::resourcePath("assets/textures/island_top_left.png"));
     assets.loadTexture("IslandTopMiddle", Systems::resourcePath("assets/textures/island_top_middle.png"));
