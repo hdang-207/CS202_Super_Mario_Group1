@@ -627,7 +627,8 @@ std::vector<physics::AABB> PlayState::getSolidAABBsOverlapping(const sf::FloatRe
 }
 
 sf::FloatRect PlayState::avatarBounds() const {
-    return sf::FloatRect(m_player->getPhysicsBody().getPosition(), avatar.getSize());
+    const physics::AABB bounds = m_player->getPhysicsBody().getAABB();
+    return sf::FloatRect(bounds.position, bounds.size);
 }
 
 void PlayState::syncAvatarPowerVisuals() {
