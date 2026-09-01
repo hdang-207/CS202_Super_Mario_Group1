@@ -152,7 +152,9 @@ private:
      * and hauls the other end up by the same amount, until the rising end
      * reaches its wheel.
      */
-    enum class LiftMotion { Horizontal, Vertical, Balance };
+    /// Elevator is the castle variant: it never turns around, it loops from
+    /// one edge of the map back to the other.
+    enum class LiftMotion { Horizontal, Vertical, Elevator, Balance };
 
     struct MovingPlatform {
         sf::Vector2f position;
@@ -172,6 +174,16 @@ private:
         float angularSpeed{0.f};
     };
     std::vector<FireBarEntity> fireBars;
+
+    /// A Podoboo waits inside the lava, leaps clear of it, and drops back.
+    struct PodobooEntity {
+        sf::Vector2f home;    ///< Lava surface the fireball rests in.
+        float y{0.f};
+        float velocityY{0.f};
+        float restTimer{0.f};
+        bool airborne{false};
+    };
+    std::vector<PodobooEntity> podoboos;
 
     struct CastleBossEntity {
         bool available{false};
@@ -351,6 +363,7 @@ private:
     void spawnCastleHazards();
     void updateCastleHazards(sf::Time dt);
     void drawCastleHazards(sf::RenderWindow& window) const;
+    [[nodiscard]] sf::FloatRect podobooBounds(const PodobooEntity& fire) const;
     [[nodiscard]] sf::FloatRect castleBossBounds() const;
     bool damagePlayerFromCastleHazard();
     void startCastleClearSequence();

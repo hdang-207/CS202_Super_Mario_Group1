@@ -42,7 +42,7 @@ This project is a complete C++ Object-Oriented Programming (OOP) recreation of c
   - **Mario**: Balanced velocity, standard gravity, and classic jump dynamics.
   - **Luigi**: Higher jump force with distinct physics (higher Y-acceleration, lower friction, and longer slide inertia).
 - **🗺️ Multi-Level Gameplay & Level Editor**:
-  - 10 stages across three world routes, loaded dynamically from text-based grid files.
+  - 11 stages across three world routes, loaded dynamically from text-based grid files.
   - Level Editor allowing custom placement of tiles, blocks, and entities.
 - **👾 Enemy AI & Boss Mechanics**:
   - **Goomba**: Patrol AI responding to obstacles and map bounds.

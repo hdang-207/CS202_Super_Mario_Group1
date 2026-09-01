@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Extract the castle-course artwork from the supplied NES reference sheets.
 
-Every castle course is drawn from the same palette - the walls, lava, bridge,
-Fire-Bar pivots and axe are pixel-identical between them - so the stages share
-one set of ``castle_*`` textures cut here rather than one set apiece.
+Worlds 1-4 and 2-4 are drawn from the same castle palette: their walls, lava,
+bridge, Fire-Bar pivots and axe are pixel-identical, so both stages share one
+set of ``castle_*`` textures cut here. Only the pieces a single stage needs -
+World 2-4's vertical elevator and brick, and the two enemies each stage's fake
+Bowser turns back into - come from just one of the two guides.
 
-The level guide is a native 160x15 tile image. Animated blocks, coins and the
+Both level guides are native 160x15 tile images. Animated blocks, coins and the
 sprite work come from the matching tileset and enemy sheets.
 
     python3 tools/build_castle_assets.py
@@ -22,6 +24,7 @@ SOURCE = ROOT / "tools" / "source_art"
 TEXTURES = ROOT / "assets" / "textures"
 
 WORLD14_PATH = SOURCE / "world1-4.png"
+WORLD24_PATH = SOURCE / "world2-4.png"
 TILESET_PATH = SOURCE / "nes_tileset.png"
 ENEMIES_PATH = SOURCE / "nes_enemies.png"
 
@@ -42,6 +45,9 @@ CASTLE_PALETTE = {
     (99, 99, 99): (116, 116, 116),
     (82, 33, 0): (0, 0, 0),
 }
+
+# Both guides draw a lift as an 8px girder whose pattern repeats every 8px.
+LIFT_PERIOD = 8
 
 
 def clear_border_black(image):
@@ -90,6 +96,21 @@ def crop_tile(stage, column, row):
     )
 
 
+def repair_lift(image, columns):
+    """Paint the guide's travel-path annotation back out of an elevator.
+
+    World 2-4 draws each elevator's route as a white line behind the platform,
+    which shows through the girder's holes. The girder repeats every eight
+    pixels, so the intact segment one period to the left restores them.
+    """
+    rgba = image.convert("RGBA")
+    pixels = rgba.load()
+    for x in columns:
+        for y in range(rgba.height):
+            pixels[x, y] = pixels[x - LIFT_PERIOD, y]
+    return rgba
+
+
 def build_strip(source, positions, cell_size=(16, 16), palette=None):
     width, height = cell_size
     strip = Image.new("RGBA", (width * len(positions), height), (0, 0, 0, 0))
@@ -101,11 +122,13 @@ def build_strip(source, positions, cell_size=(16, 16), palette=None):
 
 def main():
     world14 = Image.open(WORLD14_PATH).convert("RGBA")
+    world24 = Image.open(WORLD24_PATH).convert("RGBA")
     tileset = Image.open(TILESET_PATH).convert("RGBA")
     enemies = Image.open(ENEMIES_PATH).convert("RGBA")
 
-    if world14.size != (160 * 16, 15 * 16):
-        raise ValueError(f"World 1-4 source must be 2560x240, got {world14.size}")
+    for name, stage in (("World 1-4", world14), ("World 2-4", world24)):
+        if stage.size != (160 * 16, 15 * 16):
+            raise ValueError(f"{name} source must be 2560x240, got {stage.size}")
     if tileset.size != (680, 776):
         raise ValueError(f"Tileset source must be 680x776, got {tileset.size}")
     if enemies.size != (436, 530):
@@ -113,6 +136,8 @@ def main():
 
     assets = {
         "castle_wall.png": crop_tile(world14, 0, 2),
+        # Only World 2-4 builds anything out of breakable castle brick.
+        "castle_brick.png": crop_tile(world24, 128, 5),
         "castle_firebar_block.png": crop_tile(world14, 23, 6),
         "castle_lava_surface.png": crop_tile(world14, 13, 12),
         "castle_lava.png": crop_tile(world14, 13, 13),
@@ -120,6 +145,11 @@ def main():
         # The bridge-room lift is four girder segments wide, half a tile tall.
         "castle_lift.png": world14.crop((138 * 16, 6 * 16 + 1,
                                          140 * 16, 6 * 16 + 9)),
+        # World 2-4's two elevators are three segments wide, and the guide's
+        # travel line has to be cleaned back out of them.
+        "castle_elevator.png": repair_lift(
+            world24.crop((1372, 161, 1396, 169)), (11, 12)
+        ),
         # Include the diagonal chain to the lower-left of the axe head.
         "castle_axe.png": clear_border_black(
             world14.crop((140 * 16, 8 * 16, 142 * 16, 10 * 16))
@@ -140,10 +170,17 @@ def main():
         "castle_bowser.png": build_strip(
             enemies, ((0, 208), (34, 208), (68, 208), (102, 208)), (32, 32)
         ),
+        # The Podoboos leaping out of World 2-4's lava.
+        "castle_podoboo.png": build_strip(enemies, ((90, 370),)),
         # World 1-4's Bowser is a disguised Little Goomba: its two walking
         # frames and its flattened frame, in the Castle palette.
         "castle_goomba.png": build_strip(
             enemies, ((147, 17), (164, 17), (181, 17))
+        ),
+        # World 2-4's is a disguised green Koopa Troopa, which the bridge
+        # trigger leaves in the overworld palette alongside Bowser.
+        "castle_koopa.png": build_strip(
+            enemies, ((0, 112), (18, 112)), (16, 24)
         ),
     }
 

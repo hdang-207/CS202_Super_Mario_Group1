@@ -192,6 +192,18 @@ public:
     /// @brief Top-left cells containing a castle boss marker (';').
     const std::vector<sf::Vector2f>& castleBossSpawns() const { return castleBosses; }
 
+    /// @brief Cells a Podoboo leaps out of the lava beneath ('6').
+    const std::vector<sf::Vector2f>& podobooSpawns() const { return podoboos; }
+
+    /// @brief Castle elevators that loop upwards ('\'').
+    const std::vector<sf::Vector2f>& risingElevatorSpawns() const {
+        return risingElevators;
+    }
+
+    /// @brief Castle elevators that loop downwards ('"').
+    const std::vector<sf::Vector2f>& fallingElevatorSpawns() const {
+        return fallingElevators;
+    }
 
     /// @brief Lifts that ride up and down instead of sideways (':').
     const std::vector<sf::Vector2f>& verticalPlatformSpawns() const {
@@ -305,6 +317,9 @@ private:
     std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
     std::vector<sf::Vector2f> fireBars; ///< Rotating Fire-Bar pivots ('7').
     std::vector<sf::Vector2f> castleBosses; ///< Castle boss markers (';').
+    std::vector<sf::Vector2f> podoboos; ///< Podoboo markers ('6').
+    std::vector<sf::Vector2f> risingElevators;  ///< Castle elevators going up ('\'').
+    std::vector<sf::Vector2f> fallingElevators; ///< Castle elevators going down ('"').
     std::vector<sf::Vector2f> verticalPlatforms; ///< Up-and-down lift markers (':').
     std::vector<sf::Vector2f> balanceLefts;  ///< Left pulley platforms ('/').
     std::vector<sf::Vector2f> balanceRights; ///< Right pulley platforms ('\\').

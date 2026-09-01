@@ -31,8 +31,10 @@ namespace {
      * K Blue Koopa, G Green Koopa, u half-tile Green Koopa,
      * 2 Red Koopa, J Green Paratroopa, 3 Red Paratroopa,
      * k Hammer Bro, j Blooper, h Cheep-Cheep,
-     * R Piranha Plant, D trampoline, ; castle boss,
-     * L horizontal lift, : up-and-down lift, / and \\ the two platforms of a
+     * R Piranha Plant, D trampoline, ; castle boss, 6 Podoboo,
+     * L horizontal lift, : up-and-down lift,
+     * ' and " the castle elevators looping up and down,
+     * / and \\ the two platforms of a
      * pulley, d/e/x/i the hidden-room pipes, ^/N/>/+ the Coin
      * Heaven route, and . empty sky.
      * Scenery characters (M m V v l c F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
@@ -214,6 +216,9 @@ bool TileMap::build(const MapParser& parser, float scale) {
     movingPlatforms.clear();
     fireBars.clear();
     castleBosses.clear();
+    podoboos.clear();
+    risingElevators.clear();
+    fallingElevators.clear();
     verticalPlatforms.clear();
     balanceLefts.clear();
     balanceRights.clear();
@@ -323,6 +328,18 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == ';') {
                 castleBosses.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '6') {
+                podoboos.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '\'') {
+                risingElevators.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '"') {
+                fallingElevators.push_back(worldPos);
                 continue;
             }
             if (symbol == ':') {

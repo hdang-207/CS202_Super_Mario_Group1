@@ -70,9 +70,9 @@ namespace {
     constexpr float kBalanceLiftSpeed = 54.f;
     constexpr float kBalanceRopeWidth = 2.f;
 
-    /// A castle course is the fourth stage of a world: its own legend, its own
-    /// palette, lava and Fire-Bars, and a fake Bowser on a collapsing bridge.
-    /// Everything castle-specific keys off this rather than off a world.
+    /// The castle courses (World 1-4 and 2-4) share one legend, one palette,
+    /// one set of hazards and one fake Bowser waiting on a collapsing bridge,
+    /// so everything castle-specific keys off this rather than off a world.
     bool isCastleStage(int level) {
         return Config::stageNumber(level) == 4;
     }
@@ -85,8 +85,13 @@ namespace {
     constexpr float kCastleBossFrameDuration = 0.18f;
     constexpr float kCastleBossJumpInterval = 2.1f;
     constexpr float kCastleBossFireInterval = 1.65f;
-    /// The bridge-room lift is narrower than the standard three tiles.
+    /// Podoboos rest in the lava, then clear it by roughly five tiles.
+    constexpr float kPodobooJumpSpeed = 1080.f;
+    constexpr float kPodobooRestDuration = 2.4f;
+    constexpr float kCastleElevatorSpeed = 96.f;
+    /// Both castle lift sprites are narrower than the standard three tiles.
     constexpr float kCastleLiftWidthTiles = 2.f;
+    constexpr float kCastleElevatorWidthTiles = 1.5f;
     constexpr float kCastleBridgeStepDuration = 0.085f;
     constexpr float kCastleClearFinishDelay = 0.8f;
     constexpr float kTwoPi = 6.28318530718f;
@@ -1012,6 +1017,10 @@ bool PlayState::loadLevel(int level) {
     // legend is repointed at the shared crops taken from their guides.
     if (castle) {
         tileMap.setTileTexture('#', assets.getTexture("CastleWall"));
+        tileMap.setTileTexture('B', assets.getTexture("CastleBrick"));
+        tileMap.setTileTexture('A', assets.getTexture("CastleBrick"));
+        tileMap.setTileTexture('^', assets.getTexture("CastleBrick"));
+        tileMap.setTileTexture('b', assets.getTexture("CastleBrick"));
         tileMap.setTileTexture('7', assets.getTexture("CastleFireBarBlock"));
         tileMap.setTileTexture('8', assets.getTexture("CastleFireBarBlock"));
         tileMap.setTileTexture('9', assets.getTexture("CastleLavaSurface"));
@@ -1076,6 +1085,7 @@ bool PlayState::loadLevel(int level) {
     brickDebris.clear();
     hammers.clear();
     fireBars.clear();
+    podoboos.clear();
     castleBoss = CastleBossEntity{};
     castleBossFire.clear();
     castleClear = CastleClearSequence{};
@@ -1102,7 +1112,10 @@ bool PlayState::loadLevel(int level) {
               << tileMap.trampolineSpawns().size() << " trampolines, "
               << tileMap.movingPlatformSpawns().size() << " moving lifts, "
               << tileMap.verticalPlatformSpawns().size() << " up-and-down lifts, "
+              << (tileMap.risingElevatorSpawns().size()
+                  + tileMap.fallingElevatorSpawns().size()) << " castle elevators, "
               << tileMap.fireBarSpawns().size() << " Fire-Bars, "
+              << tileMap.podobooSpawns().size() << " Podoboos, "
               << std::min(tileMap.balanceLeftSpawns().size(),
                           tileMap.balanceRightSpawns().size()) << " pulleys\n";
     return true;
@@ -1731,9 +1744,11 @@ void PlayState::drawBlocks(sf::RenderWindow& window) const {
                       && Config::stageNumber(currentLevel) == 2;
     const bool castle = isCastleStage(currentLevel);
     const bool underground = Config::stageNumber(currentLevel) == 2 && !world32;
-    const char* brickArt = world31 ? "World31Brick"
-                         : (world32 ? "World32Brick"
-                                    : (underground ? "BrickUndergroundTile" : "BrickTile"));
+    const char* brickArt = castle ? "CastleBrick"
+                         : (world31 ? "World31Brick"
+                                    : (world32 ? "World32Brick"
+                                               : (underground ? "BrickUndergroundTile"
+                                                              : "BrickTile")));
 
     // Draw Bouncing Blocks
     for (const auto& block : bouncingBlocks) {
@@ -2126,6 +2141,21 @@ void PlayState::spawnMovingPlatforms() {
                                    LiftMotion::Vertical, -1, 0.f});
     }
 
+    // The castle elevators are narrower than their marker cell and hang
+    // centred on it, and they run one way for the whole stage.
+    const float elevatorInset = (1.f - kCastleElevatorWidthTiles) * 0.5f * tile;
+    auto addElevator = [&](sf::Vector2f pos, float speed) {
+        pos.x += elevatorInset;
+        movingPlatforms.push_back({pos, pos, pos, {0.f, speed},
+                                   LiftMotion::Elevator, -1, 0.f,
+                                   kCastleElevatorWidthTiles});
+    };
+    for (sf::Vector2f pos : tileMap.risingElevatorSpawns()) {
+        addElevator(pos, -kCastleElevatorSpeed);
+    }
+    for (sf::Vector2f pos : tileMap.fallingElevatorSpawns()) {
+        addElevator(pos, kCastleElevatorSpeed);
+    }
 
     // A stage may carry several pulleys, so the two ends are matched left to
     // right: the leftmost '/' belongs to the leftmost '\', and so on.
@@ -2220,6 +2250,24 @@ void PlayState::updateMovingPlatforms(sf::Time dt) {
             }
             break;
 
+        case LiftMotion::Elevator: {
+            // An elevator never turns around: it drops off one edge of the
+            // stage and reappears at the other. Its previous position is
+            // carried across the seam too, so a wrap does not drag a rider
+            // the whole height of the map with it - it just leaves them.
+            plat.position.y += plat.velocity.y * seconds;
+            const float loop = tileMap.pixelHeight() + tileMap.tileSize();
+            if (plat.velocity.y < 0.f && plat.position.y < -tileMap.tileSize()) {
+                plat.position.y += loop;
+                plat.previousPosition.y += loop;
+            } else if (plat.velocity.y > 0.f
+                       && plat.position.y > tileMap.pixelHeight()) {
+                plat.position.y -= loop;
+                plat.previousPosition.y -= loop;
+            }
+            break;
+        }
+
         case LiftMotion::Balance: {
             // Each pulley is stepped once, from whichever end comes first.
             if (plat.partner < 0 || static_cast<std::size_t>(plat.partner) < i) {
@@ -2300,13 +2348,18 @@ void PlayState::drawMovingPlatforms(sf::RenderWindow& window) const {
 
     sf::Sprite sprite(assets.getTexture(textureKey));
     sprite.setScale({Config::kZoom, Config::kZoom});
+    // World 2-4's looping elevators are a narrower girder than the lift in
+    // its own bridge room, so they carry their own sprite.
+    sf::Sprite elevator(assets.getTexture("CastleElevator"));
+    elevator.setScale({Config::kZoom, Config::kZoom});
     for (const auto& plat : movingPlatforms) {
         sf::Vector2f drawPosition = plat.position;
         if (coinHeaven) {
             drawPosition.y += Config::kZoom;
         }
-        sprite.setPosition(drawPosition);
-        window.draw(sprite);
+        sf::Sprite& art = plat.motion == LiftMotion::Elevator ? elevator : sprite;
+        art.setPosition(drawPosition);
+        window.draw(art);
     }
 }
 
@@ -2358,6 +2411,19 @@ void PlayState::spawnCastleHazards() {
                             direction * kFireBarAngularSpeed});
     }
 
+    // A Podoboo's marker sits in the sky right above the lava it lives in, so
+    // its home is one row below the cell that placed it.
+    podoboos.clear();
+    const auto& lavaSpouts = tileMap.podobooSpawns();
+    for (std::size_t index = 0; index < lavaSpouts.size(); ++index) {
+        const sf::Vector2f home{lavaSpouts[index].x,
+                                lavaSpouts[index].y + tileMap.tileSize()};
+        // Stagger the pit's Podoboos so they never leap in lockstep.
+        const float offset = kPodobooRestDuration
+                           * static_cast<float>(index % 2) * 0.5f;
+        podoboos.push_back({home, home.y, 0.f, offset, false});
+    }
+
     castleBoss = CastleBossEntity{};
     castleBossFire.clear();
     if (tileMap.castleBossSpawns().empty()) {
@@ -2375,6 +2441,11 @@ void PlayState::spawnCastleHazards() {
     castleBoss.groundY = spawn.y;
     castleBoss.jumpTimer = kCastleBossJumpInterval * 0.5f;
     castleBoss.fireTimer = kCastleBossFireInterval * 0.45f;
+}
+
+sf::FloatRect PlayState::podobooBounds(const PodobooEntity& fire) const {
+    const float side = tileMap.tileSize();
+    return sf::FloatRect({fire.home.x, fire.y}, {side, side});
 }
 
 sf::FloatRect PlayState::castleBossBounds() const {
@@ -2430,6 +2501,32 @@ void PlayState::updateCastleHazards(sf::Time dt) {
                 }
                 break;
             }
+        }
+    }
+
+    for (PodobooEntity& fire : podoboos) {
+        if (fire.airborne) {
+            fire.velocityY = std::min(kMaxFallSpeed,
+                                      fire.velocityY + kGravity * seconds);
+            fire.y += fire.velocityY * seconds;
+            if (fire.y >= fire.home.y) {
+                // Back under the surface: sink out of sight and wait again.
+                fire.y = fire.home.y;
+                fire.airborne = false;
+                fire.restTimer = 0.f;
+            }
+        } else {
+            fire.restTimer += seconds;
+            if (fire.restTimer >= kPodobooRestDuration) {
+                fire.restTimer = 0.f;
+                fire.airborne = true;
+                fire.velocityY = -kPodobooJumpSpeed;
+            }
+            continue;
+        }
+        if (podobooBounds(fire).findIntersection(player).has_value()
+            && damagePlayerFromCastleHazard()) {
+            return;
         }
     }
 
@@ -2558,6 +2655,18 @@ void PlayState::drawCastleHazards(sf::RenderWindow& window) const {
         window.draw(fireball);
     }
 
+    // A falling Podoboo is the rising sprite turned upside down.
+    sf::Sprite podoboo(assets.getTexture("CastlePodoboo"));
+    for (const PodobooEntity& fire : podoboos) {
+        if (!fire.airborne) {
+            continue;
+        }
+        const bool falling = fire.velocityY > 0.f;
+        podoboo.setScale({Config::kZoom, falling ? -Config::kZoom : Config::kZoom});
+        podoboo.setPosition({fire.home.x,
+                             falling ? fire.y + tileMap.tileSize() : fire.y});
+        window.draw(podoboo);
+    }
 
     if (castleBoss.available && castleBoss.alive) {
         sf::Sprite bowser(assets.getTexture("CastleBowser"));
@@ -2568,13 +2677,18 @@ void PlayState::drawCastleHazards(sf::RenderWindow& window) const {
         window.draw(bowser);
     } else if (castleBoss.available && castleBoss.revealedGoomba
                && castleBoss.revealTimer > 0.f) {
-        // World 1-4's Bowser was a Little Goomba all along.
-        sf::Sprite goomba(assets.getTexture("CastleGoomba"));
+        // World 1-4's Bowser was a Little Goomba; World 2-4's was a green
+        // Koopa Troopa, which stands a half-tile taller.
+        const sf::Texture& art = assets.getTexture(
+            Config::worldNumber(currentLevel) == 1 ? "CastleGoomba"
+                                                   : "CastleKoopa");
+        const int height = static_cast<int>(art.getSize().y);
+        sf::Sprite unmasked(art);
         const int frame = static_cast<int>(castleBoss.revealTimer / 0.12f) % 2;
-        goomba.setTextureRect(sf::IntRect({frame * 16, 0}, {16, 16}));
-        goomba.setScale({Config::kZoom, Config::kZoom});
-        goomba.setPosition(castleBoss.revealPosition);
-        window.draw(goomba);
+        unmasked.setTextureRect(sf::IntRect({frame * 16, 0}, {16, height}));
+        unmasked.setScale({Config::kZoom, Config::kZoom});
+        unmasked.setPosition(castleBoss.revealPosition);
+        window.draw(unmasked);
     }
 }
 
