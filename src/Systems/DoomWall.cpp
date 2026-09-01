@@ -5,7 +5,7 @@
 namespace Systems {
 
 DoomWall::DoomWall(AssetManager& assets) 
-    : m_wallX(-200.f), m_speed(150.f), m_animTime(0.f),
+    : m_wallX(-200.f), m_speed(200.f), m_animTime(0.f),
       m_bodySprite(assets.getTexture("DoomFire2")),
       m_edgeSprite(assets.getTexture("DoomFire1")) {
     

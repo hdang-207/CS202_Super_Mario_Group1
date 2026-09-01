@@ -373,6 +373,7 @@ Game::Game()
     assets.loadTexture("Castle", Systems::resourcePath("assets/textures/Fortress.png"));
     assets.loadTexture("DoomFire1", Systems::resourcePath("assets/textures/doomfire1.png"));
     assets.loadTexture("DoomFire2", Systems::resourcePath("assets/textures/doomfire2.png"));
+    assets.loadTexture("Hellfire", Systems::resourcePath("assets/textures/hellfire.jpg"));
     assets.loadTexture("WarpPipeForked", Systems::resourcePath("assets/textures/warp_pipe_forked.png"));
 
     // Limit application framerate to prevent high CPU utilization

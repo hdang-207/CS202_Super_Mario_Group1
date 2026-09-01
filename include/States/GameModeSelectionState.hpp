@@ -24,6 +24,8 @@ private:
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
+    sf::RenderTexture m_infernoRT;
+    sf::Sprite m_hellfireSprite;
     sf::Text headerText;
     sf::Text normalText;
     sf::Text nightfallText;
