@@ -143,8 +143,13 @@ public:
     float pixelWidth() const { return columns * tileSizePx; }  ///< Full level width, in pixels.
     float pixelHeight() const { return rows * tileSizePx; }    ///< Full level height, in pixels.
 
-    /// @brief Where the player starts, in world pixels (top-left of the spawn tile).
-    sf::Vector2f playerSpawn() const { return spawn; }
+    /// @brief Top-left world positions of all player markers ('P'), in row-major order.
+    const std::vector<sf::Vector2f>& playerSpawns() const { return spawns; }
+
+    /// @brief First player spawn, retained for single-player campaign compatibility.
+    sf::Vector2f playerSpawn() const {
+        return spawns.empty() ? sf::Vector2f{0.f, 0.f} : spawns.front();
+    }
 
     /// @brief Top-left world position of every Goomba marker ('E'/'n').
     const std::vector<sf::Vector2f>& enemySpawns() const { return enemies; }
@@ -302,7 +307,7 @@ private:
     int columns{0};
     int rows{0};
     float tileSizePx{16.f};
-    sf::Vector2f spawn{0.f, 0.f};
+    std::vector<sf::Vector2f> spawns;      ///< Player spawn markers ('P').
     std::vector<sf::Vector2f> enemies;     ///< Goomba spawn markers ('E').
     std::vector<sf::Vector2f> blueKoopas;  ///< Blue Koopa spawn markers ('K').
     std::vector<sf::Vector2f> greenKoopas; ///< Green Koopa spawn markers ('G').

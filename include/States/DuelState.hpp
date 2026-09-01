@@ -1,17 +1,22 @@
 #pragma once
 
 #include "States/State.hpp"
+#include "Systems/MapParser.hpp"
+#include "Systems/TileMap.hpp"
 
 /**
  * @class DuelState
- * @brief Minimal navigation state for the future local two-player Duel Mode.
+ * @brief Loads and previews the static arena for local Duel Mode.
  */
 class DuelState final : public State {
 private:
-    sf::Sprite bgSprite;
-    sf::RectangleShape darkOverlay;
+    MapParser mapParser;
+    TileMap tileMap;
+    bool arenaLoaded{false};
+
+    sf::RectangleShape skyBackground;
     sf::Text titleText;
-    sf::Text placeholderText;
+    sf::Text errorText;
     sf::Text hintText;
 
 public:
