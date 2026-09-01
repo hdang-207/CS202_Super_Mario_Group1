@@ -949,23 +949,38 @@ void PlayState::playLevelMusic() {
     if (m_musicLocked) return;
     
     auto& sounds = Systems::SoundController::getInstance();
-    // World 3-2 is the one stage 2 played outdoors, so it keeps the overworld
-    // theme its stage number would otherwise trade for the underground one.
-    const bool world32 = Config::worldNumber(currentLevel) == 3
-                      && Config::stageNumber(currentLevel) == 2;
-    const bool world12 = Config::worldNumber(currentLevel) == 1
-                      && Config::stageNumber(currentLevel) == 2;
-    const bool world23 = Config::worldNumber(currentLevel) == 2
-                      && Config::stageNumber(currentLevel) == 3;
-    const bool castle = isCastleStage(currentLevel);
+    
     std::string theme = "assets/audio/Theme.mp3";
-    if ((Config::stageNumber(currentLevel) == 2 && !world32
-         && (!world12 || insideWorld12Underground))
-        || insideSecretRoom) {
-        theme = "assets/audio/Theme2.mp3";
-    } else if ((Config::stageNumber(currentLevel) == 3 && !world23) || castle) {
-        theme = "assets/audio/Theme3.mp3";
+    if (m_gameMode == GameMode::Nightfall || m_gameMode == GameMode::Inferno) {
+        int world = Config::worldNumber(currentLevel);
+        if (m_gameMode == GameMode::Nightfall) {
+            if (world == 1) theme = "assets/audio/NightfalThemeWorld1.mp3";
+            else if (world == 2) theme = "assets/audio/NightfallThemeWorld2.mp3";
+            else if (world == 3) theme = "assets/audio/NightfallThemeWorld3.mp3";
+        } else {
+            if (world == 1) theme = "assets/audio/InfernoThemeWorld1.mp3";
+            else if (world == 2) theme = "assets/audio/InfernoThemeWorld2.mp3";
+            else if (world == 3) theme = "assets/audio/InfernoThemeWorld3.mp3";
+        }
+    } else {
+        // Normal mode logic
+        const bool world32 = Config::worldNumber(currentLevel) == 3
+                          && Config::stageNumber(currentLevel) == 2;
+        const bool world12 = Config::worldNumber(currentLevel) == 1
+                          && Config::stageNumber(currentLevel) == 2;
+        const bool world23 = Config::worldNumber(currentLevel) == 2
+                          && Config::stageNumber(currentLevel) == 3;
+        const bool castle = isCastleStage(currentLevel);
+        
+        if ((Config::stageNumber(currentLevel) == 2 && !world32
+             && (!world12 || insideWorld12Underground))
+            || insideSecretRoom) {
+            theme = "assets/audio/Theme2.mp3";
+        } else if ((Config::stageNumber(currentLevel) == 3 && !world23) || castle) {
+            theme = "assets/audio/Theme3.mp3";
+        }
     }
+    
     sounds.playMusic(Systems::resourcePath(theme));
 }
 
@@ -1351,7 +1366,19 @@ bool PlayState::tryEnterWorld22WaterPipe() {
     }
 
     auto& body = m_player->getPhysicsBody();
-    body.setPosition({kWorld22WaterSpawnColumn * tile, kWorld22WaterSpawnRow * tile});
+    
+    float wallDist = 0.f;
+    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+        wallDist = body.getPosition().x - m_doomWall->getX();
+    }
+    
+    const float newX = kWorld22WaterSpawnColumn * tile;
+    body.setPosition({newX, kWorld22WaterSpawnRow * tile});
+    
+    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+        m_doomWall->setX(newX - wallDist);
+    }
+    
     body.setVelocity({0.f, 0.f});
     body.clearAcceleration();
     body.setGrounded(false);
@@ -1401,11 +1428,22 @@ bool PlayState::tryLeaveWorld22WaterPipe() {
 
 void PlayState::warpAvatarTo(sf::Vector2f cell) {
     auto& body = m_player->getPhysicsBody();
+    
+    float wallDist = 0.f;
+    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+        wallDist = body.getPosition().x - m_doomWall->getX();
+    }
+
     const sf::Vector2f size = body.getColliderSize();
     const sf::Vector2f position{cell.x + (tileMap.tileSize() - size.x) * 0.5f,
                                 cell.y + tileMap.tileSize() - size.y};
 
     body.setPosition(position);
+    
+    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+        m_doomWall->setX(position.x - wallDist);
+    }
+
     body.setVelocity({0.f, 0.f});
     body.clearAcceleration();
     body.setGrounded(false);
@@ -1609,7 +1647,26 @@ bool PlayState::tryEnterNextLevel() {
                           : " collected; World 3-1 hidden 1-Up remains locked.\n");
     }
     std::cout << "[Core Engine] Level Complete reached! Transitioning to LevelCompleteState...\n";
-    gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, getSaveData()));
+    if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+        int nextLvl = Config::nextLevel(currentLevel);
+        float wallDist = 0.f;
+        if (m_doomWall.has_value()) {
+            wallDist = m_player->getPhysicsBody().getPosition().x - m_doomWall->getX();
+            if (wallDist > 300.f) wallDist = 300.f;
+        }
+        
+        this->loadLevel(nextLvl);
+        this->respawnAvatar();
+        
+        if (m_doomWall.has_value()) {
+            m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - wallDist);
+        }
+        
+        this->playLevelMusic();
+        transitionPending = false;
+    } else {
+        gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, getSaveData()));
+    }
     return true;
 }
 
@@ -2997,7 +3054,9 @@ void PlayState::startCastleClearSequence() {
         castleBoss.velocity = {0.f, 0.f};
     }
 
-    Systems::SoundController::getInstance().stopMusic();
+    if (m_gameMode == GameMode::Normal) {
+        Systems::SoundController::getInstance().stopMusic();
+    }
     Systems::SoundController::getInstance().playSound(
         assets.getSoundBuffer("BrickCollision"));
     std::cout << "[Core Engine] Castle axe touched; collapsing the bridge.\n";
@@ -3062,8 +3121,10 @@ void PlayState::updateCastleClearSequence(sf::Time dt) {
     if (!castleClear.bossFalling && !castleClear.victoryPlayed) {
         castleClear.victoryPlayed = true;
         castleClear.finishTimer = 0.f;
-        Systems::SoundController::getInstance().playSound(
-            assets.getSoundBuffer("VictorySound"));
+        if (m_gameMode == GameMode::Normal) {
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("VictorySound"));
+        }
     }
 
     if (!castleClear.victoryPlayed) {
@@ -3077,8 +3138,30 @@ void PlayState::updateCastleClearSequence(sf::Time dt) {
 
     transitionPending = true;
     std::cout << "[Core Engine] Castle bridge clear complete; opening results.\n";
-    gsm.changeState(std::make_unique<LevelCompleteState>(
-        gsm, assets, getSaveData()));
+    if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+        int nextLvl = Config::nextLevel(currentLevel);
+        float wallDist = 0.f;
+        if (m_doomWall.has_value()) {
+            // Calculate distance based on Mario's position before the castle sequence (he walks right automatically)
+            // Or just clamp it directly.
+            wallDist = m_player->getPhysicsBody().getPosition().x - m_doomWall->getX();
+            if (wallDist > 300.f) wallDist = 300.f;
+        }
+        
+        this->loadLevel(nextLvl);
+        this->respawnAvatar();
+        
+        if (m_doomWall.has_value()) {
+            m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - wallDist);
+        }
+        
+        this->playLevelMusic();
+        transitionPending = false;
+        castleClear.active = false;
+    } else {
+        gsm.changeState(std::make_unique<LevelCompleteState>(
+            gsm, assets, getSaveData()));
+    }
 }
 
 float PlayState::surfaceUnder(float x, float y) const {
@@ -3138,7 +3221,9 @@ void PlayState::startFlagpoleSequence() {
     // From here the pole is drawn by hand, in pieces, so the pennant can come
     // down the shaft on its own instead of staying baked into the scenery.
     tileMap.hideDecoration('F');
-    Systems::SoundController::getInstance().stopMusic();
+    if (m_gameMode == GameMode::Normal) {
+        Systems::SoundController::getInstance().stopMusic();
+    }
     std::cout << "[Core Engine] Flagpole grabbed; riding it down.\n";
 }
 
@@ -3171,8 +3256,10 @@ void PlayState::updateFlagpoleSequence(sf::Time dt) {
             position.x = flagpole.shaftCentreX;
             flagpole.phase = FlagpoleSequence::Phase::Dismount;
             flagpole.timer = 0.f;
-            Systems::SoundController::getInstance().playSound(
-                assets.getSoundBuffer("VictorySound"));
+            if (m_gameMode == GameMode::Normal) {
+                Systems::SoundController::getInstance().playSound(
+                    assets.getSoundBuffer("VictorySound"));
+            }
         }
         break;
 
@@ -3238,8 +3325,30 @@ void PlayState::updateFlagpoleSequence(sf::Time dt) {
 
     transitionPending = true;
     std::cout << "[Core Engine] Flagpole finish complete; opening results.\n";
-    gsm.changeState(std::make_unique<LevelCompleteState>(
-        gsm, assets, getSaveData()));
+    if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+        int nextLvl = Config::nextLevel(currentLevel);
+        float wallDist = 0.f;
+        if (m_doomWall.has_value()) {
+            // Calculate distance based on the flagpole, not Mario's current position (since he walked into the castle)
+            wallDist = flagpole.shaftCentreX - m_doomWall->getX();
+            // Clamp it so the user never has to wait too long for the fire to appear
+            if (wallDist > 300.f) wallDist = 300.f;
+        }
+        
+        this->loadLevel(nextLvl);
+        this->respawnAvatar();
+        
+        if (m_doomWall.has_value()) {
+            m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - wallDist);
+        }
+        
+        this->playLevelMusic();
+        transitionPending = false;
+        flagpole.active = false;
+    } else {
+        gsm.changeState(std::make_unique<LevelCompleteState>(
+            gsm, assets, getSaveData()));
+    }
 }
 
 void PlayState::drawFlagpoleSequence(sf::RenderWindow& window) const {
