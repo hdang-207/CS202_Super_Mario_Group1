@@ -328,10 +328,10 @@ Game::Game()
     assets.loadTexture("World33GoalPole",
                        Systems::resourcePath("assets/textures/world33_goal_pole.png"));
 
-    // Worlds 1-4 and 2-4 are the castle courses. Their stone, lava, Fire-Bar
-    // pivots, bridge room and boss artwork all come from the supplied 160x15
-    // NES maps and matching sprite sheets, and every piece below the reveal
-    // sprites is shared between the two stages.
+    // Worlds 1-4, 2-4 and 3-4 are the castle courses. Their stone, lava,
+    // Fire-Bar pivots, bridge room and boss artwork all come from the supplied
+    // 160x15 NES maps and matching sprite sheets, and every piece below the
+    // reveal sprites is shared between the three stages.
     assets.loadTexture("CastleWall",
                        Systems::resourcePath("assets/textures/castle_wall.png"));
     assets.loadTexture("CastleBrick",
@@ -365,6 +365,8 @@ Game::Game()
                        Systems::resourcePath("assets/textures/castle_goomba.png"));
     assets.loadTexture("CastleKoopa",
                        Systems::resourcePath("assets/textures/castle_koopa.png"));
+    assets.loadTexture("CastleBuzzy",
+                       Systems::resourcePath("assets/textures/castle_buzzy.png"));
 
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));

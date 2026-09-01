@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Extract the castle-course artwork from the supplied NES reference sheets.
 
-Worlds 1-4 and 2-4 are drawn from the same castle palette: their walls, lava,
-bridge, Fire-Bar pivots and axe are pixel-identical, so both stages share one
-set of ``castle_*`` textures cut here. Only the pieces a single stage needs -
-World 2-4's vertical elevator and brick, and the two enemies each stage's fake
-Bowser turns back into - come from just one of the two guides.
+Worlds 1-4, 2-4 and 3-4 are drawn from the same castle palette: their walls,
+lava, bridge, Fire-Bar pivots and axe are pixel-identical, so all three stages
+share one set of ``castle_*`` textures cut here. Only the pieces a single stage
+needs - World 2-4's vertical elevator, the brick it and World 3-4 build with,
+and the three enemies each stage's fake Bowser turns back into - come from just
+one of the guides. World 3-4 asks for nothing the first two have not already
+cut, so its guide is not opened here at all.
 
 Both level guides are native 160x15 tile images. Animated blocks, coins and the
 sprite work come from the matching tileset and enemy sheets.
@@ -136,7 +138,8 @@ def main():
 
     assets = {
         "castle_wall.png": crop_tile(world14, 0, 2),
-        # Only World 2-4 builds anything out of breakable castle brick.
+        # World 2-4's run above the bridge and World 3-4's barrier in front of
+        # its Bowser are the only breakable castle brick in the campaign.
         "castle_brick.png": crop_tile(world24, 128, 5),
         "castle_firebar_block.png": crop_tile(world14, 23, 6),
         "castle_lava_surface.png": crop_tile(world14, 13, 12),
@@ -170,7 +173,7 @@ def main():
         "castle_bowser.png": build_strip(
             enemies, ((0, 208), (34, 208), (68, 208), (102, 208)), (32, 32)
         ),
-        # The Podoboos leaping out of World 2-4's lava.
+        # The Podoboos leaping out of the lava in Worlds 2-4 and 3-4.
         "castle_podoboo.png": build_strip(enemies, ((90, 370),)),
         # World 1-4's Bowser is a disguised Little Goomba: its two walking
         # frames and its flattened frame, in the Castle palette.
@@ -182,6 +185,10 @@ def main():
         "castle_koopa.png": build_strip(
             enemies, ((0, 112), (18, 112)), (16, 24)
         ),
+        # World 3-4's is a disguised Buzzy Beetle. It is not part of the green
+        # palette group the bridge trigger repaints, so it keeps the Castle
+        # colours it walks in, exactly like World 1-4's Goomba.
+        "castle_buzzy.png": build_strip(enemies, ((147, 34), (164, 34))),
     }
 
     for name, image in assets.items():

@@ -23,18 +23,18 @@
  */
 namespace Config {
     /// The campaign keeps the original save indices for the first nine stages.
-    /// The castle courses were added afterwards and appended at indices 10 and
-    /// 11, so the tables below are the authoritative conversion instead of
+    /// The castle courses were added afterwards and appended at indices 10 to
+    /// 12, so the tables below are the authoritative conversion instead of
     /// arithmetic based on a fixed number of stages per world.
     inline constexpr int kWorldCount = 3;
-    inline constexpr int kFinalLevel = 11;
+    inline constexpr int kFinalLevel = 12;
     inline constexpr std::array<int, kFinalLevel> kLevelWorlds{
-        1, 1, 1, 2, 2, 2, 3, 3, 3, 1, 2
+        1, 1, 1, 2, 2, 2, 3, 3, 3, 1, 2, 3
     };
     inline constexpr std::array<int, kFinalLevel> kLevelStages{
-        1, 2, 3, 1, 2, 3, 1, 2, 3, 4, 4
+        1, 2, 3, 1, 2, 3, 1, 2, 3, 4, 4, 4
     };
-    inline constexpr std::array<int, kWorldCount> kStagesInWorld{4, 4, 3};
+    inline constexpr std::array<int, kWorldCount> kStagesInWorld{4, 4, 4};
 
     /// Converts the one-based linear save/progress index to its displayed world number.
     inline constexpr int worldNumber(int level) {
@@ -63,12 +63,15 @@ namespace Config {
             return level + 1;
         }
         // The castles hang off the end of the table, so the third stage of
-        // Worlds 1 and 2 jumps to them rather than to the next index.
+        // each world jumps to its castle rather than to the next index.
         if (level == 3) {
             return 10;
         }
         if (level == 6) {
             return 11;
+        }
+        if (level == 9) {
+            return 12;
         }
         return 0;
     }
