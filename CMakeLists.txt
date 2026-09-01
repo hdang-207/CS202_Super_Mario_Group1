@@ -92,6 +92,7 @@ if(BUILD_TESTING)
         src/Physics/PhysicsBody.cpp
         src/Physics/PhysicsSystem.cpp
         src/Physics/Broadphase.cpp
+        src/Physics/PlatformContact.cpp
     )
 
     target_include_directories(physics_tests PRIVATE include)

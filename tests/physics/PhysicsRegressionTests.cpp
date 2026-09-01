@@ -2,6 +2,7 @@
 #include "Physics/Broadphase.hpp"
 #include "Physics/PhysicsBody.hpp"
 #include "Physics/PhysicsSystem.hpp"
+#include "Physics/PlatformContact.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -101,6 +102,76 @@ void testPhysicsBodyAabb(TestContext& context) {
     context.expectTrue(
         !bounds.intersects(edgeTouching),
         "edge-touching AABBs should not intersect"
+    );
+}
+
+void testExactPlatformSupport(TestContext& context) {
+    const physics::AABB player({120.0f, 160.0f}, {24.0f, 40.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        physics::isSupportedByPlatform(player, true, 0.0f, platform, 2.0f, 2.0f),
+        "grounded player at platform top should be supported"
+    );
+}
+
+void testAirbornePlayerIsNotSupported(TestContext& context) {
+    const physics::AABB player({120.0f, 160.0f}, {24.0f, 40.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        !physics::isSupportedByPlatform(player, false, 0.0f, platform, 2.0f, 2.0f),
+        "airborne player at platform top should not be supported"
+    );
+}
+
+void testUpwardMovingPlayerIsNotSupported(TestContext& context) {
+    const physics::AABB player({120.0f, 160.0f}, {24.0f, 40.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        !physics::isSupportedByPlatform(player, true, -10.0f, platform, 2.0f, 2.0f),
+        "upward-moving player should not be supported despite stale grounded state"
+    );
+}
+
+void testDeepPlatformProximityIsNotSupport(TestContext& context) {
+    const physics::AABB player({120.0f, 168.0f}, {24.0f, 40.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        !physics::isSupportedByPlatform(player, true, 0.0f, platform, 2.0f, 2.0f),
+        "player eight pixels below platform top should not be supported"
+    );
+}
+
+void testSmallPlatformContactErrorIsSupported(TestContext& context) {
+    const physics::AABB player({120.0f, 161.5f}, {24.0f, 40.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        physics::isSupportedByPlatform(player, true, 0.0f, platform, 2.0f, 2.0f),
+        "player feet within contact tolerance should be supported"
+    );
+}
+
+void testMissingHorizontalPlatformOverlapIsNotSupport(TestContext& context) {
+    const physics::AABB player({78.0f, 160.0f}, {24.0f, 40.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        !physics::isSupportedByPlatform(player, true, 0.0f, platform, 2.0f, 2.0f),
+        "player outside the inset platform surface should not be supported"
+    );
+}
+
+void testTallPlayerPlatformSupport(TestContext& context) {
+    const physics::AABB player({120.0f, 120.0f}, {24.0f, 80.0f});
+    const physics::AABB platform({100.0f, 200.0f}, {144.0f, 48.0f});
+
+    context.expectTrue(
+        physics::isSupportedByPlatform(player, true, 0.0f, platform, 2.0f, 2.0f),
+        "support should depend on player feet rather than collider height"
     );
 }
 
@@ -356,6 +427,13 @@ int main() {
     int failedTests = 0;
 
     runTest("PhysicsBody AABB semantics", testPhysicsBodyAabb, passedTests, failedTests);
+    runTest("exact moving-platform support", testExactPlatformSupport, passedTests, failedTests);
+    runTest("airborne player is not platform-supported", testAirbornePlayerIsNotSupported, passedTests, failedTests);
+    runTest("upward player is not platform-supported", testUpwardMovingPlayerIsNotSupported, passedTests, failedTests);
+    runTest("deep platform proximity is not support", testDeepPlatformProximityIsNotSupport, passedTests, failedTests);
+    runTest("small platform contact error is supported", testSmallPlatformContactErrorIsSupported, passedTests, failedTests);
+    runTest("missing horizontal platform overlap is not support", testMissingHorizontalPlatformOverlapIsNotSupport, passedTests, failedTests);
+    runTest("tall player remains platform-supported", testTallPlayerPlatformSupport, passedTests, failedTests);
     runTest("swept broadphase covers max-speed fall", testSweptBroadphaseMaxSpeedFall, passedTests, failedTests);
     runTest("swept broadphase handles negative movement", testSweptBroadphaseNegativeMovement, passedTests, failedTests);
     runTest("right wall collision", testRightWallCollision, passedTests, failedTests);

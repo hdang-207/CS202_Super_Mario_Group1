@@ -4,6 +4,7 @@
 #include "Core/Config.hpp"
 #include "Core/EventSystem.hpp"
 #include "Physics/Broadphase.hpp"
+#include "Physics/PlatformContact.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/GameOverState.hpp"
 #include "States/IntroMenuState.hpp"
@@ -66,6 +67,8 @@ namespace {
     constexpr float kMovingPlatformSpeed = 90.f;
     constexpr float kMovingPlatformRangeTiles = 3.f;
     constexpr float kMovingPlatformWidthTiles = 3.f;
+    constexpr float kMovingPlatformHorizontalInset = 2.f;
+    constexpr float kMovingPlatformSupportTolerance = 2.f;
     /// World 3-3's lifts: the up-and-down one, and the pulleys, which take a
     /// beat longer so there is time to hop off before the rope runs out.
     constexpr float kVerticalLiftSpeed = 66.f;
@@ -2059,13 +2062,21 @@ bool PlayState::isStandingOnPlatform(sf::Vector2f platformPos) const {
     if (!m_player || death.active) {
         return false;
     }
-    const sf::FloatRect player = avatarBounds();
-    const float feet = player.position.y + player.size.y;
-    const float right = platformPos.x + tileMap.tileSize() * kMovingPlatformWidthTiles;
-    return player.position.x + player.size.x > platformPos.x + 2.f
-        && player.position.x < right - 2.f
-        && feet >= platformPos.y - 4.f
-        && feet <= platformPos.y + tileMap.tileSize() * 0.5f;
+
+    const auto& body = m_player->getPhysicsBody();
+    const float tile = tileMap.tileSize();
+    const physics::AABB platformBounds(
+        platformPos,
+        {tile * kMovingPlatformWidthTiles, tile}
+    );
+    return physics::isSupportedByPlatform(
+        body.getAABB(),
+        body.isGrounded(),
+        body.getVelocity().y,
+        platformBounds,
+        kMovingPlatformHorizontalInset,
+        kMovingPlatformSupportTolerance
+    );
 }
 
 float PlayState::pulleyRopeTop(sf::Vector2f platformPos) const {
