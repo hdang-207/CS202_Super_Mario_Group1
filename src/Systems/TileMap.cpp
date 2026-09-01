@@ -24,13 +24,17 @@ namespace {
      *   w underwater rock collider   O outdoor ground
      *   s outdoor staircase   = World 2-3 bridge deck
      *   _ water surface   , water body (both drawn, neither solid)
+     *   7 Fire-Bar pivot  8 inactive castle pivot
+     *   9 lava surface    % lava body
      *   0 Coin Heaven coin
      * Markers handled separately: P player spawn, E Goomba, n half-tile Goomba,
      * K Blue Koopa, G Green Koopa, u half-tile Green Koopa,
      * 2 Red Koopa, J Green Paratroopa, 3 Red Paratroopa,
      * k Hammer Bro, j Blooper, h Cheep-Cheep,
-     * R Piranha Plant, D trampoline,
-     * L horizontal lift, : up-and-down lift, / and \\ the two platforms of a
+     * R Piranha Plant, D trampoline, ; castle boss, 6 Podoboo,
+     * L horizontal lift, : up-and-down lift,
+     * ' and " the castle elevators looping up and down,
+     * / and \\ the two platforms of a
      * pulley, d/e/x/i the hidden-room pipes, ^/N/>/+ the Coin
      * Heaven route, and . empty sky.
      * Scenery characters (M m V v l c F X W Q I Y Z T t f q z N ~ @ &) carry no entry here - they are
@@ -71,6 +75,10 @@ namespace {
         { '=', TileType::Ground        },
         { '_', TileType::Decoration    },
         { ',', TileType::Decoration    },
+        { '7', TileType::Ground        },
+        { '8', TileType::Ground        },
+        { '9', TileType::Hazard        },
+        { '%', TileType::Hazard        },
     };
 
     /// @brief Looks up a map character; returns nullptr for sky, spawn markers and unknown symbols.
@@ -85,7 +93,7 @@ namespace {
 
     bool isSolidType(TileType type) {
         return type != TileType::Empty && type != TileType::Decoration
-            && type != TileType::Coin;
+            && type != TileType::Coin && type != TileType::Hazard;
     }
 
     /// @brief Appends one rectangle as the two triangles SFML 3 needs.
@@ -206,6 +214,11 @@ bool TileMap::build(const MapParser& parser, float scale) {
     piranhas.clear();
     trampolines.clear();
     movingPlatforms.clear();
+    fireBars.clear();
+    castleBosses.clear();
+    podoboos.clear();
+    risingElevators.clear();
+    fallingElevators.clear();
     verticalPlatforms.clear();
     balanceLefts.clear();
     balanceRights.clear();
@@ -306,6 +319,27 @@ bool TileMap::build(const MapParser& parser, float scale) {
             }
             if (symbol == 'L') {
                 movingPlatforms.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '7') {
+                fireBars.push_back(worldPos + sf::Vector2f(tileSizePx * 0.5f,
+                                                           tileSizePx * 0.5f));
+                // The pivot is still a visible solid block, so keep parsing it.
+            }
+            if (symbol == ';') {
+                castleBosses.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '6') {
+                podoboos.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '\'') {
+                risingElevators.push_back(worldPos);
+                continue;
+            }
+            if (symbol == '"') {
+                fallingElevators.push_back(worldPos);
                 continue;
             }
             if (symbol == ':') {
@@ -415,6 +449,10 @@ bool TileMap::build(const MapParser& parser, float scale) {
                     levelExitAvailable = true;
                     levelExitTrigger = sf::FloatRect(worldPos, drawSize);
                 } else if (symbol == 'F') {
+                    goalAvailable = true;
+                    goalTrigger = sf::FloatRect(worldPos, drawSize);
+                } else if (symbol == '$') {
+                    // Castle stages end at the axe rather than a flagpole.
                     goalAvailable = true;
                     goalTrigger = sf::FloatRect(worldPos, drawSize);
                 }
@@ -528,6 +566,34 @@ void TileMap::restoreBrick(int col, int row, char symbol) {
     rebuildTileBatch(symbol);
 }
 
+bool TileMap::removeTile(int col, int row) {
+    if (col < 0 || col >= columns || row < 0 || row >= rows) {
+        return false;
+    }
+
+    const std::size_t index = static_cast<std::size_t>(row) * columns + col;
+    const char oldSymbol = symbols[index];
+    if (oldSymbol == '.' && types[index] == TileType::Empty) {
+        return false;
+    }
+
+    symbols[index] = '.';
+    types[index] = TileType::Empty;
+    rebuildTileBatch(oldSymbol);
+    return true;
+}
+
+void TileMap::hideDecoration(char symbol) {
+    if (TileBatch* decoration = decorationFor(symbol)) {
+        decoration->vertices.clear();
+    }
+    if (symbol == '$' || symbol == 'F') {
+        goalAvailable = false;
+    } else if (symbol == 'W') {
+        levelExitAvailable = false;
+    }
+}
+
 void TileMap::changeType(int col, int row, TileType newType) {
     if (col < 0 || col >= columns || row < 0 || row >= rows) return;
     std::size_t index = static_cast<std::size_t>(row) * columns + col;
@@ -578,6 +644,32 @@ std::vector<sf::FloatRect> TileMap::solidTilesOverlapping(const sf::FloatRect& b
 
 bool TileMap::intersectsSolid(const sf::FloatRect& box) const {
     return !solidTilesOverlapping(box).empty();
+}
+
+bool TileMap::intersectsHazard(const sf::FloatRect& box) const {
+    if (tileSizePx <= 0.f) {
+        return false;
+    }
+
+    const int firstCol = std::max(
+        0, static_cast<int>(std::floor(box.position.x / tileSizePx)));
+    const int lastCol = std::min(
+        columns - 1, static_cast<int>(std::floor(
+            (box.position.x + box.size.x - 0.001f) / tileSizePx)));
+    const int firstRow = std::max(
+        0, static_cast<int>(std::floor(box.position.y / tileSizePx)));
+    const int lastRow = std::min(
+        rows - 1, static_cast<int>(std::floor(
+            (box.position.y + box.size.y - 0.001f) / tileSizePx)));
+
+    for (int row = firstRow; row <= lastRow; ++row) {
+        for (int col = firstCol; col <= lastCol; ++col) {
+            if (typeAt(col, row) == TileType::Hazard) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 int TileMap::collectCoinsOverlapping(const sf::FloatRect& box) {

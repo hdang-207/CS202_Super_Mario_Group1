@@ -328,6 +328,44 @@ Game::Game()
     assets.loadTexture("World33GoalPole",
                        Systems::resourcePath("assets/textures/world33_goal_pole.png"));
 
+    // Worlds 1-4 and 2-4 are the castle courses. Their stone, lava, Fire-Bar
+    // pivots, bridge room and boss artwork all come from the supplied 160x15
+    // NES maps and matching sprite sheets, and every piece below the reveal
+    // sprites is shared between the two stages.
+    assets.loadTexture("CastleWall",
+                       Systems::resourcePath("assets/textures/castle_wall.png"));
+    assets.loadTexture("CastleBrick",
+                       Systems::resourcePath("assets/textures/castle_brick.png"));
+    assets.loadTexture("CastleFireBarBlock",
+                       Systems::resourcePath("assets/textures/castle_firebar_block.png"));
+    assets.loadTexture("CastleLavaSurface",
+                       Systems::resourcePath("assets/textures/castle_lava_surface.png"));
+    assets.loadTexture("CastleLava",
+                       Systems::resourcePath("assets/textures/castle_lava.png"));
+    assets.loadTexture("CastleBridge",
+                       Systems::resourcePath("assets/textures/castle_bridge.png"));
+    assets.loadTexture("CastleLift",
+                       Systems::resourcePath("assets/textures/castle_lift.png"));
+    assets.loadTexture("CastleElevator",
+                       Systems::resourcePath("assets/textures/castle_elevator.png"));
+    assets.loadTexture("CastleAxe",
+                       Systems::resourcePath("assets/textures/castle_axe.png"));
+    assets.loadTexture("CastleQuestionBlock",
+                       Systems::resourcePath("assets/textures/castle_question_block.png"));
+    assets.loadTexture("CastleEmptyBlock",
+                       Systems::resourcePath("assets/textures/castle_empty_block.png"));
+    assets.loadTexture("CastleCoin",
+                       Systems::resourcePath("assets/textures/castle_coin.png"));
+    assets.loadTexture("CastleBowser",
+                       Systems::resourcePath("assets/textures/castle_bowser.png"));
+    assets.loadTexture("CastlePodoboo",
+                       Systems::resourcePath("assets/textures/castle_podoboo.png"));
+    // What each stage's fake Bowser turns back into once it is beaten.
+    assets.loadTexture("CastleGoomba",
+                       Systems::resourcePath("assets/textures/castle_goomba.png"));
+    assets.loadTexture("CastleKoopa",
+                       Systems::resourcePath("assets/textures/castle_koopa.png"));
+
     // End of the level.
     assets.loadTexture("Flagpole", Systems::resourcePath("assets/textures/Goal_Pole.png"));
     assets.loadTexture("Castle", Systems::resourcePath("assets/textures/Fortress.png"));

@@ -18,7 +18,8 @@ enum class TileType {
     UsedBlock,     ///< Question block after its item has been released (solid).
     StairBlock,    ///< Solid staircase block.
     HiddenBlock,   ///< Invisible until struck from below, but solid.
-    Pipe           ///< Solid pipe segment.
+    Pipe,          ///< Solid pipe segment.
+    Hazard         ///< Lava or another drawn, non-solid lethal tile.
 };
 
 /**
@@ -105,6 +106,15 @@ public:
      */
     void restoreBrick(int col, int row, char symbol);
 
+    /**
+     * @brief Permanently clears one drawn/colliding tile from the current map.
+     * @return True when a non-empty tile was removed.
+     */
+    bool removeTile(int col, int row);
+
+    /// @brief Hides all scenery registered for @p symbol until the map is rebuilt.
+    void hideDecoration(char symbol);
+
     /// @brief Changes the TileType of the map cell at (col, row).
     void changeType(int col, int row, TileType newType);
 
@@ -122,6 +132,9 @@ public:
 
     /// @brief True if any solid tile overlaps @p box.
     bool intersectsSolid(const sf::FloatRect& box) const;
+
+    /// @brief True if a lethal terrain tile overlaps @p box.
+    bool intersectsHazard(const sf::FloatRect& box) const;
 
     /// @brief Removes map coins overlapping @p box and returns how many were collected.
     int collectCoinsOverlapping(const sf::FloatRect& box);
@@ -172,6 +185,25 @@ public:
 
     /// @brief Top-left world positions of horizontal moving-platform markers ('L').
     const std::vector<sf::Vector2f>& movingPlatformSpawns() const { return movingPlatforms; }
+
+    /// @brief Centres of the castle courses' rotating Fire-Bars ('7').
+    const std::vector<sf::Vector2f>& fireBarSpawns() const { return fireBars; }
+
+    /// @brief Top-left cells containing a castle boss marker (';').
+    const std::vector<sf::Vector2f>& castleBossSpawns() const { return castleBosses; }
+
+    /// @brief Cells a Podoboo leaps out of the lava beneath ('6').
+    const std::vector<sf::Vector2f>& podobooSpawns() const { return podoboos; }
+
+    /// @brief Castle elevators that loop upwards ('\'').
+    const std::vector<sf::Vector2f>& risingElevatorSpawns() const {
+        return risingElevators;
+    }
+
+    /// @brief Castle elevators that loop downwards ('"').
+    const std::vector<sf::Vector2f>& fallingElevatorSpawns() const {
+        return fallingElevators;
+    }
 
     /// @brief Lifts that ride up and down instead of sideways (':').
     const std::vector<sf::Vector2f>& verticalPlatformSpawns() const {
@@ -229,10 +261,10 @@ public:
     /// @brief World-space area occupied by the level-exit decoration.
     sf::FloatRect levelExitBounds() const { return levelExitTrigger; }
 
-    /// @brief True when the map contains a final flagpole marker ('F').
+    /// @brief True when the map contains a final flagpole or castle axe.
     bool hasGoal() const { return goalAvailable; }
 
-    /// @brief World-space area occupied by the final flagpole.
+    /// @brief World-space area occupied by the final flagpole or castle axe.
     sf::FloatRect goalBounds() const { return goalTrigger; }
 
 private:
@@ -283,6 +315,11 @@ private:
     std::vector<sf::Vector2f> piranhas; ///< Piranha Plant markers ('R').
     std::vector<sf::Vector2f> trampolines; ///< Trampoline markers ('D').
     std::vector<sf::Vector2f> movingPlatforms; ///< Horizontal lift markers ('L').
+    std::vector<sf::Vector2f> fireBars; ///< Rotating Fire-Bar pivots ('7').
+    std::vector<sf::Vector2f> castleBosses; ///< Castle boss markers (';').
+    std::vector<sf::Vector2f> podoboos; ///< Podoboo markers ('6').
+    std::vector<sf::Vector2f> risingElevators;  ///< Castle elevators going up ('\'').
+    std::vector<sf::Vector2f> fallingElevators; ///< Castle elevators going down ('"').
     std::vector<sf::Vector2f> verticalPlatforms; ///< Up-and-down lift markers (':').
     std::vector<sf::Vector2f> balanceLefts;  ///< Left pulley platforms ('/').
     std::vector<sf::Vector2f> balanceRights; ///< Right pulley platforms ('\\').

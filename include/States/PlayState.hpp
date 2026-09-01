@@ -152,7 +152,9 @@ private:
      * and hauls the other end up by the same amount, until the rising end
      * reaches its wheel.
      */
-    enum class LiftMotion { Horizontal, Vertical, Balance };
+    /// Elevator is the castle variant: it never turns around, it loops from
+    /// one edge of the map back to the other.
+    enum class LiftMotion { Horizontal, Vertical, Elevator, Balance };
 
     struct MovingPlatform {
         sf::Vector2f position;
@@ -162,8 +164,66 @@ private:
         LiftMotion motion{LiftMotion::Horizontal};
         int partner{-1};      ///< Other end of the pulley, -1 when it has none.
         float ropeTopY{0.f};  ///< Row the pulley's rope hangs from.
+        float widthTiles{3.f}; ///< Collision width; the castle lifts are narrower.
     };
     std::vector<MovingPlatform> movingPlatforms;
+
+    struct FireBarEntity {
+        sf::Vector2f pivot;
+        float angle{0.f};
+        float angularSpeed{0.f};
+    };
+    std::vector<FireBarEntity> fireBars;
+
+    /// A Podoboo waits inside the lava, leaps clear of it, and drops back.
+    struct PodobooEntity {
+        sf::Vector2f home;    ///< Lava surface the fireball rests in.
+        float y{0.f};
+        float velocityY{0.f};
+        float restTimer{0.f};
+        bool airborne{false};
+    };
+    std::vector<PodobooEntity> podoboos;
+
+    struct CastleBossEntity {
+        bool available{false};
+        bool active{false};
+        bool alive{false};
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        float leftLimit{0.f};
+        float rightLimit{0.f};
+        float groundY{0.f};
+        float animationElapsed{0.f};
+        float jumpTimer{0.f};
+        float fireTimer{0.f};
+        float revealTimer{0.f};
+        sf::Vector2f revealPosition;
+        sf::Vector2f revealVelocity;
+        int frame{0};
+        int health{5};
+        bool revealedGoomba{false};
+    };
+    CastleBossEntity castleBoss;
+
+    struct CastleBossFire {
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+    };
+    std::vector<CastleBossFire> castleBossFire;
+
+    struct CastleClearSequence {
+        bool active{false};
+        bool bridgeCollapsed{false};
+        bool bossFalling{false};
+        bool victoryPlayed{false};
+        float bridgeTimer{0.f};
+        float finishTimer{0.f};
+        int bridgeRow{-1};
+        int firstBridgeColumn{-1};
+        int nextBridgeColumn{-1};
+    };
+    CastleClearSequence castleClear;
 
     enum class TrampolineState { Normal, Compressed, Launch };
     struct TrampolineEntity {
@@ -290,14 +350,24 @@ private:
     void updateMovingPlatforms(sf::Time dt);
     void drawMovingPlatforms(sf::RenderWindow& window) const;
 
-    /// @brief True while the avatar's feet rest on a lift standing at @p platformPos.
-    [[nodiscard]] bool isStandingOnPlatform(sf::Vector2f platformPos) const;
+    /// @brief True while the avatar's feet rest on a lift.
+    [[nodiscard]] bool isStandingOnPlatform(sf::Vector2f position,
+                                             float widthTiles) const;
 
     /// @brief Height the rope of the pulley above @p platformPos hangs from.
     [[nodiscard]] float pulleyRopeTop(sf::Vector2f platformPos) const;
     void spawnTrampolines();
     void updateTrampolines(sf::Time dt);
     void drawTrampolines(sf::RenderWindow& window) const;
+
+    void spawnCastleHazards();
+    void updateCastleHazards(sf::Time dt);
+    void drawCastleHazards(sf::RenderWindow& window) const;
+    [[nodiscard]] sf::FloatRect podobooBounds(const PodobooEntity& fire) const;
+    [[nodiscard]] sf::FloatRect castleBossBounds() const;
+    bool damagePlayerFromCastleHazard();
+    void startCastleClearSequence();
+    void updateCastleClearSequence(sf::Time dt);
 
     bool moveAvatar(sf::Time dt);
 

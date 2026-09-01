@@ -81,7 +81,7 @@ void LevelCompleteState::update(sf::Time dt) {
         if (Config::isLastStageOfWorld(progress.currentLevel)) {
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         } else {
-            progress.currentLevel++;
+            progress.currentLevel = Config::nextLevel(progress.currentLevel);
             gsm.changeState(std::make_unique<RespawnState>(gsm, assets, progress));
         }
     } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::S)
@@ -89,12 +89,13 @@ void LevelCompleteState::update(sf::Time dt) {
         
         // Ensure we don't save multiple times if held down
         m_elapsedTime = -9999.f; 
-        progress.currentLevel++;
+        const int clearedLevel = progress.currentLevel;
+        progress.currentLevel = Config::nextLevel(progress.currentLevel);
         if (SaveManager::saveProgress("savegame.txt", progress)) {
             std::cout << "[Core Engine] Progress saved. Returning to Main Menu.\n";
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         } else {
-            --progress.currentLevel;
+            progress.currentLevel = clearedLevel;
             std::cerr << "[Core Engine] Save failed; staying on Level Complete screen.\n";
             m_elapsedTime = 0.5f; // restore if failed
         }

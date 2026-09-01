@@ -147,7 +147,8 @@ void WorldSelectionState::update(sf::Time) {
         const std::string prefix = selectedWorld == world ? "> " : "  ";
         option.setString(prefix + "LEVEL " + std::to_string(world)
                          + "    WORLD " + std::to_string(world)
-                         + "-1 TO " + std::to_string(world) + "-3");
+                         + "-1 TO " + std::to_string(world) + "-"
+                         + std::to_string(Config::stageCount(world)));
         option.setFillColor(selectedWorld == world
             ? sf::Color::Yellow : sf::Color(180, 180, 180));
 
@@ -158,10 +159,14 @@ void WorldSelectionState::update(sf::Time) {
                             Config::kViewHeight * (0.36f + index * 0.12f)});
     }
 
-    routeText.setString(
-        "ROUTE: " + std::to_string(selectedWorld) + "-1  >  "
-        + std::to_string(selectedWorld) + "-2  >  "
-        + std::to_string(selectedWorld) + "-3");
+    std::string route = "ROUTE: ";
+    for (int stage = 1; stage <= Config::stageCount(selectedWorld); ++stage) {
+        if (stage > 1) {
+            route += "  >  ";
+        }
+        route += std::to_string(selectedWorld) + "-" + std::to_string(stage);
+    }
+    routeText.setString(route);
     const sf::FloatRect routeBounds = routeText.getLocalBounds();
     routeText.setOrigin({routeBounds.position.x + routeBounds.size.x / 2.f,
                          routeBounds.position.y + routeBounds.size.y / 2.f});
