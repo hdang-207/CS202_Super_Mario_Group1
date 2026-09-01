@@ -1272,6 +1272,30 @@ bool PlayState::loadLevel(int level) {
     return true;
 }
 
+// ─── Inferno mode helpers ───────────────────────────────────────────────────
+
+float PlayState::saveDoomWallDistance(float referenceX) const {
+    if (m_gameMode != GameMode::Inferno || !m_doomWall.has_value()) return 0.f;
+    float dist = referenceX - m_doomWall->getX();
+    return std::min(dist, 300.f);   // clamp so fire always stays close
+}
+
+void PlayState::restoreDoomWallDistance(float dist) {
+    if (m_gameMode != GameMode::Inferno || !m_doomWall.has_value()) return;
+    m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - dist);
+}
+
+void PlayState::infernoNextStage() {
+    int nextLvl = Config::nextLevel(currentLevel);
+    float dist  = saveDoomWallDistance(m_player->getPhysicsBody().getPosition().x);
+
+    loadLevel(nextLvl);
+    respawnAvatar();
+    restoreDoomWallDistance(dist);
+    playLevelMusic();
+    transitionPending = false;
+}
+
 bool PlayState::tryEnterWorld12UndergroundPipe() {
     if (Config::worldNumber(currentLevel) != 1
         || Config::stageNumber(currentLevel) != 2
@@ -1366,18 +1390,10 @@ bool PlayState::tryEnterWorld22WaterPipe() {
     }
 
     auto& body = m_player->getPhysicsBody();
+    float dist = saveDoomWallDistance(body.getPosition().x);
     
-    float wallDist = 0.f;
-    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
-        wallDist = body.getPosition().x - m_doomWall->getX();
-    }
-    
-    const float newX = kWorld22WaterSpawnColumn * tile;
-    body.setPosition({newX, kWorld22WaterSpawnRow * tile});
-    
-    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
-        m_doomWall->setX(newX - wallDist);
-    }
+    body.setPosition({kWorld22WaterSpawnColumn * tile, kWorld22WaterSpawnRow * tile});
+    restoreDoomWallDistance(dist);
     
     body.setVelocity({0.f, 0.f});
     body.clearAcceleration();
@@ -1428,21 +1444,14 @@ bool PlayState::tryLeaveWorld22WaterPipe() {
 
 void PlayState::warpAvatarTo(sf::Vector2f cell) {
     auto& body = m_player->getPhysicsBody();
-    
-    float wallDist = 0.f;
-    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
-        wallDist = body.getPosition().x - m_doomWall->getX();
-    }
+    float dist = saveDoomWallDistance(body.getPosition().x);
 
     const sf::Vector2f size = body.getColliderSize();
     const sf::Vector2f position{cell.x + (tileMap.tileSize() - size.x) * 0.5f,
                                 cell.y + tileMap.tileSize() - size.y};
 
     body.setPosition(position);
-    
-    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
-        m_doomWall->setX(position.x - wallDist);
-    }
+    restoreDoomWallDistance(dist);
 
     body.setVelocity({0.f, 0.f});
     body.clearAcceleration();
@@ -1450,9 +1459,6 @@ void PlayState::warpAvatarTo(sf::Vector2f cell) {
     facingRight = true;
     syncAvatarPowerVisuals();
 
-    // The camera lock only ever moves forwards during play, so a warp has to
-    // hand it its new anchor itself - otherwise coming back from a room far to
-    // the right would leave the stage stuck off-screen.
     m_cameraSystem.setMaxCameraCenterX(position.x);
     m_cameraSystem.centreCamera({position.x, Config::kViewHeight / 2.f},
                                 tileMap.pixelWidth(), tileMap.pixelHeight());
@@ -1648,22 +1654,7 @@ bool PlayState::tryEnterNextLevel() {
     }
     std::cout << "[Core Engine] Level Complete reached! Transitioning to LevelCompleteState...\n";
     if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
-        int nextLvl = Config::nextLevel(currentLevel);
-        float wallDist = 0.f;
-        if (m_doomWall.has_value()) {
-            wallDist = m_player->getPhysicsBody().getPosition().x - m_doomWall->getX();
-            if (wallDist > 300.f) wallDist = 300.f;
-        }
-        
-        this->loadLevel(nextLvl);
-        this->respawnAvatar();
-        
-        if (m_doomWall.has_value()) {
-            m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - wallDist);
-        }
-        
-        this->playLevelMusic();
-        transitionPending = false;
+        infernoNextStage();
     } else {
         gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, getSaveData()));
     }
@@ -3139,24 +3130,7 @@ void PlayState::updateCastleClearSequence(sf::Time dt) {
     transitionPending = true;
     std::cout << "[Core Engine] Castle bridge clear complete; opening results.\n";
     if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
-        int nextLvl = Config::nextLevel(currentLevel);
-        float wallDist = 0.f;
-        if (m_doomWall.has_value()) {
-            // Calculate distance based on Mario's position before the castle sequence (he walks right automatically)
-            // Or just clamp it directly.
-            wallDist = m_player->getPhysicsBody().getPosition().x - m_doomWall->getX();
-            if (wallDist > 300.f) wallDist = 300.f;
-        }
-        
-        this->loadLevel(nextLvl);
-        this->respawnAvatar();
-        
-        if (m_doomWall.has_value()) {
-            m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - wallDist);
-        }
-        
-        this->playLevelMusic();
-        transitionPending = false;
+        infernoNextStage();
         castleClear.active = false;
     } else {
         gsm.changeState(std::make_unique<LevelCompleteState>(
@@ -3326,23 +3300,13 @@ void PlayState::updateFlagpoleSequence(sf::Time dt) {
     transitionPending = true;
     std::cout << "[Core Engine] Flagpole finish complete; opening results.\n";
     if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+        // Use the flagpole position as reference (Mario walked past it into the castle)
+        float dist = saveDoomWallDistance(flagpole.shaftCentreX);
         int nextLvl = Config::nextLevel(currentLevel);
-        float wallDist = 0.f;
-        if (m_doomWall.has_value()) {
-            // Calculate distance based on the flagpole, not Mario's current position (since he walked into the castle)
-            wallDist = flagpole.shaftCentreX - m_doomWall->getX();
-            // Clamp it so the user never has to wait too long for the fire to appear
-            if (wallDist > 300.f) wallDist = 300.f;
-        }
-        
-        this->loadLevel(nextLvl);
-        this->respawnAvatar();
-        
-        if (m_doomWall.has_value()) {
-            m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - wallDist);
-        }
-        
-        this->playLevelMusic();
+        loadLevel(nextLvl);
+        respawnAvatar();
+        restoreDoomWallDistance(dist);
+        playLevelMusic();
         transitionPending = false;
         flagpole.active = false;
     } else {

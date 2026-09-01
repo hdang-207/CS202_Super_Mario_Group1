@@ -306,6 +306,14 @@ private:
     void playLevelMusic();
     void respawnAvatar();
     bool loadLevel(int level);
+
+    // --- Inferno mode helpers ---
+    /// Saves the horizontal distance between the player and the fire wall.
+    float saveDoomWallDistance(float referenceX) const;
+    /// Restores the fire wall position so it keeps the saved distance from the player.
+    void restoreDoomWallDistance(float dist);
+    /// Loads the next stage seamlessly for Inferno mode (no results screen).
+    void infernoNextStage();
     bool tryEnterWorld12UndergroundPipe();
     bool tryLeaveWorld12UndergroundPipe();
     bool tryEnterWorld22WaterPipe();
