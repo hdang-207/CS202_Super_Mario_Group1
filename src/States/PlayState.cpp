@@ -2260,7 +2260,12 @@ bool PlayState::moveAvatar(sf::Time dt) {
     const bool inStrongCurrent = underwater
                               && isWorld22CurrentColumn(playerCentreX, tileMap.tileSize());
     const bool wasGrounded = body.isGrounded();
-    m_player->setInput(playerInput);
+    PlayerInput movementInput = playerInput;
+    if (underwater || m_flyMode) {
+        movementInput.jumpHeld = false;
+        movementInput.jumpPressed = false;
+    }
+    m_player->setInput(movementInput);
     m_player->update(seconds);
 
     bool swimStroke = false;
