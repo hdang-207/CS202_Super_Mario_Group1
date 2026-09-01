@@ -4,14 +4,18 @@
 
 /**
  * @class GameModeSelectionState
- * @brief Allows the player to choose between Normal and Nightfall game modes.
+ * @brief Allows the player to choose Normal, Nightfall, or Duel mode.
  *
  * Single Responsibility: Only handles the game mode selection UI.
  * Appears after pressing "START NEW GAME" and before character selection.
  */
 class GameModeSelectionState : public State {
 public:
-    GameModeSelectionState(GameStateManager& gsm, Systems::AssetManager& assets);
+    GameModeSelectionState(
+        GameStateManager& gsm,
+        Systems::AssetManager& assets,
+        bool nightfallInitiallySelected = false
+    );
     ~GameModeSelectionState() override = default;
 
     void init() override;
@@ -20,14 +24,27 @@ public:
     void render(sf::RenderWindow& window) override;
 
 private:
-    int selectedIndex{0};  ///< 0 = Normal, 1 = Nightfall
+    enum class SelectionOption {
+        Normal,
+        Nightfall,
+        Duel
+    };
+
+    SelectionOption selectedOption{SelectionOption::Normal};
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
     sf::Text headerText;
     sf::Text normalText;
     sf::Text nightfallText;
+    sf::Text duelText;
     sf::Text normalDesc;
     sf::Text nightfallDesc;
+    sf::Text duelDesc;
     sf::Text hintText;
+
+    void selectPreviousOption();
+    void selectNextOption();
+    void chooseOption(SelectionOption option);
+    void confirmSelection();
 };

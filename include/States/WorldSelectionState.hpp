@@ -9,15 +9,8 @@
  */
 class WorldSelectionState : public State {
 private:
-    enum class SelectionOption {
-        World1,
-        World2,
-        World3,
-        Duel
-    };
-
     CharacterType selectedCharacter;
-    SelectionOption selectedOption{SelectionOption::World1};
+    int selectedWorld{1};
     bool nightfallMode{false};
 
     sf::Sprite bgSprite;
@@ -26,21 +19,18 @@ private:
     sf::Text world1Text;
     sf::Text world2Text;
     sf::Text world3Text;
-    sf::Text duelText;
     sf::Text routeText;
     sf::Text hintText;
 
-    void selectPreviousOption();
-    void selectNextOption();
-    void chooseOption(SelectionOption option);
-    void startSelectedOption();
+    void chooseWorld(int world);
+    void startSelectedWorld();
 
 public:
     WorldSelectionState(
-    GameStateManager& gsm,
-    Systems::AssetManager& assets,
-    CharacterType character,
-    bool nightfall = false
+        GameStateManager& gsm,
+        Systems::AssetManager& assets,
+        CharacterType character,
+        bool nightfall = false
     );
     ~WorldSelectionState() override = default;
 
