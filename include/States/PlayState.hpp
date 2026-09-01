@@ -301,6 +301,10 @@ private:
     void spawnMushroom(sf::Vector2f blockPosition, items::MushroomKind kind = items::MushroomKind::Super);
     void spawnFireFlower(sf::Vector2f blockPosition);
     void spawnStar(sf::Vector2f blockPosition);
+
+    /// @brief Turns round any mushroom standing on a block Mario has bumped.
+    void reverseMushroomsOnBlock(const sf::FloatRect& tile);
+
     bool spawnGrowingVine(sf::Vector2f blockPosition);
     void updateGrowingVines(sf::Time dt);
     void drawGrowingVines(sf::RenderWindow& window) const;

@@ -85,6 +85,15 @@ void Mushroom::update(float deltaTime, float tileSize,
     }
 }
 
+void Mushroom::reverseDirection() {
+    if (!m_alive || m_state != MushroomState::Moving) {
+        return;
+    }
+
+    m_velocity.x = m_velocity.x > 0.f ? -kMushroomSpeed : kMushroomSpeed;
+    m_physicsBody.setVelocity(m_velocity);
+}
+
 void Mushroom::render(sf::RenderWindow& window) const {
     if (!m_alive || !m_texture) {
         return;

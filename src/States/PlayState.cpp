@@ -40,6 +40,9 @@ namespace {
     constexpr float kVineClimbDistanceTiles = 4.f;
     constexpr float kVineLowerOffsetTiles = 0.5f;
     constexpr std::size_t kMushroomRewardDivisor = 4;
+    /// How far a mushroom's feet may sit from a block's surface and still
+    /// count as standing on it, absorbing the sub-pixel drift of gravity.
+    constexpr float kMushroomRestTolerance = 4.f;
     constexpr float kStarPowerDuration = 10.f;
     constexpr int kCoinBlockCapacity = 10;
 
@@ -1469,6 +1472,28 @@ PlayState::BlockReward PlayState::takeNextItemBlockReward() {
         return BlockReward::Coin;
     }
     return blockRewards[nextBlockReward++];
+}
+
+void PlayState::reverseMushroomsOnBlock(const sf::FloatRect& tile) {
+    const float blockTop = tile.position.y;
+    const sf::FloatRect above({tile.position.x, blockTop - tileMap.tileSize()},
+                              {tile.size.x, tileMap.tileSize()});
+
+    for (entity::Entity* candidate : m_entityManager.queryOverlapping(above)) {
+        auto* mushroom = dynamic_cast<items::Mushroom*>(candidate);
+        if (mushroom == nullptr) {
+            continue;
+        }
+
+        // Only what is resting on the block feels the knock; a mushroom
+        // falling past the space above it keeps its course.
+        const sf::FloatRect bounds = mushroom->getBounds();
+        const float feet = bounds.position.y + bounds.size.y;
+        if (feet >= blockTop - kMushroomRestTolerance
+            && feet <= blockTop + kMushroomRestTolerance) {
+            mushroom->reverseDirection();
+        }
+    }
 }
 
 void PlayState::spawnMushroom(sf::Vector2f blockPosition, items::MushroomKind kind) {
@@ -2959,6 +2984,11 @@ bool PlayState::moveAvatar(sf::Time dt) {
         headBounds.size.y = 8.0f;
 
         for (const sf::FloatRect& tile : tileMap.solidTilesOverlapping(headBounds)) {
+            // The knock carries through whatever the block is made of, so a
+            // mushroom walking along the top turns round even on a hard block
+            // that has no bounce of its own.
+            reverseMushroomsOnBlock(tile);
+
             int col = static_cast<int>(tile.position.x / tileMap.tileSize());
             int row = static_cast<int>(tile.position.y / tileMap.tileSize());
             const char blockSymbol = tileMap.symbolAt(col, row);
