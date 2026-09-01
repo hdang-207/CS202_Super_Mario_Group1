@@ -85,6 +85,19 @@ namespace {
         return Config::stageNumber(level) == 4;
     }
 
+    /// Which cut of the goal pole a stage finishes on. The flagpole animation
+    /// takes the pole apart and redraws it, so it has to reach for the same
+    /// image the level legend does - hence one lookup, used by both.
+    const char* goalPoleArt(int level) {
+        const int world = Config::worldNumber(level);
+        const int stage = Config::stageNumber(level);
+        if (world == 2 && stage == 3) return "World23GoalPole";
+        if (world == 3 && stage == 1) return "World31GoalPole";
+        if (world == 3 && stage == 2) return "World32GoalPole";
+        if (world == 3 && stage == 3) return "World33GoalPole";
+        return "Flagpole";
+    }
+
     constexpr int kFireBarBallCount = 6;
     constexpr float kFireBarAngularSpeed = 1.8f;
     constexpr float kCastleBossWalkSpeed = 54.f;
@@ -103,6 +116,26 @@ namespace {
     constexpr float kCastleBridgeStepDuration = 0.085f;
     constexpr float kCastleClearFinishDelay = 0.8f;
     constexpr float kTwoPi = 6.28318530718f;
+
+    /// The outdoor finish. Mario rides the pole down, waits for the pennant to
+    /// land beside him, hops to the far side and walks off into the castle.
+    constexpr float kFlagSlideSpeed = 260.f;
+    constexpr float kFlagDismountDelay = 0.4f;
+    constexpr float kFlagWalkSpeed = 170.f;
+    constexpr float kFlagFinishDelay = 1.2f;
+    /// How far Mario walks when the stage draws no castle to walk into.
+    constexpr float kFlagWalkFallbackTiles = 5.f;
+    /// Goal_Pole.png and every world's recut of it share one 24x168 layout: a
+    /// two-pixel green shaft at x15, a 16x16 pennant painted over the left half
+    /// of that shaft across rows 9..24, and the base block starting at row 152.
+    /// Because the pennant covers the shaft rather than sitting beside it, the
+    /// green behind it has to be borrowed from the clean run underneath.
+    constexpr int kFlagpoleShaftX = 15;
+    constexpr int kFlagpoleShaftWidth = 2;
+    constexpr int kFlagpoleFlagTop = 9;
+    constexpr int kFlagpoleFlagSize = 16;
+    constexpr int kFlagpoleCleanShaftTop = kFlagpoleFlagTop + kFlagpoleFlagSize;
+    constexpr int kFlagpoleBaseTop = 152;
 
     constexpr int kOutdoorGoalColumns = 41;
     constexpr int kWorld21BonusStartColumn = 293;
@@ -304,7 +337,8 @@ void PlayState::registerEvents() {
 }
 
 void PlayState::handleInput(const sf::Event& event) {
-    if (transitionPending || death.active || castleClear.active) {
+    if (transitionPending || death.active || castleClear.active
+        || flagpole.active) {
         return;
     }
 
@@ -415,6 +449,13 @@ void PlayState::update(sf::Time dt) {
 
     if (castleClear.active) {
         updateCastleClearSequence(dt);
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
+    if (flagpole.active) {
+        updateFlagpoleSequence(dt);
         tileMap.update(dt);
         Systems::SoundController::getInstance().update();
         return;
@@ -581,6 +622,7 @@ void PlayState::render(sf::RenderWindow& window) {
     }
 
     window.draw(tileMap);
+    drawFlagpoleSequence(window);
     drawGrowingVines(window);
     drawTrampolines(window);
     drawMovingPlatforms(window);
@@ -595,7 +637,9 @@ void PlayState::render(sf::RenderWindow& window) {
     drawHammers(window);
     drawBullets(window);
     drawBlocks(window);
-    animator.draw(window, avatarFeetCentre());
+    if (!flagpole.hidden) {
+        animator.draw(window, avatarFeetCentre());
+    }
     drawExplosions(window);
 
     window.setView(screenView);
@@ -942,8 +986,7 @@ bool PlayState::loadLevel(int level) {
         world23 ? "World23StartCastle" : "Castle"));
     tileMap.setDecorationTexture('Z', assets.getTexture(
         world23 ? "World23EndCastle" : "CastleWorld2_1"));
-    tileMap.setDecorationTexture('F', assets.getTexture(
-        world23 ? "World23GoalPole" : "Flagpole"));
+    tileMap.setDecorationTexture('F', assets.getTexture(goalPoleArt(level)));
 
     // World 3-1 is the night stage. Almost nothing it draws is shared with the
     // daylight stages - white pipes, white trees, pink stone, a black sky - so
@@ -981,7 +1024,6 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('c', assets.getTexture("World31CloudSmall"));
         tileMap.setDecorationTexture('Z', assets.getTexture("World31StartCastle"));
         tileMap.setDecorationTexture('X', assets.getTexture("World31EndCastle"));
-        tileMap.setDecorationTexture('F', assets.getTexture("World31GoalPole"));
         tileMap.setDecorationTexture('Q', assets.getTexture("World31RoomPipe"));
         tileMap.setDecorationTexture('N', assets.getTexture("World31Vine"));
     }
@@ -1013,7 +1055,6 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('c', assets.getTexture("World32CloudSmall"));
         tileMap.setDecorationTexture('X', assets.getTexture("World32StartCastle"));
         tileMap.setDecorationTexture('Z', assets.getTexture("World32EndCastle"));
-        tileMap.setDecorationTexture('F', assets.getTexture("World32GoalPole"));
     }
 
     // World 3-3 hangs over a single bottomless pit. Its ground only exists at
@@ -1036,7 +1077,6 @@ bool PlayState::loadLevel(int level) {
         tileMap.setDecorationTexture('c', assets.getTexture("World33CloudSmall"));
         tileMap.setDecorationTexture('X', assets.getTexture("World33StartCastle"));
         tileMap.setDecorationTexture('Z', assets.getTexture("World33EndCastle"));
-        tileMap.setDecorationTexture('F', assets.getTexture("World33GoalPole"));
         tileMap.setDecorationTexture('@', assets.getTexture("World33PulleyWide"));
         tileMap.setDecorationTexture('&', assets.getTexture("World33PulleyShort"));
     }
@@ -1117,6 +1157,7 @@ bool PlayState::loadLevel(int level) {
     castleBoss = CastleBossEntity{};
     castleBossFire.clear();
     castleClear = CastleClearSequence{};
+    flagpole = FlagpoleSequence{};
 
     spawnWalkingEnemies();
     spawnAquaticEnemies();
@@ -1395,8 +1436,14 @@ bool PlayState::tryEnterNextLevel() {
         return false;
     }
 
-    if (isCastleStage(currentLevel) && reachedStageGoal) {
-        startCastleClearSequence();
+    if (reachedStageGoal) {
+        // Both finishes play out in the level before the results screen opens:
+        // the castles drop their bridge, everything else rides the flagpole.
+        if (isCastleStage(currentLevel)) {
+            startCastleClearSequence();
+        } else {
+            startFlagpoleSequence();
+        }
         return true;
     }
 
@@ -2888,6 +2935,206 @@ void PlayState::updateCastleClearSequence(sf::Time dt) {
     std::cout << "[Core Engine] Castle bridge clear complete; opening results.\n";
     gsm.changeState(std::make_unique<LevelCompleteState>(
         gsm, assets, getSaveData()));
+}
+
+float PlayState::surfaceUnder(float x, float y) const {
+    const float tile = tileMap.tileSize();
+    const int column = static_cast<int>(x / tile);
+    for (int row = std::max(0, static_cast<int>(y / tile));
+         row < static_cast<int>(mapParser.getHeight()); ++row) {
+        if (tileMap.isSolid(column, row)) {
+            return row * tile;
+        }
+    }
+    return tileMap.pixelHeight();
+}
+
+void PlayState::startFlagpoleSequence() {
+    if (flagpole.active || !m_player) {
+        return;
+    }
+
+    const sf::FloatRect art = tileMap.goalArtBounds();
+    const float zoom = Config::kZoom;
+    const float tile = tileMap.tileSize();
+    auto& playerBody = m_player->getPhysicsBody();
+    const sf::Vector2f size = playerBody.getColliderSize();
+
+    flagpole = FlagpoleSequence{};
+    flagpole.active = true;
+    flagpole.shaftCentreX = art.position.x
+                         + (kFlagpoleShaftX + kFlagpoleShaftWidth * 0.5f) * zoom;
+    flagpole.slideEndY = art.position.y + kFlagpoleBaseTop * zoom;
+    flagpole.flagY = art.position.y + kFlagpoleFlagTop * zoom;
+    flagpole.flagEndY = flagpole.slideEndY - kFlagpoleFlagSize * zoom;
+
+    // Stages that draw a castle send Mario in through its doorway; World 1-3
+    // finishes on bare ground, so there he just walks off to the right.
+    flagpole.doorX = flagpole.shaftCentreX + kFlagWalkFallbackTiles * tile;
+    if (tileMap.hasEndCastle()
+        && tileMap.endCastleBounds().position.x > art.position.x) {
+        const sf::FloatRect castle = tileMap.endCastleBounds();
+        flagpole.doorX = castle.position.x + castle.size.x * 0.5f;
+    }
+
+    // He catches the pole at whatever height he touched it, but never above
+    // the pennant he is about to bring down. Touching it at ground level, below
+    // where the shaft ends, is left alone: he simply has nothing left to slide.
+    const float feet = std::max(playerBody.getPosition().y + size.y,
+                                art.position.y + kFlagpoleCleanShaftTop * zoom);
+    playerBody.setPosition({flagpole.shaftCentreX - size.x, feet - size.y});
+    playerBody.setVelocity({0.f, 0.f});
+    playerBody.clearAcceleration();
+    playerBody.setGrounded(false);
+    facingRight = true;
+    avatar.setPosition(playerBody.getPosition());
+
+    heldKeys.clear();
+    inputHandler.reset();
+    // From here the pole is drawn by hand, in pieces, so the pennant can come
+    // down the shaft on its own instead of staying baked into the scenery.
+    tileMap.hideDecoration('F');
+    Systems::SoundController::getInstance().stopMusic();
+    std::cout << "[Core Engine] Flagpole grabbed; riding it down.\n";
+}
+
+void PlayState::updateFlagpoleSequence(sf::Time dt) {
+    if (!flagpole.active || !m_player) {
+        return;
+    }
+
+    const float seconds = dt.asSeconds();
+    auto& playerBody = m_player->getPhysicsBody();
+    const sf::Vector2f size = playerBody.getColliderSize();
+    sf::Vector2f position = playerBody.getPosition();
+    playerBody.setVelocity({0.f, 0.f});
+    playerBody.clearAcceleration();
+
+    switch (flagpole.phase) {
+    case FlagpoleSequence::Phase::Slide:
+        animator.setAction(entity::PlayerAction::Climb);
+        if (position.y < flagpole.slideEndY - size.y) {
+            position.y = std::min(flagpole.slideEndY - size.y,
+                                  position.y + kFlagSlideSpeed * seconds);
+        }
+        flagpole.flagY = std::min(flagpole.flagEndY,
+                                  flagpole.flagY + kFlagSlideSpeed * seconds);
+        // A high grab lands Mario well before the pennant does; he holds on
+        // at the foot of the pole until it has caught up with him.
+        if (position.y >= flagpole.slideEndY - size.y
+            && flagpole.flagY >= flagpole.flagEndY) {
+            // He swings round to the far side of the shaft to walk away.
+            position.x = flagpole.shaftCentreX;
+            flagpole.phase = FlagpoleSequence::Phase::Dismount;
+            flagpole.timer = 0.f;
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("VictorySound"));
+        }
+        break;
+
+    case FlagpoleSequence::Phase::Dismount:
+        animator.setAction(entity::PlayerAction::Idle);
+        animator.setSpeedRatio(0.f);
+        flagpole.timer += seconds;
+        if (flagpole.timer >= kFlagDismountDelay) {
+            flagpole.phase = FlagpoleSequence::Phase::Walk;
+        }
+        break;
+
+    case FlagpoleSequence::Phase::Walk:
+        animator.setAction(entity::PlayerAction::Walk);
+        animator.setSpeedRatio(1.f);
+        position.x += kFlagWalkSpeed * seconds;
+        if (position.x + size.x >= flagpole.doorX) {
+            // Through the doorway: he is out of sight for the last beat.
+            flagpole.hidden = true;
+            flagpole.phase = FlagpoleSequence::Phase::Finish;
+            flagpole.timer = 0.f;
+        }
+        break;
+
+    case FlagpoleSequence::Phase::Finish:
+        flagpole.timer += seconds;
+        break;
+    }
+
+    // Off the pole he answers to the ground again: the pole's base block is
+    // solid and stands a tile proud of it, so he drops off its edge as he
+    // walks rather than gliding along at the height he landed at.
+    bool grounded = flagpole.phase != FlagpoleSequence::Phase::Slide;
+    if (grounded) {
+        const float surface = surfaceUnder(position.x + size.x * 0.5f,
+                                           position.y + size.y);
+        if (position.y + size.y < surface) {
+            flagpole.fallSpeed = std::min(
+                kMaxFallSpeed, flagpole.fallSpeed + kGravity * seconds);
+            position.y += flagpole.fallSpeed * seconds;
+            grounded = false;
+        }
+        if (position.y + size.y >= surface) {
+            position.y = surface - size.y;
+            flagpole.fallSpeed = 0.f;
+            grounded = true;
+        }
+    }
+
+    playerBody.setPosition(position);
+    playerBody.setGrounded(grounded);
+    avatar.setPosition(position);
+    animator.setFacingRight(true);
+    animator.setForm(currentPlayerForm());
+    animator.update(dt);
+    m_cameraSystem.followTarget(position, tileMap.pixelWidth(),
+                                tileMap.pixelHeight());
+
+    if (flagpole.phase != FlagpoleSequence::Phase::Finish
+        || flagpole.timer < kFlagFinishDelay) {
+        return;
+    }
+
+    transitionPending = true;
+    std::cout << "[Core Engine] Flagpole finish complete; opening results.\n";
+    gsm.changeState(std::make_unique<LevelCompleteState>(
+        gsm, assets, getSaveData()));
+}
+
+void PlayState::drawFlagpoleSequence(sf::RenderWindow& window) const {
+    if (!flagpole.active) {
+        return;
+    }
+
+    // hideDecoration() took the whole pole out of the map, pennant and all, so
+    // it is put back together here out of the pieces that stay put - ball,
+    // shaft and base block - plus the pennant wherever it has slid to. With
+    // the pennant at rest the four draws below are pixel-for-pixel the image
+    // the map was drawing, so grabbing the pole changes nothing on screen.
+    const sf::FloatRect art = tileMap.goalArtBounds();
+    const sf::Texture& texture = assets.getTexture(goalPoleArt(currentLevel));
+    const int width = static_cast<int>(texture.getSize().x);
+    const int height = static_cast<int>(texture.getSize().y);
+    const float zoom = Config::kZoom;
+
+    sf::Sprite piece(texture);
+    piece.setScale({zoom, zoom});
+    const auto drawPiece = [&](sf::IntRect rect, int sourceX, float y) {
+        piece.setTextureRect(rect);
+        piece.setPosition({art.position.x + sourceX * zoom, y});
+        window.draw(piece);
+    };
+
+    // Ball, then the shaft: its clean run, and a second copy of that run
+    // standing in for the stretch the pennant is painted over.
+    drawPiece({{0, 0}, {width, kFlagpoleFlagTop}}, 0, art.position.y);
+    drawPiece({{kFlagpoleShaftX, kFlagpoleCleanShaftTop},
+               {kFlagpoleShaftWidth, kFlagpoleBaseTop - kFlagpoleCleanShaftTop}},
+              kFlagpoleShaftX, art.position.y + kFlagpoleCleanShaftTop * zoom);
+    drawPiece({{kFlagpoleShaftX, kFlagpoleCleanShaftTop},
+               {kFlagpoleShaftWidth, kFlagpoleFlagSize}},
+              kFlagpoleShaftX, art.position.y + kFlagpoleFlagTop * zoom);
+    drawPiece({{0, kFlagpoleBaseTop}, {width, height - kFlagpoleBaseTop}},
+              0, art.position.y + kFlagpoleBaseTop * zoom);
+    drawPiece({{0, kFlagpoleFlagTop}, {kFlagpoleFlagSize, kFlagpoleFlagSize}},
+              0, flagpole.flagY);
 }
 
 bool PlayState::moveAvatar(sf::Time dt) {

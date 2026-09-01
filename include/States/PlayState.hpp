@@ -225,6 +225,29 @@ private:
     };
     CastleClearSequence castleClear;
 
+    /**
+     * @struct FlagpoleSequence
+     * @brief The outdoor finish: pole ride, flag drop, walk into the castle.
+     *
+     * Touching the pole hands the stage over to this, exactly as touching the
+     * axe hands a castle over to CastleClearSequence. The player keeps no
+     * control until the results screen opens.
+     */
+    struct FlagpoleSequence {
+        enum class Phase { Slide, Dismount, Walk, Finish };
+        bool active{false};
+        Phase phase{Phase::Slide};
+        float shaftCentreX{0.f};  ///< Middle of the two-pixel pole shaft.
+        float slideEndY{0.f};     ///< Feet position that ends the ride down.
+        float flagY{0.f};         ///< Current top of the pennant.
+        float flagEndY{0.f};      ///< Where the pennant comes to rest.
+        float doorX{0.f};         ///< Castle doorway the walk finishes at.
+        float fallSpeed{0.f};     ///< Stepping off the pole's base block.
+        float timer{0.f};
+        bool hidden{false};       ///< True once Mario is inside the castle.
+    };
+    FlagpoleSequence flagpole;
+
     enum class TrampolineState { Normal, Compressed, Launch };
     struct TrampolineEntity {
         float x;
@@ -372,6 +395,12 @@ private:
     bool damagePlayerFromCastleHazard();
     void startCastleClearSequence();
     void updateCastleClearSequence(sf::Time dt);
+
+    /// @brief Top of the first solid tile at or below @p y in @p x's column.
+    [[nodiscard]] float surfaceUnder(float x, float y) const;
+    void startFlagpoleSequence();
+    void updateFlagpoleSequence(sf::Time dt);
+    void drawFlagpoleSequence(sf::RenderWindow& window) const;
 
     bool moveAvatar(sf::Time dt);
 
