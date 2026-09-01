@@ -207,7 +207,7 @@ void DuelState::init() {
     const bool rowWidthsValid = std::all_of(
         grid.begin(),
         grid.end(),
-        [](const std::vector<char>& row) {
+        [expectedColumns](const std::vector<char>& row) {
             return row.size() == expectedColumns;
         }
     );
