@@ -147,7 +147,10 @@ namespace {
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       m_physicsSystem(kGravity, kMaxFallSpeed),
-      m_commandParser(std::make_unique<Systems::CommandParser>(*this)) {}
+      m_commandParser(std::make_unique<Systems::CommandParser>(*this)) {    if (m_gameMode == GameMode::Inferno) {
+        m_doomWall.emplace(assets);
+    }
+}
 
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data)
     : State(gsm, assets), selectedCharacter(data.selectedCharacter),
@@ -160,9 +163,13 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->lives = data.lives;
     this->world13OneUpUnlocked = data.world13OneUpUnlocked;
     this->world23AllCoinsCollected = data.world23AllCoinsCollected;
-    this->m_nightfallMode = data.nightfallMode;
-    if (m_nightfallMode) {
+    this->m_gameMode = data.gameMode;
+    if (m_gameMode == GameMode::Nightfall) {
         m_nightfallOverlay.emplace(Config::kViewWidth, Config::kViewHeight, 160.f);
+    }
+    if (m_gameMode == GameMode::Inferno) {
+        this->lives = 1; // Enforce 1 life
+        m_doomWall.emplace(assets);
     }
 }
 
@@ -289,8 +296,10 @@ void PlayState::registerEvents() {
     events.subscribe(Core::EventType::OneMoreLife, [this](const Core::Event&) {
         auto& sounds = Systems::SoundController::getInstance();
         sounds.playSound(assets.getSoundBuffer("OneMoreLifeSound"));
-        this->lives += 1;
-        this->hud.setLives(this->lives);
+        if (m_gameMode != GameMode::Inferno) {
+            this->lives += 1;
+            this->hud.setLives(this->lives);
+        }
     });
 
     events.subscribe(Core::EventType::GameSaved, [this](const Core::Event&) {
@@ -468,6 +477,22 @@ void PlayState::update(sf::Time dt) {
         return;
     }
     updateTrampolines(dt);
+
+    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+        float cameraLeft = m_cameraSystem.getView().getCenter().x - m_cameraSystem.getView().getSize().x / 2.f;
+        m_doomWall->update(dt, cameraLeft);
+        if (m_doomWall->checkCollision(avatarBounds())) {
+            // Player touches the fire wall
+            handlePlayerDeath(); // This will trigger death.active
+        }
+    }
+
+    if (death.active) {
+        tileMap.update(dt);
+        Systems::SoundController::getInstance().update();
+        return;
+    }
+
     if (tryEnterNextLevel()) {
         tileMap.update(dt);
         return;
@@ -598,8 +623,13 @@ void PlayState::render(sf::RenderWindow& window) {
     drawExplosions(window);
 
     // Nightfall Mode: draw darkness overlay after all world elements
-    if (m_nightfallMode && m_nightfallOverlay.has_value() && m_player) {
+    if (m_gameMode == GameMode::Nightfall && m_nightfallOverlay.has_value() && m_player) {
         m_nightfallOverlay->draw(window, avatarFeetCentre(), m_cameraSystem.getView());
+    }
+
+    // Inferno Mode: draw fire wall overlaying almost everything
+    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+        m_doomWall->render(window);
     }
 
     window.setView(screenView);
@@ -632,7 +662,7 @@ SaveData PlayState::getSaveData() const {
     data.selectedCharacter = selectedCharacter;
     data.world13OneUpUnlocked = world13OneUpUnlocked;
     data.world23AllCoinsCollected = world23AllCoinsCollected;
-    data.nightfallMode = m_nightfallMode;
+    data.gameMode = m_gameMode;
     return data;
 }
 

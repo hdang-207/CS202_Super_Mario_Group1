@@ -11,12 +11,8 @@
 #include <string>
 
 WorldSelectionState::WorldSelectionState(
-    GameStateManager& gsm,
-    Systems::AssetManager& assets,
-    CharacterType character,
-    bool nightfall
-)
-    : State(gsm, assets), selectedCharacter(character), nightfallMode(nightfall),
+    GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character, GameMode mode)
+    : State(gsm, assets), selectedCharacter(character), gameMode(mode),
       bgSprite(assets.getTexture("MenuBackground")),
       headerText(assets.getFont("MarioFont")),
       world1Text(assets.getFont("MarioFont")),
@@ -87,7 +83,7 @@ void WorldSelectionState::startSelectedWorld() {
     SaveData progress;
     progress.currentLevel = Config::firstLevelOfWorld(selectedWorld);
     progress.selectedCharacter = selectedCharacter;
-    progress.nightfallMode = nightfallMode;
+    progress.gameMode = gameMode;
 
     std::cout << "[Core Engine] Starting Level " << selectedWorld
               << " route at World " << selectedWorld << "-1.\n";
@@ -120,7 +116,7 @@ void WorldSelectionState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("SelectSound"));
             gsm.changeState(std::make_unique<CharacterSelectionState>(
-                gsm, assets, nightfallMode));
+                gsm, assets, gameMode));
         }
         return;
     }

@@ -1,21 +1,23 @@
 #pragma once
 
+#include "Core/GameMode.hpp"
 #include "States/State.hpp"
 
 /**
  * @class GameModeSelectionState
- * @brief Allows the player to choose Normal, Nightfall, or Duel mode.
+ * @brief Allows the player to choose Normal, Nightfall, Inferno, or Duel mode.
  *
- * Single Responsibility: Only handles the game mode selection UI.
- * Appears after pressing "START NEW GAME" and before character selection.
+ * Normal, Nightfall, and Inferno continue to character/world selection.
+ * Duel enters its dedicated local multiplayer state directly.
  */
 class GameModeSelectionState : public State {
 public:
     GameModeSelectionState(
         GameStateManager& gsm,
         Systems::AssetManager& assets,
-        bool nightfallInitiallySelected = false
+        GameMode initiallySelected = GameMode::Normal
     );
+
     ~GameModeSelectionState() override = default;
 
     void init() override;
@@ -27,6 +29,7 @@ private:
     enum class SelectionOption {
         Normal,
         Nightfall,
+        Inferno,
         Duel
     };
 
@@ -35,12 +38,17 @@ private:
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
     sf::Text headerText;
+
     sf::Text normalText;
     sf::Text nightfallText;
+    sf::Text infernoText;
     sf::Text duelText;
+
     sf::Text normalDesc;
     sf::Text nightfallDesc;
+    sf::Text infernoDesc;
     sf::Text duelDesc;
+
     sf::Text hintText;
 
     void selectPreviousOption();

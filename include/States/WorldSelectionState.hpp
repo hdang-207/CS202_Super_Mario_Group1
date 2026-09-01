@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/CharacterType.hpp"
+#include "Core/GameMode.hpp"
 #include "States/State.hpp"
 
 /**
@@ -11,7 +12,7 @@ class WorldSelectionState : public State {
 private:
     CharacterType selectedCharacter;
     int selectedWorld{1};
-    bool nightfallMode{false};
+    GameMode gameMode{GameMode::Normal};
 
     sf::Sprite bgSprite;
     sf::RectangleShape darkOverlay;
@@ -30,8 +31,9 @@ public:
         GameStateManager& gsm,
         Systems::AssetManager& assets,
         CharacterType character,
-        bool nightfall = false
+        GameMode mode = GameMode::Normal
     );
+
     ~WorldSelectionState() override = default;
 
     void init() override;

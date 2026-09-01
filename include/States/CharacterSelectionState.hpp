@@ -1,5 +1,6 @@
 #pragma once
 #include "States/State.hpp"
+#include "Core/GameMode.hpp"
 
 /**
  * @class CharacterSelectionState
@@ -23,7 +24,7 @@ private:
     sf::Sprite musicIconSprite;    ///< Music toggle icon sprite
     sf::Sprite soundIconSprite;    ///< Sound effect toggle icon sprite
     int selectedIndex = 0;         ///< 0 for Mario, 1 for Luigi
-    bool nightfallMode{false};     ///< Whether Nightfall game mode is selected
+    GameMode gameMode{GameMode::Normal}; ///< Selected game mode
 
 public:
     /**
@@ -37,9 +38,9 @@ public:
      * @brief Constructor for CharacterSelectionState with game mode.
      * @param gsm Reference to the GameStateManager.
      * @param assets Reference to the central AssetManager.
-     * @param nightfall Whether Nightfall mode is enabled.
+     * @param mode The selected game mode.
      */
-    CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets, bool nightfall);
+    CharacterSelectionState(GameStateManager& gsm, Systems::AssetManager& assets, GameMode mode);
 
     /**
      * @brief Destructor.

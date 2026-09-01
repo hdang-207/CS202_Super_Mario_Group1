@@ -14,12 +14,12 @@ CharacterSelectionState::CharacterSelectionState(
     GameStateManager& gsm,
     Systems::AssetManager& assets
 )
-    : CharacterSelectionState(gsm, assets, false) {}
+    : CharacterSelectionState(gsm, assets, GameMode::Normal) {}
 
 CharacterSelectionState::CharacterSelectionState(
     GameStateManager& gsm,
     Systems::AssetManager& assets,
-    bool nightfall
+    GameMode mode
 )
     : State(gsm, assets),
       bgSprite(assets.getTexture("MenuBackground")),
@@ -31,7 +31,8 @@ CharacterSelectionState::CharacterSelectionState(
       previewSprite(assets.getTexture("MarioPreview")),
       musicIconSprite(assets.getTexture("MusicSymbol")),
       soundIconSprite(assets.getTexture("SoundSymbol")),
-      nightfallMode(nightfall) {}
+      gameMode(mode) {}
+
 
 void CharacterSelectionState::init() {
     std::cout << "[Core Engine] CharacterSelectionState Initialized.\n";
@@ -120,13 +121,13 @@ void CharacterSelectionState::handleInput(const sf::Event& event) {
             Systems::SoundController::getInstance().playSound(assets.getSoundBuffer("SelectSound"));
             CharacterType chosen = (selectedIndex == 0) ? CharacterType::Mario : CharacterType::Luigi;
             std::cout << "[Core Engine] Character confirmed! Transitioning to WorldSelectionState...\n";
-            gsm.changeState(std::make_unique<WorldSelectionState>(gsm, assets, chosen, nightfallMode));
+            gsm.changeState(std::make_unique<WorldSelectionState>(gsm, assets, chosen, gameMode));
         }
         else if (code == sf::Keyboard::Scancode::B
                  || code == sf::Keyboard::Scancode::Escape) {
             std::cout << "[Core Engine] Going back to GameModeSelectionState...\n";
             gsm.changeState(std::make_unique<GameModeSelectionState>(
-                gsm, assets, nightfallMode));
+                gsm, assets, gameMode));
         }
         else if (code == sf::Keyboard::Scancode::L) {
             SaveData data;

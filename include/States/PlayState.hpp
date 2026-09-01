@@ -26,6 +26,8 @@
 #include <vector>
 #include "UI/ConsoleOverlay.hpp"
 #include "UI/NightfallOverlay.hpp"
+#include "Systems/DoomWall.hpp"
+#include "Core/GameMode.hpp"
 #include "Systems/CommandParser.hpp"
 
 /**
@@ -250,8 +252,9 @@ private:
     bool m_godMode{false};
     bool m_destroyerMode{false};
     bool m_musicLocked{false};
-    bool m_nightfallMode{false};
+    GameMode m_gameMode{GameMode::Normal};
     std::optional<UI::NightfallOverlay> m_nightfallOverlay;
+    std::optional<Systems::DoomWall> m_doomWall;
 
     std::vector<physics::AABB> getSolidAABBsOverlapping(const sf::FloatRect& bounds) const;
     sf::FloatRect avatarBounds() const;
