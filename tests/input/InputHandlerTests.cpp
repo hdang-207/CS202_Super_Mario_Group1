@@ -262,24 +262,41 @@ void testHandlersHaveIndependentEdgeState(TestContext& context) {
     );
 }
 
-void testDuelProfilesDisableCombat(TestContext& context) {
+void testDuelShootingBindings(TestContext& context) {
     InputHandler playerOne(PlayerKeyBindings::duelPlayerOne());
     InputHandler playerTwo(PlayerKeyBindings::duelPlayerTwo());
 
-    update(playerOne, {Scancode::X, Scancode::C});
+    update(playerOne, {Scancode::F});
+    context.expectTrue(
+        playerOne.getPlayerInput().shootPressed,
+        "player one F should shoot"
+    );
+    update(playerOne, {});
+    update(playerOne, {Scancode::RControl});
     context.expectTrue(
         !playerOne.getPlayerInput().shootPressed,
-        "player one should not shoot"
+        "player one should ignore player two shoot key"
     );
+
+    update(playerTwo, {Scancode::RControl});
+    context.expectTrue(
+        playerTwo.getPlayerInput().shootPressed,
+        "player two Right Control should shoot"
+    );
+    update(playerTwo, {});
+    update(playerTwo, {Scancode::Numpad0});
+    context.expectTrue(
+        playerTwo.getPlayerInput().shootPressed,
+        "player two Numpad 0 should also shoot"
+    );
+
+    update(playerOne, {});
+    update(playerTwo, {});
+    update(playerOne, {Scancode::C});
+    update(playerTwo, {Scancode::C});
     context.expectTrue(
         !playerOne.getPlayerInput().bombPressed,
         "player one should not throw bombs"
-    );
-
-    update(playerTwo, {Scancode::X, Scancode::C});
-    context.expectTrue(
-        !playerTwo.getPlayerInput().shootPressed,
-        "player two should not shoot"
     );
     context.expectTrue(
         !playerTwo.getPlayerInput().bombPressed,
@@ -358,8 +375,8 @@ int main() {
         failedTests
     );
     runTest(
-        "duel profiles disable combat",
-        testDuelProfilesDisableCombat,
+        "duel shooting bindings",
+        testDuelShootingBindings,
         passedTests,
         failedTests
     );

@@ -115,6 +115,18 @@ if(BUILD_TESTING)
         NAME InputHandlerTests
         COMMAND input_handler_tests
     )
+
+    add_executable(duel_rules_tests
+        tests/states/DuelRulesTests.cpp
+    )
+
+    target_include_directories(duel_rules_tests PRIVATE include)
+    target_link_libraries(duel_rules_tests PRIVATE SFML::System)
+
+    add_test(
+        NAME DuelRulesTests
+        COMMAND duel_rules_tests
+    )
 endif()
 
 # Tự động copy file DLL của SFML vào thư mục bin trên Windows (đối với liên kết động - Dynamic Link)

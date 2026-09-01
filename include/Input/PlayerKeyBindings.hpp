@@ -36,7 +36,7 @@ struct PlayerKeyBindings {
             {Scancode::D},
             {Scancode::W},
             {Scancode::S},
-            {},
+            {Scancode::F},
             {}
         };
     }
@@ -47,7 +47,7 @@ struct PlayerKeyBindings {
             {Scancode::Right},
             {Scancode::Up},
             {Scancode::Down},
-            {},
+            {Scancode::RControl, Scancode::Numpad0},
             {}
         };
     }
