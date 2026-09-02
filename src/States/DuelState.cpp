@@ -5,6 +5,7 @@
 #include "Items/FireFlower.hpp"
 #include "Items/ManaOrb.hpp"
 #include "Items/Mushroom.hpp"
+#include "Items/Star.hpp"
 #include "Physics/Broadphase.hpp"
 #include "States/DuelRules.hpp"
 #include "States/GameStateManager.hpp"
@@ -12,6 +13,7 @@
 #include "Systems/SoundController.hpp"
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -27,8 +29,38 @@ constexpr float kStompBounceSpeed = 650.f;
 constexpr float kDamageProtectionDuration = 0.9f;
 constexpr float kFireballSpeed = 520.f;
 constexpr float kFireballLifetime = 2.5f;
-constexpr float kMinimumPowerUpDelay = 10.f;
-constexpr float kMaximumPowerUpDelay = 15.f;
+constexpr float kMinimumPowerUpDelay = 4.f;
+constexpr float kMaximumPowerUpDelay = 7.f;
+constexpr float kFirstPowerUpDelay = 2.f;
+constexpr float kVictoryFanfareDelay = 1.f;
+constexpr int kRoundsToWinMatch = 2;      // best of three
+constexpr float kRoundIntroDuration = 3.f;
+constexpr float kFightBannerDuration = 0.7f;
+constexpr float kRoundTimeLimit = 90.f;
+constexpr float kLowTimeWarning = 10.f;
+struct ArenaDefinition {
+    const char* file;
+    const char* name;
+};
+
+// Every arena is mirrored left to right so neither player gets the better side.
+constexpr ArenaDefinition kArenas[] = {
+    {"assets/maps/duel_arena.txt", "CLASSIC"},
+    {"assets/maps/duel_arena_towers.txt", "SKY TOWERS"},
+    {"assets/maps/duel_arena_chasm.txt", "CHASM"},
+};
+constexpr std::size_t kArenaCount = std::size(kArenas);
+
+constexpr unsigned int kResultTextSize = 38;
+constexpr float kResultTextPadding = 60.f;
+constexpr float kBombBlastRadius = 66.f;
+constexpr float kBlastEffectDuration = 0.35f;
+constexpr float kBlastKnockbackX = 300.f;
+constexpr float kBlastKnockbackY = 340.f;
+constexpr float kStarContactKnockback = 260.f;
+// Swap this for a dedicated battle track once the group records one.
+constexpr const char* kDuelMusicPath = "assets/audio/InfernoThemeWorld1.mp3";
+constexpr const char* kMenuMusicPath = "assets/audio/Theme.mp3";
 constexpr std::size_t kMaximumActivePowerUps = 6;
 constexpr sf::Vector2f kPlayerOneHealthPosition{48.f, 48.f};
 constexpr sf::Vector2f kPlayerTwoHealthPosition{
@@ -48,14 +80,33 @@ DuelState::DuelState(GameStateManager& gsm, Systems::AssetManager& assets)
       playerTwoInput(PlayerKeyBindings::duelPlayerTwo()),
       physicsSystem(kGravity, kMaxFallSpeed),
       titleText(assets.getFont("MarioFont")),
+      scoreText(assets.getFont("MarioFont")),
+      countdownText(assets.getFont("MarioFont")),
+      timerText(assets.getFont("MarioFont")),
+      controlsText(assets.getFont("MarioFont")),
       errorText(assets.getFont("MarioFont")),
-      hintText(assets.getFont("MarioFont")),
       resultText(assets.getFont("MarioFont")),
       resultReasonText(assets.getFont("MarioFont")),
       resultHintText(assets.getFont("MarioFont")) {}
 
 void DuelState::init() {
+    std::uniform_int_distribution<std::size_t> arenaChoice(0, kArenaCount - 1);
+    arenaIndex = arenaChoice(randomEngine);
+    startMatch();
+}
+
+void DuelState::startMatch() {
+    roundNumber = 1;
+    roundsWonByPlayerOne = 0;
+    roundsWonByPlayerTwo = 0;
+    matchOver = false;
+    startRound();
+}
+
+void DuelState::startRound() {
     std::cout << "[Core Engine] DuelState Initialized.\n";
+    Systems::SoundController::getInstance().playMusic(
+        Systems::resourcePath(kDuelMusicPath));
     arenaLoaded = false;
     playerOne.reset();
     playerTwo.reset();
@@ -67,9 +118,17 @@ void DuelState::init() {
     activePowerUps.clear();
     playerOneFireballs.clear();
     playerTwoFireballs.clear();
+    playerOneBomb.reset();
+    playerTwoBomb.reset();
+    blasts.clear();
     powerUpSpawnPoints.clear();
     roundOver = false;
+    victoryFanfareDelay = -1.f;
     winnerPlayer = 0;
+    roundTimeRemaining = kRoundTimeLimit;
+    roundIntroRemaining = kRoundIntroDuration;
+    fightBannerRemaining = 0.f;
+    lastIntroTick = static_cast<int>(kRoundIntroDuration) + 1;
 
     const sf::Font& font = assets.getFont("MarioFont");
     playerOneHealthBar.init(
@@ -124,6 +183,40 @@ void DuelState::init() {
                          titleBounds.position.y + titleBounds.size.y / 2.f});
     titleText.setPosition({Config::kViewWidth / 2.f, 42.f});
 
+    scoreText.setCharacterSize(20);
+    scoreText.setFillColor(sf::Color::White);
+    scoreText.setOutlineColor(sf::Color::Black);
+    scoreText.setOutlineThickness(2.f);
+    refreshScoreText();
+
+    timerText.setCharacterSize(26);
+    timerText.setOutlineColor(sf::Color::Black);
+    timerText.setOutlineThickness(3.f);
+    refreshTimerText();
+
+    // The arena carries no permanent control legend, so show one while the
+    // players are frozen for the countdown.
+    controlsText.setString(
+        "P1  A/D MOVE   W JUMP   S DUCK   F FIRE   G BOMB\n"
+        "P2  ARROWS MOVE   J FIRE   K BOMB\n"
+        "ARENA: " + std::string(kArenas[arenaIndex].name) + "   -   T: CHANGE ARENA");
+    controlsText.setCharacterSize(16);
+    controlsText.setFillColor(sf::Color(200, 230, 255));
+    controlsText.setOutlineColor(sf::Color::Black);
+    controlsText.setOutlineThickness(2.f);
+    const sf::FloatRect controlsBounds = controlsText.getLocalBounds();
+    controlsText.setOrigin({
+        controlsBounds.position.x + controlsBounds.size.x / 2.f,
+        controlsBounds.position.y + controlsBounds.size.y / 2.f
+    });
+    controlsText.setPosition({Config::kViewWidth / 2.f,
+                              Config::kViewHeight / 2.f + 78.f});
+
+    countdownText.setCharacterSize(72);
+    countdownText.setFillColor(sf::Color::Yellow);
+    countdownText.setOutlineColor(sf::Color::Black);
+    countdownText.setOutlineThickness(4.f);
+
     errorText.setString("FAILED TO LOAD DUEL ARENA");
     errorText.setCharacterSize(24);
     errorText.setFillColor(sf::Color::White);
@@ -135,27 +228,14 @@ void DuelState::init() {
     errorText.setPosition({Config::kViewWidth / 2.f,
                            Config::kViewHeight * 0.50f});
 
-    hintText.setString(
-        "P1: A/D + W + F FIRE   |   P2: ARROWS + RCTRL FIRE\n"
-        "STOMP: -20 HP   |   POWER-UP: 10-15S   |   FALL = LOSE   |   B/ESC: BACK");
-    hintText.setCharacterSize(15);
-    hintText.setFillColor(sf::Color::White);
-    hintText.setOutlineColor(sf::Color::Black);
-    hintText.setOutlineThickness(2.f);
-    const sf::FloatRect hintBounds = hintText.getLocalBounds();
-    hintText.setOrigin({hintBounds.position.x + hintBounds.size.x / 2.f,
-                        hintBounds.position.y + hintBounds.size.y / 2.f});
-    hintText.setPosition({Config::kViewWidth / 2.f,
-                          Config::kViewHeight - 43.f});
-
-    resultOverlay.setSize({620.f, 210.f});
-    resultOverlay.setOrigin({310.f, 105.f});
+    resultOverlay.setSize({820.f, 220.f});
+    resultOverlay.setOrigin({410.f, 110.f});
     resultOverlay.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight / 2.f});
     resultOverlay.setFillColor(sf::Color(0, 0, 0, 215));
     resultOverlay.setOutlineColor(sf::Color::White);
     resultOverlay.setOutlineThickness(4.f);
 
-    resultText.setCharacterSize(38);
+    resultText.setCharacterSize(kResultTextSize);
     resultText.setFillColor(sf::Color::Yellow);
     resultText.setOutlineColor(sf::Color::Black);
     resultText.setOutlineThickness(3.f);
@@ -180,7 +260,8 @@ void DuelState::init() {
 
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
 
-    const std::string arenaPath = Systems::resourcePath("assets/maps/duel_arena.txt");
+    const ArenaDefinition& arena = kArenas[arenaIndex];
+    const std::string arenaPath = Systems::resourcePath(arena.file);
     if (!mapParser.loadFromFile(arenaPath)) {
         std::cerr << "[DuelState] Failed to load arena map: " << arenaPath << '\n';
         return;
@@ -236,9 +317,10 @@ void DuelState::init() {
     }
 
     buildPowerUpSpawnPoints();
-    resetPowerUpTimer();
+    powerUpSpawnTimer = kFirstPowerUpDelay;
 
-    std::cout << "[DuelState] Arena loaded with Mario and Luigi ready.\n";
+    std::cout << "[DuelState] Arena \"" << arena.name
+              << "\" loaded with Mario and Luigi ready.\n";
 }
 
 void DuelState::handleInput(const sf::Event& event) {
@@ -260,7 +342,22 @@ void DuelState::handleInput(const sf::Event& event) {
             || key == sf::Keyboard::Scancode::Escape) {
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("SelectSound"));
+            Systems::SoundController::getInstance().playMusic(
+                Systems::resourcePath(kMenuMusicPath));
             gsm.popState();
+            return;
+        }
+
+        if (key == sf::Keyboard::Scancode::T
+            && (roundOver || roundIntroRemaining > 0.f)) {
+            Systems::SoundController::getInstance().playSound(
+                assets.getSoundBuffer("SelectSound"));
+            arenaIndex = (arenaIndex + 1) % kArenaCount;
+            if (matchOver) {
+                startMatch();
+            } else {
+                startRound();
+            }
             return;
         }
 
@@ -268,7 +365,11 @@ void DuelState::handleInput(const sf::Event& event) {
             if (key == sf::Keyboard::Scancode::R) {
                 Systems::SoundController::getInstance().playSound(
                     assets.getSoundBuffer("SelectSound"));
-                init();
+                if (matchOver) {
+                    init();
+                } else {
+                    startRound();
+                }
             }
             return;
         }
@@ -279,6 +380,10 @@ void DuelState::handleInput(const sf::Event& event) {
 
 void DuelState::update(sf::Time dt) {
     const float seconds = dt.asSeconds();
+    if (roundOver && seconds > 0.f) {
+        updateRoundEndAudio(seconds);
+        updateBlasts(seconds);
+    }
     if (!arenaLoaded || !playerOne || !playerTwo || seconds <= 0.f || roundOver) {
         return;
     }
@@ -291,6 +396,21 @@ void DuelState::update(sf::Time dt) {
         0.f,
         playerTwoCombat.damageProtectionRemaining - seconds
     );
+    updateStarPower(seconds);
+
+    if (roundIntroRemaining > 0.f) {
+        updateRoundIntro(seconds);
+        playerOneAnimator.update(dt);
+        playerTwoAnimator.update(dt);
+        tileMap.update(dt);
+        return;
+    }
+    fightBannerRemaining = std::max(0.f, fightBannerRemaining - seconds);
+
+    updateRoundTimer(seconds);
+    if (roundOver) {
+        return;
+    }
 
     if (playerOneAnimator.isTransforming() || playerTwoAnimator.isTransforming()) {
         playerOneAnimator.setBlinking(playerOneCombat.damageProtectionRemaining > 0.f);
@@ -335,6 +455,24 @@ void DuelState::update(sf::Time dt) {
         playerTwoFireballs,
         2
     );
+    tryThrowBomb(
+        *playerOne,
+        playerOneShotFacingRight,
+        playerOneControls,
+        playerOneCombat,
+        playerOneEnergyBar,
+        playerOneBomb,
+        1
+    );
+    tryThrowBomb(
+        *playerTwo,
+        playerTwoShotFacingRight,
+        playerTwoControls,
+        playerTwoCombat,
+        playerTwoEnergyBar,
+        playerTwoBomb,
+        2
+    );
     playerOne->setInput(playerOneControls);
     playerTwo->setInput(playerTwoControls);
     playerOne->update(seconds);
@@ -365,7 +503,18 @@ void DuelState::update(sf::Time dt) {
         return;
     }
 
+    resolveStarContact();
+    if (roundOver) {
+        return;
+    }
+
     updateFireballs(dt);
+    if (roundOver) {
+        return;
+    }
+
+    updateBombs(seconds);
+    updateBlasts(seconds);
     if (roundOver) {
         return;
     }
@@ -403,6 +552,7 @@ void DuelState::render(sf::RenderWindow& window) {
             }
         }
         drawFireballs(window);
+        drawBombs(window);
         if (playerOne) {
             playerOneAnimator.draw(window, feetCentre(*playerOne));
         }
@@ -413,11 +563,21 @@ void DuelState::render(sf::RenderWindow& window) {
         window.draw(errorText);
     }
     window.draw(titleText);
+    window.draw(scoreText);
+    if (arenaLoaded) {
+        window.draw(timerText);
+    }
     playerOneHealthBar.render(window);
     playerTwoHealthBar.render(window);
     playerOneEnergyBar.render(window);
     playerTwoEnergyBar.render(window);
-    window.draw(hintText);
+
+    if (roundIntroRemaining > 0.f || fightBannerRemaining > 0.f) {
+        window.draw(countdownText);
+    }
+    if (roundIntroRemaining > 0.f) {
+        window.draw(controlsText);
+    }
 
     if (roundOver) {
         window.draw(resultOverlay);
@@ -579,7 +739,10 @@ bool DuelState::tryResolveStomp(
             victimBounds,
             attackerBody.getVelocity().y,
             victimBody.getVelocity().y,
-            victimCombat.damageProtectionRemaining
+            duel::damageProtectionOf(
+                victimCombat.damageProtectionRemaining,
+                victimCombat.starPowerRemaining
+            )
         )) {
         return false;
     }
@@ -613,6 +776,88 @@ bool DuelState::tryResolveStomp(
     return true;
 }
 
+void DuelState::refreshScoreText() {
+    scoreText.setString(
+        "ROUND " + std::to_string(roundNumber)
+        + "     MARIO " + std::to_string(roundsWonByPlayerOne)
+        + " - " + std::to_string(roundsWonByPlayerTwo) + " LUIGI"
+        + "     FIRST TO " + std::to_string(kRoundsToWinMatch)
+    );
+    const sf::FloatRect bounds = scoreText.getLocalBounds();
+    scoreText.setOrigin({bounds.position.x + bounds.size.x / 2.f,
+                         bounds.position.y + bounds.size.y / 2.f});
+    scoreText.setPosition({Config::kViewWidth / 2.f,
+                           Config::kViewHeight - 43.f});
+}
+
+void DuelState::refreshTimerText() {
+    const int wholeSeconds = static_cast<int>(std::ceil(roundTimeRemaining));
+    const int minutes = wholeSeconds / 60;
+    const int seconds = wholeSeconds % 60;
+    const std::string padded = seconds < 10
+        ? "0" + std::to_string(seconds)
+        : std::to_string(seconds);
+    timerText.setString("TIME  " + std::to_string(minutes) + ":" + padded);
+    timerText.setFillColor(roundTimeRemaining <= kLowTimeWarning
+        ? sf::Color(255, 90, 60)
+        : sf::Color::White);
+
+    const sf::FloatRect bounds = timerText.getLocalBounds();
+    timerText.setOrigin({bounds.position.x + bounds.size.x / 2.f,
+                         bounds.position.y + bounds.size.y / 2.f});
+    timerText.setPosition({Config::kViewWidth / 2.f,
+                           Config::kViewHeight - 80.f});
+}
+
+void DuelState::updateRoundTimer(float seconds) {
+    roundTimeRemaining = std::max(0.f, roundTimeRemaining - seconds);
+    refreshTimerText();
+    if (roundTimeRemaining > 0.f) {
+        return;
+    }
+
+    // Out of time: whoever is left standing with more health takes the round.
+    if (playerOneCombat.health > playerTwoCombat.health) {
+        finishRound(1, "TIME UP - MARIO HEALTHIER!");
+    } else if (playerTwoCombat.health > playerOneCombat.health) {
+        finishRound(2, "TIME UP - LUIGI HEALTHIER!");
+    } else {
+        finishRound(0, "TIME UP - DEAD HEAT!");
+    }
+}
+
+void DuelState::setCountdownString(const std::string& text) {
+    countdownText.setString(text);
+    const sf::FloatRect bounds = countdownText.getLocalBounds();
+    countdownText.setOrigin({bounds.position.x + bounds.size.x / 2.f,
+                             bounds.position.y + bounds.size.y / 2.f});
+    countdownText.setPosition({Config::kViewWidth / 2.f,
+                               Config::kViewHeight / 2.f - 20.f});
+}
+
+void DuelState::updateRoundIntro(float seconds) {
+    roundIntroRemaining = std::max(0.f, roundIntroRemaining - seconds);
+
+    if (roundIntroRemaining <= 0.f) {
+        fightBannerRemaining = kFightBannerDuration;
+        setCountdownString("FIGHT!");
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("FightSound"));
+        std::cout << "[DuelState] Round " << roundNumber << " start!\n";
+        return;
+    }
+
+    // One beep per whole second left on the clock.
+    const int tick = static_cast<int>(std::ceil(roundIntroRemaining));
+    if (tick < lastIntroTick) {
+        lastIntroTick = tick;
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("SelectSound"));
+    }
+
+    setCountdownString(std::to_string(tick));
+}
+
 void DuelState::finishRound(int winningPlayer, const std::string& reason) {
     if (roundOver) {
         return;
@@ -627,17 +872,39 @@ void DuelState::finishRound(int winningPlayer, const std::string& reason) {
     playerTwo->getPhysicsBody().setVelocity({0.f, 0.f});
 
     if (winnerPlayer == 1) {
-        resultText.setString("MARIO WINS!");
+        ++roundsWonByPlayerOne;
         playerTwoAnimator.setAction(entity::PlayerAction::Dead);
     } else if (winnerPlayer == 2) {
-        resultText.setString("LUIGI WINS!");
+        ++roundsWonByPlayerTwo;
         playerOneAnimator.setAction(entity::PlayerAction::Dead);
-    } else {
+    }
+    matchOver = roundsWonByPlayerOne >= kRoundsToWinMatch
+        || roundsWonByPlayerTwo >= kRoundsToWinMatch;
+
+    if (winnerPlayer == 0) {
         resultText.setString("DRAW!");
+    } else {
+        const std::string winnerName = winnerPlayer == 1 ? "MARIO" : "LUIGI";
+        resultText.setString(
+            matchOver ? winnerName + " WINS THE MATCH!"
+                      : winnerName + " WINS ROUND " + std::to_string(roundNumber));
     }
     resultReasonText.setString(reason);
+    resultHintText.setString(
+        matchOver ? "R: NEW MATCH   T: ARENA   B/ESC: BACK"
+                  : "R: NEXT ROUND   T: ARENA   B/ESC: BACK");
+    refreshScoreText();
     std::cout << "[DuelState] Round finished: " << resultText.getString().toAnsiString()
               << " (" << reason << ")\n";
+
+    const float maxResultWidth = resultOverlay.getSize().x - kResultTextPadding;
+    unsigned int resultSize = kResultTextSize;
+    resultText.setCharacterSize(resultSize);
+    while (resultSize > 22u
+           && resultText.getLocalBounds().size.x > maxResultWidth) {
+        resultSize -= 2u;
+        resultText.setCharacterSize(resultSize);
+    }
 
     const auto centreTextAt = [](sf::Text& text, sf::Vector2f position) {
         const sf::FloatRect bounds = text.getLocalBounds();
@@ -649,9 +916,34 @@ void DuelState::finishRound(int winningPlayer, const std::string& reason) {
                               Config::kViewHeight / 2.f - 45.f});
     centreTextAt(resultReasonText, {Config::kViewWidth / 2.f,
                                     Config::kViewHeight / 2.f + 10.f});
+    centreTextAt(resultHintText, {Config::kViewWidth / 2.f,
+                                  Config::kViewHeight / 2.f + 66.f});
 
-    Systems::SoundController::getInstance().playSound(
-        assets.getSoundBuffer(winnerPlayer == 0 ? "GameOverSound" : "VictorySound"));
+    auto& sound = Systems::SoundController::getInstance();
+    if (winnerPlayer == 0) {
+        sound.playSound(assets.getSoundBuffer("GameOverSound"));
+    } else if (matchOver) {
+        sound.playSound(assets.getSoundBuffer(
+            winnerPlayer == 1 ? "MarioWinsSound" : "LuigiWinsSound"));
+        victoryFanfareDelay = kVictoryFanfareDelay;
+    } else {
+        sound.playSound(assets.getSoundBuffer("VictorySound"));
+    }
+
+    ++roundNumber;
+}
+
+void DuelState::updateRoundEndAudio(float seconds) {
+    if (victoryFanfareDelay < 0.f) {
+        return;
+    }
+
+    victoryFanfareDelay -= seconds;
+    if (victoryFanfareDelay <= 0.f) {
+        victoryFanfareDelay = -1.f;
+        Systems::SoundController::getInstance().playSound(
+            assets.getSoundBuffer("VictorySound"));
+    }
 }
 
 void DuelState::tryShootFireball(
@@ -733,7 +1025,8 @@ void DuelState::updateFireballGroup(
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("ExplodeSound"));
 
-            if (targetCombat.damageProtectionRemaining <= 0.f) {
+            if (targetCombat.damageProtectionRemaining <= 0.f
+                && targetCombat.starPowerRemaining <= 0.f) {
                 targetCombat.health = duel::healthAfterFireball(targetCombat.health);
                 targetCombat.damageProtectionRemaining = kDamageProtectionDuration;
                 targetHealthBar.setEnergy(targetCombat.health);
@@ -776,6 +1069,234 @@ void DuelState::drawFireballs(sf::RenderWindow& window) const {
     }
     for (const entity::Bullet& fireball : playerTwoFireballs) {
         fireball.draw(window);
+    }
+}
+
+bool DuelState::damagePlayer(
+    int victimNumber,
+    float damage,
+    int creditedWinner,
+    const std::string& knockoutReason
+) {
+    PlayerCombatState& victimCombat =
+        victimNumber == 1 ? playerOneCombat : playerTwoCombat;
+    UI::EnergyBar& victimHealthBar =
+        victimNumber == 1 ? playerOneHealthBar : playerTwoHealthBar;
+    if (victimCombat.damageProtectionRemaining > 0.f
+        || victimCombat.starPowerRemaining > 0.f) {
+        return false;
+    }
+
+    victimCombat.health = std::clamp(
+        victimCombat.health - damage,
+        0.f,
+        duel::kMaximumHealth
+    );
+    victimCombat.damageProtectionRemaining = kDamageProtectionDuration;
+    victimHealthBar.setEnergy(victimCombat.health);
+    std::cout << "[DuelState] P" << victimNumber << " took "
+              << static_cast<int>(damage) << " damage; health now "
+              << static_cast<int>(victimCombat.health) << ".\n";
+
+    if (victimCombat.health <= 0.f) {
+        finishRound(creditedWinner, knockoutReason);
+    }
+    return true;
+}
+
+void DuelState::updateStarPower(float seconds) {
+    playerOneCombat.starPowerRemaining = std::max(
+        0.f,
+        playerOneCombat.starPowerRemaining - seconds
+    );
+    playerTwoCombat.starPowerRemaining = std::max(
+        0.f,
+        playerTwoCombat.starPowerRemaining - seconds
+    );
+    playerOneAnimator.setStarPower(playerOneCombat.starPowerRemaining > 0.f);
+    playerTwoAnimator.setStarPower(playerTwoCombat.starPowerRemaining > 0.f);
+}
+
+void DuelState::resolveStarContact() {
+    const bool playerOneStarred = playerOneCombat.starPowerRemaining > 0.f;
+    const bool playerTwoStarred = playerTwoCombat.starPowerRemaining > 0.f;
+    // Nobody starred, or both starred, means nobody wins the collision.
+    if (playerOneStarred == playerTwoStarred) {
+        return;
+    }
+
+    const sf::FloatRect attackerBox =
+        playerBounds(playerOneStarred ? *playerOne : *playerTwo);
+    const sf::FloatRect victimBox =
+        playerBounds(playerOneStarred ? *playerTwo : *playerOne);
+    if (!attackerBox.findIntersection(victimBox).has_value()) {
+        return;
+    }
+
+    const int attackerNumber = playerOneStarred ? 1 : 2;
+    const int victimNumber = playerOneStarred ? 2 : 1;
+    entity::Player& victim = playerOneStarred ? *playerTwo : *playerOne;
+    if (!damagePlayer(
+            victimNumber,
+            duel::kStarContactDamage,
+            attackerNumber,
+            "STAR SMASH!"
+        )) {
+        return;
+    }
+
+    const float attackerCentreX = attackerBox.position.x + attackerBox.size.x / 2.f;
+    const float victimCentreX = victimBox.position.x + victimBox.size.x / 2.f;
+    physics::PhysicsBody& victimBody = victim.getPhysicsBody();
+    sf::Vector2f victimVelocity = victimBody.getVelocity();
+    victimVelocity.x = attackerCentreX < victimCentreX
+        ? kStarContactKnockback
+        : -kStarContactKnockback;
+    victimBody.setVelocity(victimVelocity);
+    Systems::SoundController::getInstance().playSound(
+        assets.getSoundBuffer("StompSound"));
+}
+
+void DuelState::tryThrowBomb(
+    entity::Player& player,
+    bool facingRight,
+    const PlayerInput& input,
+    PlayerCombatState& combatState,
+    UI::EnergyBar& energyBar,
+    std::optional<combat::Bomb>& bombSlot,
+    int playerNumber
+) {
+    // One bomb in the air per player keeps the arena readable.
+    if (!input.bombPressed
+        || bombSlot.has_value()
+        || !duel::canThrowBomb(combatState.energy)) {
+        return;
+    }
+
+    const physics::AABB body = player.getPhysicsBody().getAABB();
+    const float bombX = facingRight
+        ? body.right()
+        : body.left() - combat::Bomb::kSize;
+    const float bombY = body.top() + body.size.y * 0.5f;
+    bombSlot.emplace(sf::Vector2f{bombX, bombY}, facingRight);
+
+    combatState.energy = duel::energyAfterBomb(combatState.energy);
+    energyBar.setEnergy(combatState.energy);
+    std::cout << "[DuelState] P" << playerNumber << " threw a bomb; energy now "
+              << static_cast<int>(combatState.energy) << ".\n";
+    Systems::SoundController::getInstance().playSound(
+        assets.getSoundBuffer("FireSound"));
+}
+
+void DuelState::updateBombs(float seconds) {
+    updateBombSlot(playerOneBomb, 1, seconds);
+    if (roundOver) {
+        return;
+    }
+    updateBombSlot(playerTwoBomb, 2, seconds);
+}
+
+void DuelState::updateBombSlot(
+    std::optional<combat::Bomb>& bombSlot,
+    int throwerNumber,
+    float seconds
+) {
+    if (!bombSlot) {
+        return;
+    }
+
+    bombSlot->update(seconds);
+    const sf::FloatRect bounds = bombSlot->getBounds();
+    const bool outsideArena = bounds.position.y > Config::kViewHeight
+        || bounds.position.x + bounds.size.x < 0.f
+        || bounds.position.x > Config::kViewWidth;
+    if (outsideArena) {
+        bombSlot.reset();
+        return;
+    }
+
+    if (tileMap.intersectsSolid(bounds) || bombSlot->fuseExpired()) {
+        const sf::Vector2f centre = bombSlot->getPosition()
+            + sf::Vector2f{combat::Bomb::kSize / 2.f, combat::Bomb::kSize / 2.f};
+        bombSlot.reset();
+        explodeBomb(centre, throwerNumber);
+    }
+}
+
+void DuelState::explodeBomb(sf::Vector2f centre, int throwerNumber) {
+    blasts.push_back({centre, kBlastEffectDuration});
+    Systems::SoundController::getInstance().playSound(
+        assets.getSoundBuffer("ExplodeSound"));
+
+    const sf::FloatRect blast(
+        centre - sf::Vector2f{kBombBlastRadius, kBombBlastRadius},
+        {kBombBlastRadius * 2.f, kBombBlastRadius * 2.f}
+    );
+    const int otherPlayer = throwerNumber == 1 ? 2 : 1;
+
+    // The blast is blind: it hurts whoever stands in it, thrower included.
+    for (int victimNumber : {1, 2}) {
+        entity::Player& victim = victimNumber == 1 ? *playerOne : *playerTwo;
+        const sf::FloatRect victimBox = playerBounds(victim);
+        if (!blast.findIntersection(victimBox).has_value()) {
+            continue;
+        }
+
+        // Blowing yourself up hands the round to the other player.
+        const int creditedWinner = victimNumber == throwerNumber
+            ? otherPlayer
+            : throwerNumber;
+        const std::string reason = victimNumber == throwerNumber
+            ? "OWN BOMB!"
+            : "BOMB KNOCKOUT!";
+        if (!damagePlayer(victimNumber, duel::kBombDamage, creditedWinner, reason)) {
+            continue;
+        }
+
+        const float victimCentreX = victimBox.position.x + victimBox.size.x / 2.f;
+        physics::PhysicsBody& victimBody = victim.getPhysicsBody();
+        sf::Vector2f velocity = victimBody.getVelocity();
+        velocity.x = victimCentreX < centre.x ? -kBlastKnockbackX : kBlastKnockbackX;
+        velocity.y = -kBlastKnockbackY;
+        victimBody.setVelocity(velocity);
+        victimBody.setGrounded(false);
+    }
+}
+
+void DuelState::updateBlasts(float seconds) {
+    for (Blast& blast : blasts) {
+        blast.remaining -= seconds;
+    }
+    blasts.erase(
+        std::remove_if(
+            blasts.begin(),
+            blasts.end(),
+            [](const Blast& blast) { return blast.remaining <= 0.f; }
+        ),
+        blasts.end()
+    );
+}
+
+void DuelState::drawBombs(sf::RenderWindow& window) const {
+    if (playerOneBomb) {
+        playerOneBomb->render(window);
+    }
+    if (playerTwoBomb) {
+        playerTwoBomb->render(window);
+    }
+
+    for (const Blast& blast : blasts) {
+        const float progress = 1.f - blast.remaining / kBlastEffectDuration;
+        const float radius = kBombBlastRadius * (0.35f + 0.65f * progress);
+        sf::CircleShape flash(radius);
+        flash.setOrigin({radius, radius});
+        flash.setPosition(blast.centre);
+        const auto alpha = static_cast<std::uint8_t>(
+            std::clamp(220.f * (1.f - progress), 0.f, 255.f));
+        flash.setFillColor(sf::Color(255, 190, 60, alpha));
+        flash.setOutlineThickness(3.f);
+        flash.setOutlineColor(sf::Color(255, 90, 30, alpha));
+        window.draw(flash);
     }
 }
 
@@ -845,7 +1366,7 @@ void DuelState::spawnRandomPowerUp() {
         0,
         safePositions.size() - 1
     );
-    std::uniform_int_distribution<int> powerUpChoice(0, 2);
+    std::uniform_int_distribution<int> powerUpChoice(0, 3);
     const sf::Vector2f blockPosition = safePositions[positionChoice(randomEngine)];
 
     switch (powerUpChoice(randomEngine)) {
@@ -867,6 +1388,16 @@ void DuelState::spawnRandomPowerUp() {
             Config::kZoom
         ));
         std::cout << "[DuelState] Spawned Super Mushroom at ("
+                  << static_cast<int>(blockPosition.x) << ", "
+                  << static_cast<int>(blockPosition.y) << ").\n";
+        break;
+    case 2:
+        activePowerUps.push_back(std::make_unique<items::Star>(
+            blockPosition,
+            &assets.getTexture("SuperStar"),
+            Config::kZoom
+        ));
+        std::cout << "[DuelState] Spawned Super Star at ("
                   << static_cast<int>(blockPosition.x) << ", "
                   << static_cast<int>(blockPosition.y) << ").\n";
         break;
@@ -911,6 +1442,11 @@ void DuelState::updatePowerUps(sf::Time dt) {
             flower->update(seconds, tile);
         } else if (auto* manaOrb = dynamic_cast<items::ManaOrb*>(powerUp.get())) {
             manaOrb->update(seconds, tile);
+        } else if (auto* star = dynamic_cast<items::Star*>(powerUp.get())) {
+            sf::FloatRect query = star->getBounds();
+            query.position -= sf::Vector2f{tile, tile};
+            query.size += sf::Vector2f{tile * 2.f, tile * 2.f};
+            star->update(seconds, tile, solidAABBsOverlapping(query));
         }
     }
 
@@ -922,9 +1458,15 @@ void DuelState::updatePowerUps(sf::Time dt) {
                 if (!powerUp || !powerUp->isAlive()) {
                     return true;
                 }
-                const auto* mushroom = dynamic_cast<const items::Mushroom*>(
-                    powerUp.get());
-                return mushroom && mushroom->hasFallenOut(Config::kViewHeight);
+                if (const auto* mushroom = dynamic_cast<const items::Mushroom*>(
+                        powerUp.get())) {
+                    return mushroom->hasFallenOut(Config::kViewHeight);
+                }
+                if (const auto* star = dynamic_cast<const items::Star*>(
+                        powerUp.get())) {
+                    return star->hasFallenOut(Config::kViewHeight);
+                }
+                return false;
             }
         ),
         activePowerUps.end()
@@ -1012,6 +1554,10 @@ void DuelState::applyPowerUp(
         player.applyPower(entity::PowerType::Fire);
         changesPlayerForm = true;
         collectedName = "Fire Flower";
+    } else if (dynamic_cast<items::Star*>(&powerUp)) {
+        combatState.starPowerRemaining = duel::kStarPowerDuration;
+        animator.setStarPower(true);
+        collectedName = "Super Star (10s invincible)";
     } else if (dynamic_cast<items::ManaOrb*>(&powerUp)) {
         combatState.energy = duel::energyAfterManaPickup(combatState.energy);
         energyBar.setEnergy(combatState.energy);

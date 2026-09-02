@@ -44,6 +44,11 @@ Game::Game()
     assets.loadSoundBuffer("DowngradeSound", Systems::resourcePath("assets/audio/sound/downgrade.wav"));
     assets.loadSoundBuffer("BrickBreak", Systems::resourcePath("assets/audio/sound/brick_break.wav"));
     assets.loadSoundBuffer("BrickCollision", Systems::resourcePath("assets/audio/sound/brick_collision.wav"));
+
+    // Duel round-winner announcements
+    assets.loadSoundBuffer("MarioWinsSound", Systems::resourcePath("assets/audio/sound/mario_wins.wav"));
+    assets.loadSoundBuffer("LuigiWinsSound", Systems::resourcePath("assets/audio/sound/luigi_wins.wav"));
+    assets.loadSoundBuffer("FightSound", Systems::resourcePath("assets/audio/sound/fight.wav"));
     
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));

@@ -272,22 +272,51 @@ void testDuelShootingBindings(TestContext& context) {
         "player one F should shoot"
     );
     update(playerOne, {});
-    update(playerOne, {Scancode::RControl});
+    update(playerOne, {Scancode::J});
     context.expectTrue(
         !playerOne.getPlayerInput().shootPressed,
         "player one should ignore player two shoot key"
     );
 
-    update(playerTwo, {Scancode::RControl});
+    update(playerTwo, {Scancode::J});
     context.expectTrue(
         playerTwo.getPlayerInput().shootPressed,
-        "player two Right Control should shoot"
+        "player two J should shoot"
     );
     update(playerTwo, {});
-    update(playerTwo, {Scancode::Numpad0});
+    update(playerTwo, {Scancode::F});
     context.expectTrue(
-        playerTwo.getPlayerInput().shootPressed,
-        "player two Numpad 0 should also shoot"
+        !playerTwo.getPlayerInput().shootPressed,
+        "player two should ignore player one shoot key"
+    );
+}
+
+void testDuelBombBindings(TestContext& context) {
+    InputHandler playerOne(PlayerKeyBindings::duelPlayerOne());
+    InputHandler playerTwo(PlayerKeyBindings::duelPlayerTwo());
+
+    update(playerOne, {Scancode::G});
+    context.expectTrue(
+        playerOne.getPlayerInput().bombPressed,
+        "player one G should throw a bomb"
+    );
+    update(playerTwo, {Scancode::K});
+    context.expectTrue(
+        playerTwo.getPlayerInput().bombPressed,
+        "player two K should throw a bomb"
+    );
+
+    update(playerOne, {});
+    update(playerTwo, {});
+    update(playerOne, {Scancode::K});
+    update(playerTwo, {Scancode::G});
+    context.expectTrue(
+        !playerOne.getPlayerInput().bombPressed,
+        "player one should ignore player two bomb key"
+    );
+    context.expectTrue(
+        !playerTwo.getPlayerInput().bombPressed,
+        "player two should ignore player one bomb key"
     );
 
     update(playerOne, {});
@@ -296,11 +325,11 @@ void testDuelShootingBindings(TestContext& context) {
     update(playerTwo, {Scancode::C});
     context.expectTrue(
         !playerOne.getPlayerInput().bombPressed,
-        "player one should not throw bombs"
+        "the campaign bomb key should stay out of the duel bindings"
     );
     context.expectTrue(
         !playerTwo.getPlayerInput().bombPressed,
-        "player two should not throw bombs"
+        "the campaign bomb key should stay out of the duel bindings"
     );
 }
 
@@ -377,6 +406,12 @@ int main() {
     runTest(
         "duel shooting bindings",
         testDuelShootingBindings,
+        passedTests,
+        failedTests
+    );
+    runTest(
+        "duel bomb bindings",
+        testDuelBombBindings,
         passedTests,
         failedTests
     );
