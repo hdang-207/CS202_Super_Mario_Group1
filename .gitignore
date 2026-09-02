@@ -61,3 +61,4 @@ PROJECT_REPORT.pdf
 # 6. Bỏ qua các file của game
 # ====================================================================
 savegame.txt
+completion.dat

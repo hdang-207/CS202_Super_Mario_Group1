@@ -198,8 +198,11 @@ namespace {
 PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, CharacterType character)
     : State(gsm, assets), selectedCharacter(character),
       m_physicsSystem(kGravity, kMaxFallSpeed),
-      m_commandParser(std::make_unique<Systems::CommandParser>(*this)) {    if (m_gameMode == GameMode::Inferno) {
+      m_commandParser(std::make_unique<Systems::CommandParser>(*this)) {    if (m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) {
         m_doomWall.emplace(assets);
+    }
+    if (m_gameMode == GameMode::Nightfall || m_gameMode == GameMode::Apocalypse) {
+        m_nightfallOverlay.emplace(Config::kViewWidth, Config::kViewHeight, 200.f);
     }
 }
 
@@ -215,10 +218,10 @@ PlayState::PlayState(GameStateManager& gsm, Systems::AssetManager& assets, const
     this->world13OneUpUnlocked = data.world13OneUpUnlocked;
     this->world23AllCoinsCollected = data.world23AllCoinsCollected;
     this->m_gameMode = data.gameMode;
-    if (m_gameMode == GameMode::Nightfall) {
+    if (m_gameMode == GameMode::Nightfall || m_gameMode == GameMode::Apocalypse) {
         m_nightfallOverlay.emplace(Config::kViewWidth, Config::kViewHeight, 200.f);
     }
-    if (m_gameMode == GameMode::Inferno) {
+    if (m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) {
         this->lives = 1; // Enforce 1 life
         m_doomWall.emplace(assets);
     }
@@ -540,7 +543,7 @@ void PlayState::update(sf::Time dt) {
     }
     updateTrampolines(dt);
 
-    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+    if ((m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) && m_doomWall.has_value()) {
         float cameraLeft = m_cameraSystem.getView().getCenter().x - m_cameraSystem.getView().getSize().x / 2.f;
         m_doomWall->update(dt, cameraLeft);
         if (m_doomWall->checkCollision(avatarBounds())) {
@@ -693,13 +696,13 @@ void PlayState::render(sf::RenderWindow& window) {
     }
     drawExplosions(window);
 
-    // Nightfall Mode: draw darkness overlay after all world elements
-    if (m_gameMode == GameMode::Nightfall && m_nightfallOverlay.has_value() && m_player) {
+    // Nightfall/Apocalypse Mode: draw darkness overlay after all world elements
+    if ((m_gameMode == GameMode::Nightfall || m_gameMode == GameMode::Apocalypse) && m_nightfallOverlay.has_value() && m_player) {
         m_nightfallOverlay->draw(window, avatarFeetCentre(), m_cameraSystem.getView());
     }
 
-    // Inferno Mode: draw fire wall overlaying almost everything
-    if (m_gameMode == GameMode::Inferno && m_doomWall.has_value()) {
+    // Inferno/Apocalypse Mode: draw fire wall overlaying almost everything
+    if ((m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) && m_doomWall.has_value()) {
         m_doomWall->render(window);
     }
 
@@ -951,13 +954,14 @@ void PlayState::playLevelMusic() {
     auto& sounds = Systems::SoundController::getInstance();
     
     std::string theme = "assets/audio/Theme.mp3";
-    if (m_gameMode == GameMode::Nightfall || m_gameMode == GameMode::Inferno) {
+    if (m_gameMode == GameMode::Nightfall || m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) {
         int world = Config::worldNumber(currentLevel);
         if (m_gameMode == GameMode::Nightfall) {
             if (world == 1) theme = "assets/audio/NightfalThemeWorld1.mp3";
             else if (world == 2) theme = "assets/audio/NightfallThemeWorld2.mp3";
             else if (world == 3) theme = "assets/audio/NightfallThemeWorld3.mp3";
         } else {
+            // Inferno and Apocalypse use the same Inferno themes
             if (world == 1) theme = "assets/audio/InfernoThemeWorld1.mp3";
             else if (world == 2) theme = "assets/audio/InfernoThemeWorld2.mp3";
             else if (world == 3) theme = "assets/audio/InfernoThemeWorld3.mp3";
@@ -1272,16 +1276,16 @@ bool PlayState::loadLevel(int level) {
     return true;
 }
 
-// ─── Inferno mode helpers ───────────────────────────────────────────────────
+// ─── Inferno/Apocalypse mode helpers ────────────────────────────────────────
 
 float PlayState::saveDoomWallDistance(float referenceX) const {
-    if (m_gameMode != GameMode::Inferno || !m_doomWall.has_value()) return 0.f;
+    if ((m_gameMode != GameMode::Inferno && m_gameMode != GameMode::Apocalypse) || !m_doomWall.has_value()) return 0.f;
     float dist = referenceX - m_doomWall->getX();
     return std::min(dist, 300.f);   // clamp so fire always stays close
 }
 
 void PlayState::restoreDoomWallDistance(float dist) {
-    if (m_gameMode != GameMode::Inferno || !m_doomWall.has_value()) return;
+    if ((m_gameMode != GameMode::Inferno && m_gameMode != GameMode::Apocalypse) || !m_doomWall.has_value()) return;
     m_doomWall->setX(m_player->getPhysicsBody().getPosition().x - dist);
 }
 
@@ -1653,7 +1657,7 @@ bool PlayState::tryEnterNextLevel() {
                           : " collected; World 3-1 hidden 1-Up remains locked.\n");
     }
     std::cout << "[Core Engine] Level Complete reached! Transitioning to LevelCompleteState...\n";
-    if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+    if ((m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) && !Config::isLastStageOfWorld(currentLevel)) {
         infernoNextStage();
     } else {
         gsm.changeState(std::make_unique<LevelCompleteState>(gsm, assets, getSaveData()));
@@ -3129,7 +3133,7 @@ void PlayState::updateCastleClearSequence(sf::Time dt) {
 
     transitionPending = true;
     std::cout << "[Core Engine] Castle bridge clear complete; opening results.\n";
-    if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+    if ((m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) && !Config::isLastStageOfWorld(currentLevel)) {
         infernoNextStage();
         castleClear.active = false;
     } else {
@@ -3299,7 +3303,7 @@ void PlayState::updateFlagpoleSequence(sf::Time dt) {
 
     transitionPending = true;
     std::cout << "[Core Engine] Flagpole finish complete; opening results.\n";
-    if (m_gameMode == GameMode::Inferno && !Config::isLastStageOfWorld(currentLevel)) {
+    if ((m_gameMode == GameMode::Inferno || m_gameMode == GameMode::Apocalypse) && !Config::isLastStageOfWorld(currentLevel)) {
         // Use the flagpole position as reference (Mario walked past it into the castle)
         float dist = saveDoomWallDistance(flagpole.shaftCentreX);
         int nextLvl = Config::nextLevel(currentLevel);

@@ -6,6 +6,7 @@
 #include "States/GameStateManager.hpp"
 #include "Systems/SaveManager.hpp"
 #include "Systems/SoundController.hpp"
+#include "Systems/CompletionTracker.hpp"
 #include "Core/Config.hpp"
 #include <iostream>
 #include <string>
@@ -79,6 +80,13 @@ void LevelCompleteState::update(sf::Time dt) {
         sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::C)) {
         
         if (Config::isLastStageOfWorld(progress.currentLevel)) {
+            // Track completion for mode unlock
+            if (progress.gameMode == GameMode::Nightfall 
+                || progress.gameMode == GameMode::Inferno
+                || progress.gameMode == GameMode::Apocalypse) {
+                Systems::CompletionTracker::getInstance().markWorldComplete(
+                    progress.gameMode, Config::worldNumber(progress.currentLevel));
+            }
             gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
         } else {
             progress.currentLevel = Config::nextLevel(progress.currentLevel);
