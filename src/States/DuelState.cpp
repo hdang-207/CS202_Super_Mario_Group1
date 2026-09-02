@@ -7,6 +7,7 @@
 #include "Items/Mushroom.hpp"
 #include "Items/Star.hpp"
 #include "Physics/Broadphase.hpp"
+#include "States/DuelPlayerCollision.hpp"
 #include "States/DuelRules.hpp"
 #include "States/GameStateManager.hpp"
 #include "Systems/ResourcePath.hpp"
@@ -498,14 +499,26 @@ void DuelState::update(sf::Time dt) {
         return;
     }
 
-    resolvePlayerStomps(previousPlayerOneBounds, previousPlayerTwoBounds);
+    const bool stompHandled = resolvePlayerStomps(
+        previousPlayerOneBounds,
+        previousPlayerTwoBounds
+    );
     if (roundOver) {
         return;
     }
 
-    resolveStarContact();
+    const bool starHandled = resolveStarContact();
     if (roundOver) {
         return;
+    }
+
+    if (!stompHandled && !starHandled) {
+        (void)duel::resolveHorizontalPlayerCollision(
+            playerOne->getPhysicsBody(),
+            playerTwo->getPhysicsBody(),
+            previousPlayerOneBounds,
+            previousPlayerTwoBounds
+        );
     }
 
     updateFireballs(dt);
@@ -692,7 +705,7 @@ void DuelState::updatePlayerAnimation(
     animator.update(dt);
 }
 
-void DuelState::resolvePlayerStomps(
+bool DuelState::resolvePlayerStomps(
     const physics::AABB& previousPlayerOneBounds,
     const physics::AABB& previousPlayerTwoBounds
 ) {
@@ -705,10 +718,10 @@ void DuelState::resolvePlayerStomps(
             playerTwoHealthBar,
             1
         )) {
-        return;
+        return true;
     }
 
-    tryResolveStomp(
+    return tryResolveStomp(
         *playerTwo,
         *playerOne,
         previousPlayerTwoBounds,
@@ -1117,12 +1130,12 @@ void DuelState::updateStarPower(float seconds) {
     playerTwoAnimator.setStarPower(playerTwoCombat.starPowerRemaining > 0.f);
 }
 
-void DuelState::resolveStarContact() {
+bool DuelState::resolveStarContact() {
     const bool playerOneStarred = playerOneCombat.starPowerRemaining > 0.f;
     const bool playerTwoStarred = playerTwoCombat.starPowerRemaining > 0.f;
     // Nobody starred, or both starred, means nobody wins the collision.
     if (playerOneStarred == playerTwoStarred) {
-        return;
+        return false;
     }
 
     const sf::FloatRect attackerBox =
@@ -1130,7 +1143,7 @@ void DuelState::resolveStarContact() {
     const sf::FloatRect victimBox =
         playerBounds(playerOneStarred ? *playerTwo : *playerOne);
     if (!attackerBox.findIntersection(victimBox).has_value()) {
-        return;
+        return false;
     }
 
     const int attackerNumber = playerOneStarred ? 1 : 2;
@@ -1142,7 +1155,7 @@ void DuelState::resolveStarContact() {
             attackerNumber,
             "STAR SMASH!"
         )) {
-        return;
+        return false;
     }
 
     const float attackerCentreX = attackerBox.position.x + attackerBox.size.x / 2.f;
@@ -1155,6 +1168,7 @@ void DuelState::resolveStarContact() {
     victimBody.setVelocity(victimVelocity);
     Systems::SoundController::getInstance().playSound(
         assets.getSoundBuffer("StompSound"));
+    return true;
 }
 
 void DuelState::tryThrowBomb(

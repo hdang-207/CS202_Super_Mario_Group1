@@ -108,7 +108,7 @@ private:
         float damageProtectionRemaining,
         sf::Time dt
     );
-    void resolvePlayerStomps(
+    bool resolvePlayerStomps(
         const physics::AABB& previousPlayerOneBounds,
         const physics::AABB& previousPlayerTwoBounds
     );
@@ -168,7 +168,7 @@ private:
     void updateBlasts(float seconds);
     void drawBombs(sf::RenderWindow& window) const;
     void updateStarPower(float seconds);
-    void resolveStarContact();
+    bool resolveStarContact();
     bool damagePlayer(
         int victimNumber,
         float damage,
