@@ -8,6 +8,7 @@
 #include "Items/Star.hpp"
 #include "Physics/Broadphase.hpp"
 #include "States/DuelPlayerCollision.hpp"
+#include "States/DuelPauseState.hpp"
 #include "States/DuelRules.hpp"
 #include "States/GameStateManager.hpp"
 #include "Systems/ResourcePath.hpp"
@@ -61,7 +62,6 @@ constexpr float kBlastKnockbackY = 340.f;
 constexpr float kStarContactKnockback = 260.f;
 // Swap this for a dedicated battle track once the group records one.
 constexpr const char* kDuelMusicPath = "assets/audio/InfernoThemeWorld1.mp3";
-constexpr const char* kMenuMusicPath = "assets/audio/Theme.mp3";
 constexpr std::size_t kMaximumActivePowerUps = 6;
 constexpr sf::Vector2f kPlayerOneHealthPosition{48.f, 48.f};
 constexpr sf::Vector2f kPlayerTwoHealthPosition{
@@ -246,7 +246,7 @@ void DuelState::startRound() {
     resultReasonText.setOutlineColor(sf::Color::Black);
     resultReasonText.setOutlineThickness(2.f);
 
-    resultHintText.setString("R: REMATCH   |   B/ESC: BACK");
+    resultHintText.setString("R: REMATCH   |   ESC: PAUSE");
     resultHintText.setCharacterSize(16);
     resultHintText.setFillColor(sf::Color(180, 220, 255));
     resultHintText.setOutlineColor(sf::Color::Black);
@@ -339,13 +339,12 @@ void DuelState::handleInput(const sf::Event& event) {
 
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         const auto key = keyPressed->scancode;
-        if (key == sf::Keyboard::Scancode::B
-            || key == sf::Keyboard::Scancode::Escape) {
-            Systems::SoundController::getInstance().playSound(
-                assets.getSoundBuffer("SelectSound"));
-            Systems::SoundController::getInstance().playMusic(
-                Systems::resourcePath(kMenuMusicPath));
-            gsm.popState();
+        if (key == sf::Keyboard::Scancode::Escape) {
+            gsm.pushState(std::make_unique<DuelPauseState>(gsm, assets));
+            return;
+        }
+
+        if (key == sf::Keyboard::Scancode::B) {
             return;
         }
 
@@ -598,6 +597,12 @@ void DuelState::render(sf::RenderWindow& window) {
         window.draw(resultReasonText);
         window.draw(resultHintText);
     }
+}
+
+void DuelState::pause() {
+    heldKeys.clear();
+    playerOneInput.reset();
+    playerTwoInput.reset();
 }
 
 void DuelState::spawnPlayers(const std::vector<sf::Vector2f>& spawns) {
@@ -904,8 +909,8 @@ void DuelState::finishRound(int winningPlayer, const std::string& reason) {
     }
     resultReasonText.setString(reason);
     resultHintText.setString(
-        matchOver ? "R: NEW MATCH   T: ARENA   B/ESC: BACK"
-                  : "R: NEXT ROUND   T: ARENA   B/ESC: BACK");
+        matchOver ? "R: NEW MATCH   T: ARENA   ESC: PAUSE"
+                  : "R: NEXT ROUND   T: ARENA   ESC: PAUSE");
     refreshScoreText();
     std::cout << "[DuelState] Round finished: " << resultText.getString().toAnsiString()
               << " (" << reason << ")\n";
