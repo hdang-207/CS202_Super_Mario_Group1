@@ -960,11 +960,14 @@ void PlayState::playLevelMusic() {
             if (world == 1) theme = "assets/audio/NightfalThemeWorld1.mp3";
             else if (world == 2) theme = "assets/audio/NightfallThemeWorld2.mp3";
             else if (world == 3) theme = "assets/audio/NightfallThemeWorld3.mp3";
-        } else {
-            // Inferno and Apocalypse use the same Inferno themes
+        } else if (m_gameMode == GameMode::Inferno) {
             if (world == 1) theme = "assets/audio/InfernoThemeWorld1.mp3";
             else if (world == 2) theme = "assets/audio/InfernoThemeWorld2.mp3";
             else if (world == 3) theme = "assets/audio/InfernoThemeWorld3.mp3";
+        } else if (m_gameMode == GameMode::Apocalypse) {
+            if (world == 1) theme = "assets/audio/ApocalypseTheme1.mp3";
+            else if (world == 2) theme = "assets/audio/ApocalypseTheme2.mp3";
+            else if (world == 3) theme = "assets/audio/ApocalypseTheme3.mp3";
         }
     } else {
         // Normal mode logic
