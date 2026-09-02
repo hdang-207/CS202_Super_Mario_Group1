@@ -2,7 +2,7 @@
 
 #include "Core/Config.hpp"
 #include "States/CharacterSelectionState.hpp"
-#include "States/DuelState.hpp"
+#include "States/DuelArenaSelectionState.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/IntroMenuState.hpp"
 #include "Systems/CompletionTracker.hpp"
@@ -123,7 +123,7 @@ void GameModeSelectionState::init() {
     apocalypseDesc.setString(
         "The ultimate challenge. Darkness and fire converge."
     );
-    duelDesc.setString("Local Mario vs Luigi battle");
+    duelDesc.setString("Local Mario vs Luigi battle - pick your arena");
 
     hintText.setString(
         "UP/DOWN OR 1/2/3/4/5: SELECT | "
@@ -298,7 +298,8 @@ void GameModeSelectionState::confirmSelection() {
 
         case SelectionOption::Duel:
             std::cout << "[Core Engine] Game mode selected: DUEL\n";
-            gsm.pushState(std::make_unique<DuelState>(gsm, assets));
+            gsm.pushState(
+                std::make_unique<DuelArenaSelectionState>(gsm, assets));
             break;
     }
 }

@@ -40,18 +40,6 @@ constexpr float kRoundIntroDuration = 3.f;
 constexpr float kFightBannerDuration = 0.7f;
 constexpr float kRoundTimeLimit = 90.f;
 constexpr float kLowTimeWarning = 10.f;
-struct ArenaDefinition {
-    const char* file;
-    const char* name;
-};
-
-// Every arena is mirrored left to right so neither player gets the better side.
-constexpr ArenaDefinition kArenas[] = {
-    {"assets/maps/duel_arena.txt", "CLASSIC"},
-    {"assets/maps/duel_arena_towers.txt", "SKY TOWERS"},
-    {"assets/maps/duel_arena_chasm.txt", "CHASM"},
-};
-constexpr std::size_t kArenaCount = std::size(kArenas);
 
 constexpr unsigned int kResultTextSize = 38;
 constexpr float kResultTextPadding = 60.f;
@@ -75,8 +63,13 @@ constexpr sf::Vector2f kPlayerTwoEnergyPosition{
 };
 }
 
-DuelState::DuelState(GameStateManager& gsm, Systems::AssetManager& assets)
+DuelState::DuelState(
+    GameStateManager& gsm,
+    Systems::AssetManager& assets,
+    std::size_t arenaChoice
+)
     : State(gsm, assets),
+      arenaChoice(arenaChoice),
       playerOneInput(PlayerKeyBindings::duelPlayerOne()),
       playerTwoInput(PlayerKeyBindings::duelPlayerTwo()),
       physicsSystem(kGravity, kMaxFallSpeed),
@@ -91,8 +84,13 @@ DuelState::DuelState(GameStateManager& gsm, Systems::AssetManager& assets)
       resultHintText(assets.getFont("MarioFont")) {}
 
 void DuelState::init() {
-    std::uniform_int_distribution<std::size_t> arenaChoice(0, kArenaCount - 1);
-    arenaIndex = arenaChoice(randomEngine);
+    if (duel::isRandomArena(arenaChoice)) {
+        std::uniform_int_distribution<std::size_t> arenaRoll(
+            0, duel::kArenaCount - 1);
+        arenaIndex = arenaRoll(randomEngine);
+    } else {
+        arenaIndex = arenaChoice;
+    }
     startMatch();
 }
 
@@ -200,7 +198,8 @@ void DuelState::startRound() {
     controlsText.setString(
         "P1  A/D MOVE   W JUMP   S DUCK   F FIRE   G BOMB\n"
         "P2  ARROWS MOVE   J FIRE   K BOMB\n"
-        "ARENA: " + std::string(kArenas[arenaIndex].name) + "   -   T: CHANGE ARENA");
+        "ARENA: " + std::string(duel::kArenas[arenaIndex].name)
+            + "   -   T: CHANGE ARENA");
     controlsText.setCharacterSize(16);
     controlsText.setFillColor(sf::Color(200, 230, 255));
     controlsText.setOutlineColor(sf::Color::Black);
@@ -261,7 +260,7 @@ void DuelState::startRound() {
 
     tileMap.setTileTexture('#', assets.getTexture("GroundTile"));
 
-    const ArenaDefinition& arena = kArenas[arenaIndex];
+    const duel::ArenaDefinition& arena = duel::kArenas[arenaIndex];
     const std::string arenaPath = Systems::resourcePath(arena.file);
     if (!mapParser.loadFromFile(arenaPath)) {
         std::cerr << "[DuelState] Failed to load arena map: " << arenaPath << '\n';
@@ -340,7 +339,8 @@ void DuelState::handleInput(const sf::Event& event) {
     if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
         const auto key = keyPressed->scancode;
         if (key == sf::Keyboard::Scancode::Escape) {
-            gsm.pushState(std::make_unique<DuelPauseState>(gsm, assets));
+            gsm.pushState(
+                std::make_unique<DuelPauseState>(gsm, assets, arenaChoice));
             return;
         }
 
@@ -352,7 +352,12 @@ void DuelState::handleInput(const sf::Event& event) {
             && (roundOver || roundIntroRemaining > 0.f)) {
             Systems::SoundController::getInstance().playSound(
                 assets.getSoundBuffer("SelectSound"));
-            arenaIndex = (arenaIndex + 1) % kArenaCount;
+            arenaIndex = (arenaIndex + 1) % duel::kArenaCount;
+            if (!duel::isRandomArena(arenaChoice)) {
+                // A deliberate pick sticks across rematches; a random one keeps
+                // rolling, which is what the players asked for.
+                arenaChoice = arenaIndex;
+            }
             if (matchOver) {
                 startMatch();
             } else {

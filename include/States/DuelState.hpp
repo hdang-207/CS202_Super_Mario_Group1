@@ -7,6 +7,7 @@
 #include "Physics/PhysicsSystem.hpp"
 #include "Player/Player.hpp"
 #include "Player/PlayerAnimator.hpp"
+#include "States/DuelArenas.hpp"
 #include "States/State.hpp"
 #include "Systems/MapParser.hpp"
 #include "Systems/TileMap.hpp"
@@ -28,6 +29,9 @@ private:
     MapParser mapParser;
     TileMap tileMap;
     bool arenaLoaded{false};
+    // What the players asked for on the selection screen, which may be the
+    // random roll; arenaIndex is the map that request resolved to.
+    std::size_t arenaChoice{duel::kRandomArena};
     std::size_t arenaIndex{0};
 
     std::unique_ptr<entity::Player> playerOne;
@@ -189,7 +193,11 @@ private:
     static sf::Vector2f feetCentre(const entity::Player& player);
 
 public:
-    DuelState(GameStateManager& gsm, Systems::AssetManager& assets);
+    DuelState(
+        GameStateManager& gsm,
+        Systems::AssetManager& assets,
+        std::size_t arenaChoice = duel::kRandomArena
+    );
     ~DuelState() override = default;
 
     void init() override;
