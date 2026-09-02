@@ -27,15 +27,55 @@ void IntroMenuState::init() {
                           (Config::kViewHeight - bgSize.y * bgScale) / 2.f});
 
     titleText.setString("SUPER MARIO BROS");
-    titleText.setCharacterSize(48);
-    titleText.setFillColor(sf::Color::Red);
-    titleText.setOutlineColor(sf::Color::White);
-    titleText.setOutlineThickness(3.f);
+    titleText.setCharacterSize(80); // Make it larger
+    titleText.setFillColor(sf::Color::White); // Base color white to let texture show
+    titleText.setOutlineColor(sf::Color::Black); // Black outline
+    titleText.setOutlineThickness(4.f);
+    
+    // Make text narrower (scale X slightly)
+    titleText.setScale({0.7f, 1.0f});
 
     sf::FloatRect titleBounds = titleText.getLocalBounds();
-    titleText.setOrigin({titleBounds.position.x + titleBounds.size.x / 2.f,
-                         titleBounds.position.y + titleBounds.size.y / 2.f});
-    titleText.setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.22f});
+    // Create render texture to fit the scaled text plus outline
+    float scaledWidth = titleBounds.size.x * 0.7f;
+    float scaledHeight = titleBounds.size.y * 1.0f;
+    float outlinePadding = 10.f; // Extra padding for outline
+    if (titleRT.resize({static_cast<unsigned int>(scaledWidth + outlinePadding * 2.f), 
+                        static_cast<unsigned int>(scaledHeight + outlinePadding * 2.f)})) {
+        
+        // Setup text origin and position within the RT
+        titleText.setOrigin({titleBounds.position.x, titleBounds.position.y});
+        titleText.setPosition({outlinePadding, outlinePadding});
+        
+        titleRT.clear(sf::Color::Transparent);
+        titleRT.draw(titleText);
+
+        // Blend the silver texture over the text
+        sf::Sprite silverSprite(assets.getTexture("SilverBackground"));
+        silverSprite.setOrigin({0.f, 0.f});
+        silverSprite.setPosition({0.f, 0.f});
+        
+        // Scale silver texture to cover the text
+        sf::Vector2f silverSize(silverSprite.getTexture().getSize());
+        float sScale = std::max((scaledWidth + outlinePadding * 2.f) / silverSize.x, 
+                                (scaledHeight + outlinePadding * 2.f) / silverSize.y);
+        silverSprite.setScale({sScale, sScale});
+        
+        sf::RenderStates blendState;
+        blendState.blendMode = sf::BlendMultiply;
+        titleRT.draw(silverSprite, blendState);
+        titleRT.display();
+
+        titleSprite.emplace(titleRT.getTexture());
+        // Center the resulting sprite
+        titleSprite->setOrigin({titleSprite->getLocalBounds().size.x / 2.f, 
+                               titleSprite->getLocalBounds().size.y / 2.f});
+    }
+
+    // Position the title sprite slightly higher to avoid overlapping start button
+    if (titleSprite.has_value()) {
+        titleSprite->setPosition({Config::kViewWidth / 2.f, Config::kViewHeight * 0.20f});
+    }
 
     // Frame 1 Prompt Text
     promptText.setString("PRESS ENTER / ANY KEY TO START");
@@ -244,7 +284,7 @@ void IntroMenuState::update(sf::Time dt) {
 
 void IntroMenuState::render(sf::RenderWindow& window) {
     window.draw(bgSprite);
-    window.draw(titleText);
+    if (titleSprite.has_value()) window.draw(*titleSprite);
 
     if (currentPhase == MenuPhase::TitleScreen) {
         if (showPrompt) {
@@ -252,7 +292,7 @@ void IntroMenuState::render(sf::RenderWindow& window) {
         }
     } else {
         window.draw(modalOverlay);
-        window.draw(titleText); // Draw title on top of overlay
+        if (titleSprite.has_value()) window.draw(*titleSprite); // Draw title on top of overlay
         for (const auto& text : menuTexts) {
             window.draw(text);
         }

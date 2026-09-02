@@ -382,6 +382,7 @@ Game::Game()
     assets.loadTexture("DoomFire1", Systems::resourcePath("assets/textures/doomfire1.png"));
     assets.loadTexture("DoomFire2", Systems::resourcePath("assets/textures/doomfire2.png"));
     assets.loadTexture("Hellfire", Systems::resourcePath("assets/textures/hellfire.jpg"));
+    assets.loadTexture("SilverBackground", Systems::resourcePath("assets/textures/silver_metal_background_1.jpg"));
     assets.loadTexture("Apocalypse", Systems::resourcePath("assets/textures/Apocalypse.png"));
     assets.loadTexture("Lock", Systems::resourcePath("assets/textures/lock.png"));
     assets.loadTexture("WarpPipeForked", Systems::resourcePath("assets/textures/warp_pipe_forked.png"));

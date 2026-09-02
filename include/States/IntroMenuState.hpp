@@ -1,5 +1,10 @@
 #pragma once
 #include "States/State.hpp"
+#include <SFML/Graphics/RenderTexture.hpp>
+#include <SFML/Graphics/Sprite.hpp>
+#include <SFML/Graphics/Text.hpp>
+#include <SFML/Graphics/RectangleShape.hpp>
+#include <optional>
 
 /**
  * @class IntroMenuState
@@ -19,6 +24,8 @@ private:
     sf::Sprite bgSprite;           ///< Background menu sprite
     sf::RectangleShape titleBox;   ///< Frame/box container for game title
     sf::Text titleText;            ///< Text display for main game title
+    sf::RenderTexture titleRT;     ///< Render texture for text masking
+    std::optional<sf::Sprite> titleSprite; ///< Sprite displaying the masked title
     sf::Text promptText;           ///< Text prompt instructing user to press key
     float blinkTimer = 0.0f;       ///< Timer for blinking text effect
     bool showPrompt = true;        ///< Toggle visibility of prompt text
