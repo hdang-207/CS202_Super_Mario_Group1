@@ -1,11 +1,15 @@
 #include "States/DuelPauseState.hpp"
 
 #include "Core/Config.hpp"
+#include "States/DuelArenaSelectionState.hpp"
 #include "States/GameStateManager.hpp"
 #include "Systems/ResourcePath.hpp"
 #include "Systems/SoundController.hpp"
 
+#include <array>
 #include <iostream>
+#include <memory>
+#include <string>
 
 namespace {
 
@@ -24,13 +28,16 @@ void centreText(sf::Text& text, sf::Vector2f position) {
 
 DuelPauseState::DuelPauseState(
     GameStateManager& gsm,
-    Systems::AssetManager& assets
+    Systems::AssetManager& assets,
+    std::size_t arenaChoice
 )
     : State(gsm, assets),
       titleText(assets.getFont("MarioFont")),
       resumeText(assets.getFont("MarioFont")),
+      changeArenaText(assets.getFont("MarioFont")),
       backText(assets.getFont("MarioFont")),
-      hintText(assets.getFont("MarioFont")) {}
+      hintText(assets.getFont("MarioFont")),
+      arenaChoice(arenaChoice) {}
 
 void DuelPauseState::init() {
     std::cout << "[Core Engine] DuelPauseState Initialized.\n";
@@ -50,7 +57,7 @@ void DuelPauseState::init() {
         {Config::kViewWidth / 2.f, Config::kViewHeight * 0.27f}
     );
 
-    for (sf::Text* option : {&resumeText, &backText}) {
+    for (sf::Text* option : {&resumeText, &changeArenaText, &backText}) {
         option->setCharacterSize(28);
         option->setOutlineColor(sf::Color::Black);
         option->setOutlineThickness(2.f);
@@ -92,10 +99,13 @@ void DuelPauseState::handleInput(const sf::Event& event) {
     }
 
     if (key == sf::Keyboard::Scancode::Up
-        || key == sf::Keyboard::Scancode::W
-        || key == sf::Keyboard::Scancode::Down
+        || key == sf::Keyboard::Scancode::W) {
+        moveSelection(-1);
+        return;
+    }
+    if (key == sf::Keyboard::Scancode::Down
         || key == sf::Keyboard::Scancode::S) {
-        moveSelection();
+        moveSelection(1);
         return;
     }
 
@@ -111,45 +121,65 @@ void DuelPauseState::render(sf::RenderWindow& window) {
     window.draw(backgroundOverlay);
     window.draw(titleText);
     window.draw(resumeText);
+    window.draw(changeArenaText);
     window.draw(backText);
     window.draw(hintText);
 }
 
-void DuelPauseState::moveSelection() {
-    selectedOption = selectedOption == Option::Resume
-        ? Option::BackToModeSelection
-        : Option::Resume;
+void DuelPauseState::moveSelection(int step) {
+    constexpr int optionCount = 3;
+    const int current = static_cast<int>(selectedOption);
+    const int next = (current + step + optionCount) % optionCount;
+    selectedOption = static_cast<Option>(next);
     playSelectSound();
     updateOptionStyles();
 }
 
 void DuelPauseState::updateOptionStyles() {
-    const bool resumeSelected = selectedOption == Option::Resume;
-    resumeText.setString(resumeSelected ? "> RESUME" : "  RESUME");
-    backText.setString(
-        resumeSelected ? "  BACK TO MODE SELECT" : "> BACK TO MODE SELECT"
-    );
-    resumeText.setFillColor(
-        resumeSelected ? sf::Color::Yellow : sf::Color::White
-    );
-    backText.setFillColor(
-        resumeSelected ? sf::Color::White : sf::Color::Yellow
-    );
-    centreText(
-        resumeText,
-        {Config::kViewWidth / 2.f, Config::kViewHeight * 0.43f}
-    );
-    centreText(
-        backText,
-        {Config::kViewWidth / 2.f, Config::kViewHeight * 0.53f}
-    );
+    struct Entry {
+        sf::Text* text;
+        Option option;
+        const char* label;
+        float verticalFraction;
+    };
+
+    const std::array<Entry, 3> entries{{
+        {&resumeText, Option::Resume, "RESUME", 0.41f},
+        {&changeArenaText, Option::ChangeArena, "CHANGE ARENA", 0.50f},
+        {&backText, Option::BackToModeSelection, "BACK TO MODE SELECT", 0.59f},
+    }};
+
+    for (const Entry& entry : entries) {
+        const bool selected = selectedOption == entry.option;
+        entry.text->setString(
+            (selected ? "> " : "  ") + std::string(entry.label)
+        );
+        entry.text->setFillColor(
+            selected ? sf::Color::Yellow : sf::Color::White
+        );
+        centreText(
+            *entry.text,
+            {
+                Config::kViewWidth / 2.f,
+                Config::kViewHeight * entry.verticalFraction
+            }
+        );
+    }
 }
 
 void DuelPauseState::confirmSelection() {
-    if (selectedOption == Option::Resume) {
-        resumeDuel();
-    } else {
-        backToModeSelection();
+    switch (selectedOption) {
+        case Option::Resume:
+            resumeDuel();
+            break;
+
+        case Option::ChangeArena:
+            changeArena();
+            break;
+
+        case Option::BackToModeSelection:
+            backToModeSelection();
+            break;
     }
 }
 
@@ -157,6 +187,20 @@ void DuelPauseState::resumeDuel() {
     transitionPending = true;
     playSelectSound();
     gsm.popState();
+}
+
+void DuelPauseState::changeArena() {
+    transitionPending = true;
+    playSelectSound();
+    Systems::SoundController::getInstance().playMusic(
+        Systems::resourcePath(kMenuMusicPath)
+    );
+    // Close this overlay first, then swap the duel underneath it for the arena
+    // screen, so the mode menu stays exactly one state further down.
+    gsm.popState();
+    gsm.changeState(
+        std::make_unique<DuelArenaSelectionState>(gsm, assets, arenaChoice)
+    );
 }
 
 void DuelPauseState::backToModeSelection() {
