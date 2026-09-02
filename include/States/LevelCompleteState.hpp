@@ -16,6 +16,10 @@ private:
     sf::Text promptText;
     SaveData progress;
     float m_elapsedTime{0.f};
+    bool m_transitionRequested{false};
+
+    void continueFromLevel();
+    void saveAndReturnToMenu();
 
 public:
     LevelCompleteState(GameStateManager& gsm, Systems::AssetManager& assets, const SaveData& data);
