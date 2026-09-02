@@ -943,7 +943,7 @@ void PlayState::updateDeathSequence(sf::Time dt) {
         if (lives > 0) {
             gsm.changeState(std::make_unique<RespawnState>(gsm, assets, getSaveData()));
         } else {
-            gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+            gsm.changeState(std::make_unique<GameOverState>(gsm, assets, m_gameMode));
         }
     }
 }

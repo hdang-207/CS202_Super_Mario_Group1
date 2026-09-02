@@ -385,6 +385,10 @@ Game::Game()
     assets.loadTexture("Apocalypse", Systems::resourcePath("assets/textures/Apocalypse.png"));
     assets.loadTexture("Lock", Systems::resourcePath("assets/textures/lock.png"));
     assets.loadTexture("WarpPipeForked", Systems::resourcePath("assets/textures/warp_pipe_forked.png"));
+    assets.loadTexture("NormalGameover", Systems::resourcePath("assets/textures/NormalGameover.png"));
+    assets.loadTexture("NightfallGameover", Systems::resourcePath("assets/textures/NightfallGameover.png"));
+    assets.loadTexture("InfernoGameover", Systems::resourcePath("assets/textures/InfernoGameover.png"));
+    assets.loadTexture("ApocalypseGameover", Systems::resourcePath("assets/textures/ApocalypseGameover.png"));
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);
