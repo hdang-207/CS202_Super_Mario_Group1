@@ -6,6 +6,7 @@
 #include "States/GameStateManager.hpp"
 #include "Systems/SaveManager.hpp"
 #include "Systems/SoundController.hpp"
+#include "Systems/CompletionTracker.hpp"
 #include "Core/Config.hpp"
 #include <iostream>
 #include <string>
@@ -62,43 +63,101 @@ void LevelCompleteState::init() {
 }
 
 void LevelCompleteState::handleInput(const sf::Event& event) {
-    // Unikey/IME blocks sf::Event::KeyPressed for some keys (like Enter).
-    // So we handle input using direct hardware polling in update() instead.
+    if (m_transitionRequested) {
+        return;
+    }
+
+    // Prefer window events: unlike global hardware polling, they work on macOS
+    // without granting the game Input Monitoring permission. Check both the
+    // localized key and physical scancode so Return works on every layout.
+    if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        const auto code = keyPressed->code;
+        const auto scancode = keyPressed->scancode;
+        const bool continuePressed =
+            code == sf::Keyboard::Key::Enter
+            || scancode == sf::Keyboard::Scancode::Enter
+            || scancode == sf::Keyboard::Scancode::NumpadEnter
+            || scancode == sf::Keyboard::Scancode::Space
+            || scancode == sf::Keyboard::Scancode::Z
+            || scancode == sf::Keyboard::Scancode::X
+            || scancode == sf::Keyboard::Scancode::C;
+
+        if (continuePressed) {
+            continueFromLevel();
+        } else if ((code == sf::Keyboard::Key::S
+                    || scancode == sf::Keyboard::Scancode::S)
+                   && !Config::isLastStageOfWorld(progress.currentLevel)) {
+            saveAndReturnToMenu();
+        }
+        return;
+    }
+
+    // Some macOS input methods expose Return as text input instead of a
+    // KeyPressed event. Accept CR and LF as a final event-based fallback.
+    if (const auto* textEntered = event.getIf<sf::Event::TextEntered>();
+        textEntered != nullptr
+        && (textEntered->unicode == U'\r' || textEntered->unicode == U'\n')) {
+        continueFromLevel();
+    }
 }
 
 void LevelCompleteState::update(sf::Time dt) {
     m_elapsedTime += dt.asSeconds();
-    if (m_elapsedTime < 0.5f) {
-        return; // Prevent accidental instant skip
+    if (m_transitionRequested || m_elapsedTime < 0.5f) {
+        return; // Prevent a held gameplay key from instantly skipping the screen
     }
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Enter) || 
+    // Retain direct polling as a fallback for Windows IMEs such as UniKey.
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Enter) ||
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::NumpadEnter) ||
         sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space) ||
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Z) || 
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::X) || 
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Z) ||
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::X) ||
         sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::C)) {
-        
-        if (Config::isLastStageOfWorld(progress.currentLevel)) {
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
-        } else {
-            progress.currentLevel = Config::nextLevel(progress.currentLevel);
-            gsm.changeState(std::make_unique<RespawnState>(gsm, assets, progress));
-        }
+        continueFromLevel();
     } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::S)
                && !Config::isLastStageOfWorld(progress.currentLevel)) {
-        
-        // Ensure we don't save multiple times if held down
-        m_elapsedTime = -9999.f; 
-        const int clearedLevel = progress.currentLevel;
-        progress.currentLevel = Config::nextLevel(progress.currentLevel);
-        if (SaveManager::saveProgress("savegame.txt", progress)) {
-            std::cout << "[Core Engine] Progress saved. Returning to Main Menu.\n";
-            gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
-        } else {
-            progress.currentLevel = clearedLevel;
-            std::cerr << "[Core Engine] Save failed; staying on Level Complete screen.\n";
-            m_elapsedTime = 0.5f; // restore if failed
+        saveAndReturnToMenu();
+    }
+}
+
+void LevelCompleteState::continueFromLevel() {
+    if (m_transitionRequested) {
+        return;
+    }
+    m_transitionRequested = true;
+
+    if (Config::isLastStageOfWorld(progress.currentLevel)) {
+        // Track completion for mode unlock
+        if (progress.gameMode == GameMode::Nightfall
+            || progress.gameMode == GameMode::Inferno
+            || progress.gameMode == GameMode::Apocalypse) {
+            Systems::CompletionTracker::getInstance().markWorldComplete(
+                progress.gameMode, Config::worldNumber(progress.currentLevel));
         }
+        gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+    } else {
+        progress.currentLevel = Config::nextLevel(progress.currentLevel);
+        gsm.changeState(std::make_unique<RespawnState>(gsm, assets, progress));
+    }
+}
+
+void LevelCompleteState::saveAndReturnToMenu() {
+    if (m_transitionRequested
+        || Config::isLastStageOfWorld(progress.currentLevel)) {
+        return;
+    }
+    m_transitionRequested = true;
+
+    const int clearedLevel = progress.currentLevel;
+    progress.currentLevel = Config::nextLevel(progress.currentLevel);
+    if (SaveManager::saveProgress("savegame.txt", progress)) {
+        std::cout << "[Core Engine] Progress saved. Returning to Main Menu.\n";
+        gsm.changeState(std::make_unique<IntroMenuState>(gsm, assets));
+    } else {
+        progress.currentLevel = clearedLevel;
+        m_transitionRequested = false;
+        std::cerr << "[Core Engine] Save failed; staying on Level Complete screen.\n";
     }
 }
 

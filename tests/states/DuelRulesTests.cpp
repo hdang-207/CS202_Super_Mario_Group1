@@ -125,6 +125,80 @@ void testManaPickupRestoresEnergy() {
     );
 }
 
+void testBombCostsMoreEnergyThanAFireball() {
+    expect(
+        !duel::canThrowBomb(duel::kBombEnergyCost - 1.f),
+        "a bomb should be refused below its energy cost"
+    );
+    expect(
+        duel::canThrowBomb(duel::kBombEnergyCost),
+        "a bomb should be allowed at exactly its energy cost"
+    );
+    expect(
+        duel::kBombEnergyCost > duel::kFireballEnergyCost,
+        "a bomb should cost more energy than a fireball"
+    );
+    expect(
+        std::abs(duel::energyAfterBomb(100.f) - 65.f) < 0.001f,
+        "throwing a bomb should drain exactly 35 energy"
+    );
+    expect(
+        std::abs(duel::energyAfterBomb(10.f)) < 0.001f,
+        "bomb energy should clamp at zero"
+    );
+}
+
+void testBlastAndStarDamage() {
+    expect(
+        std::abs(duel::healthAfterBlast(100.f) - 75.f) < 0.001f,
+        "a bomb blast should remove exactly 25 health"
+    );
+    expect(
+        std::abs(duel::healthAfterBlast(10.f)) < 0.001f,
+        "blast damage should clamp at zero health"
+    );
+    expect(
+        std::abs(duel::healthAfterStarContact(100.f) - 75.f) < 0.001f,
+        "a star body-check should remove exactly 25 health"
+    );
+    expect(
+        duel::kBombDamage > duel::kFireballDamage,
+        "a bomb should hit harder than a fireball"
+    );
+}
+
+void testStarTimeCountsAsProtection() {
+    expect(
+        std::abs(duel::damageProtectionOf(0.f, 4.f) - 4.f) < 0.001f,
+        "remaining star time should act as damage protection"
+    );
+    expect(
+        std::abs(duel::damageProtectionOf(0.6f, 0.f) - 0.6f) < 0.001f,
+        "hit protection should still apply without a star"
+    );
+    expect(
+        std::abs(duel::damageProtectionOf(0.f, 0.f)) < 0.001f,
+        "an unprotected player should have no protection left"
+    );
+
+    const physics::AABB previousAttacker({100.f, 40.f}, {32.f, 46.f});
+    const physics::AABB previousVictim({100.f, 90.f}, {32.f, 46.f});
+    const physics::AABB currentAttacker({100.f, 52.f}, {32.f, 46.f});
+    const physics::AABB currentVictim({100.f, 90.f}, {32.f, 46.f});
+    expect(
+        !duel::isValidStomp(
+            previousAttacker,
+            previousVictim,
+            currentAttacker,
+            currentVictim,
+            500.f,
+            0.f,
+            duel::damageProtectionOf(0.f, duel::kStarPowerDuration)
+        ),
+        "a starred victim should not take stomp damage"
+    );
+}
+
 } // namespace
 
 int main() {
@@ -134,6 +208,9 @@ int main() {
     testDamageAndFallRules();
     testFireballEnergyAndDamage();
     testManaPickupRestoresEnergy();
+    testBombCostsMoreEnergyThanAFireball();
+    testBlastAndStarDamage();
+    testStarTimeCountsAsProtection();
 
     if (failures == 0) {
         std::cout << "All Duel rules tests passed.\n";

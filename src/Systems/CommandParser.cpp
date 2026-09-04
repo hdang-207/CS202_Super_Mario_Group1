@@ -4,6 +4,7 @@
 #include "Entities/EntityFactory.hpp"
 #include "Systems/SoundController.hpp"
 #include "Systems/ResourcePath.hpp"
+#include "Systems/CompletionTracker.hpp"
 #include "Core/Config.hpp"
 #include <sstream>
 #include <algorithm>
@@ -50,6 +51,20 @@ CommandResult CommandParser::execute(const std::string& input) {
     if (cmd == "lives") return handleLives(tokens);
     if (cmd == "destroyer") return handleDestroyer(tokens);
     if (cmd == "world") return handleWorld(tokens);
+    if (cmd == "unlock") {
+        if (tokens.size() >= 2 && tokens[1] == "apocalypse") {
+            CompletionTracker::getInstance().forceUnlockApocalypse();
+            return {true, "Apocalypse Mode unlocked!"};
+        }
+        return {false, "Usage: unlock apocalypse"};
+    }
+    if (cmd == "lock") {
+        if (tokens.size() >= 2 && tokens[1] == "apocalypse") {
+            CompletionTracker::getInstance().resetUnlockState();
+            return {true, "Apocalypse Mode locked and progress reset!"};
+        }
+        return {false, "Usage: lock apocalypse"};
+    }
     
     return {false, "Unknown command: " + cmd + ". Type 'help' for a list."};
 }
@@ -209,6 +224,8 @@ CommandResult CommandParser::handleHelp() {
                        "  destroyer [0/1] - Toggle instakill mode on touch\n"
                        "  world <W> [S] - Warp to World W Stage S (e.g. world 1 2)\n"
                        "  reset        - Reset current level\n"
+                       "  unlock apocalypse - Unlock Apocalypse Mode\n"
+                       "  lock apocalypse - Lock Apocalypse Mode\n"
                        "  help         - Show this message";
     return {true, help};
 }

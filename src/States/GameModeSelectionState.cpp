@@ -2,9 +2,10 @@
 
 #include "Core/Config.hpp"
 #include "States/CharacterSelectionState.hpp"
-#include "States/DuelState.hpp"
+#include "States/DuelArenaSelectionState.hpp"
 #include "States/GameStateManager.hpp"
 #include "States/IntroMenuState.hpp"
+#include "Systems/CompletionTracker.hpp"
 #include "Systems/SoundController.hpp"
 
 #include <algorithm>
@@ -20,14 +21,18 @@ GameModeSelectionState::GameModeSelectionState(
       selectedOption(SelectionOption::Normal),
       bgSprite(assets.getTexture("MenuBackground")),
       m_hellfireSprite(assets.getTexture("Hellfire")),
+      m_apocalypseSprite(assets.getTexture("Apocalypse")),
+      m_lockSprite(assets.getTexture("Lock")),
       headerText(assets.getFont("MarioFont")),
       normalText(assets.getFont("MarioFont")),
       nightfallText(assets.getFont("MarioFont")),
       infernoText(assets.getFont("MarioFont")),
+      apocalypseText(assets.getFont("MarioFont")),
       duelText(assets.getFont("MarioFont")),
       normalDesc(assets.getFont("MarioFont")),
       nightfallDesc(assets.getFont("MarioFont")),
       infernoDesc(assets.getFont("MarioFont")),
+      apocalypseDesc(assets.getFont("MarioFont")),
       duelDesc(assets.getFont("MarioFont")),
       hintText(assets.getFont("MarioFont")) {
     switch (initiallySelected) {
@@ -41,6 +46,10 @@ GameModeSelectionState::GameModeSelectionState(
 
         case GameMode::Inferno:
             selectedOption = SelectionOption::Inferno;
+            break;
+
+        case GameMode::Apocalypse:
+            selectedOption = SelectionOption::Apocalypse;
             break;
     }
 }
@@ -76,13 +85,14 @@ void GameModeSelectionState::init() {
     });
     headerText.setPosition({
         Config::kViewWidth / 2.f,
-        Config::kViewHeight * 0.10f
+        Config::kViewHeight * 0.08f
     });
 
     for (sf::Text* text : {
              &normalText,
              &nightfallText,
              &infernoText,
+             &apocalypseText,
              &duelText
          }) {
         text->setCharacterSize(26);
@@ -94,6 +104,7 @@ void GameModeSelectionState::init() {
              &normalDesc,
              &nightfallDesc,
              &infernoDesc,
+             &apocalypseDesc,
              &duelDesc
          }) {
         text->setCharacterSize(15);
@@ -109,10 +120,13 @@ void GameModeSelectionState::init() {
     infernoDesc.setString(
         "ONE CHANCE TO LIVE! RUN FROM THE WALL OF DEATH!"
     );
-    duelDesc.setString("Local Mario vs Luigi battle");
+    apocalypseDesc.setString(
+        "The ultimate challenge. Darkness and fire converge."
+    );
+    duelDesc.setString("Local Mario vs Luigi battle - pick your arena");
 
     hintText.setString(
-        "UP/DOWN OR 1/2/3/4: SELECT | "
+        "UP/DOWN OR 1/2/3/4/5: SELECT | "
         "ENTER/SPACE: CONFIRM | B/ESC: BACK"
     );
     hintText.setCharacterSize(15);
@@ -127,7 +141,7 @@ void GameModeSelectionState::init() {
     });
     hintText.setPosition({
         Config::kViewWidth / 2.f,
-        Config::kViewHeight * 0.90f
+        Config::kViewHeight * 0.94f
     });
 
     // Setup Inferno Mode RenderTexture
@@ -137,16 +151,32 @@ void GameModeSelectionState::init() {
     const auto& hellfireTex = assets.getTexture("Hellfire");
     m_hellfireSprite.setTexture(hellfireTex);
     
-    // Scale the hellfire image to fit the text bounds nicely
     float scale = Config::kViewWidth / static_cast<float>(hellfireTex.getSize().x);
-    // Alternatively, just make it a bit wider than the text. Text is about 200px wide.
     scale = std::max(scale, 300.f / hellfireTex.getSize().x);
     m_hellfireSprite.setScale({scale, scale});
-
-    // Center the origin
     m_hellfireSprite.setOrigin({hellfireTex.getSize().x / 2.f, hellfireTex.getSize().y / 2.f});
-    // Position at the center of the render texture, shifted up to show the lower part of the fire
     m_hellfireSprite.setPosition({Config::kViewWidth / 2.f, 20.f});
+
+    // Setup Apocalypse Mode RenderTexture
+    if (!m_apocalypseRT.resize({static_cast<unsigned int>(Config::kViewWidth), 100u})) {
+        std::cerr << "[Warning] Failed to resize m_apocalypseRT\n";
+    }
+    const auto& apocalypseTex = assets.getTexture("Apocalypse");
+    m_apocalypseSprite.setTexture(apocalypseTex);
+    
+    float apocScale = Config::kViewWidth / static_cast<float>(apocalypseTex.getSize().x);
+    apocScale = std::max(apocScale, 300.f / apocalypseTex.getSize().x);
+    m_apocalypseSprite.setScale({apocScale, apocScale});
+    m_apocalypseSprite.setOrigin({apocalypseTex.getSize().x / 2.f, apocalypseTex.getSize().y / 2.f});
+    m_apocalypseSprite.setPosition({Config::kViewWidth / 2.f, 20.f});
+
+    // Setup Lock icon sprite
+    const auto& lockTex = assets.getTexture("Lock");
+    m_lockSprite.setTexture(lockTex);
+    // Scale lock to about 40x40
+    float lockScale = 40.f / static_cast<float>(lockTex.getSize().x);
+    m_lockSprite.setScale({lockScale, lockScale});
+    m_lockSprite.setOrigin({lockTex.getSize().x / 2.f, lockTex.getSize().y / 2.f});
 }
 
 void GameModeSelectionState::selectPreviousOption() {
@@ -163,8 +193,12 @@ void GameModeSelectionState::selectPreviousOption() {
             chooseOption(SelectionOption::Nightfall);
             break;
 
-        case SelectionOption::Duel:
+        case SelectionOption::Apocalypse:
             chooseOption(SelectionOption::Inferno);
+            break;
+
+        case SelectionOption::Duel:
+            chooseOption(SelectionOption::Apocalypse);
             break;
     }
 }
@@ -180,6 +214,10 @@ void GameModeSelectionState::selectNextOption() {
             break;
 
         case SelectionOption::Inferno:
+            chooseOption(SelectionOption::Apocalypse);
+            break;
+
+        case SelectionOption::Apocalypse:
             chooseOption(SelectionOption::Duel);
             break;
 
@@ -202,6 +240,13 @@ void GameModeSelectionState::chooseOption(SelectionOption option) {
 }
 
 void GameModeSelectionState::confirmSelection() {
+    // Block confirmation if Apocalypse is locked
+    if (selectedOption == SelectionOption::Apocalypse
+        && !Systems::CompletionTracker::getInstance().isApocalypseUnlocked()) {
+        // Play a deny sound or just do nothing
+        return;
+    }
+
     Systems::SoundController::getInstance().playSound(
         assets.getSoundBuffer("SelectSound")
     );
@@ -240,9 +285,21 @@ void GameModeSelectionState::confirmSelection() {
             );
             break;
 
+        case SelectionOption::Apocalypse:
+            std::cout << "[Core Engine] Game mode selected: APOCALYPSE\n";
+            gsm.changeState(
+                std::make_unique<CharacterSelectionState>(
+                    gsm,
+                    assets,
+                    GameMode::Apocalypse
+                )
+            );
+            break;
+
         case SelectionOption::Duel:
             std::cout << "[Core Engine] Game mode selected: DUEL\n";
-            gsm.pushState(std::make_unique<DuelState>(gsm, assets));
+            gsm.pushState(
+                std::make_unique<DuelArenaSelectionState>(gsm, assets));
             break;
     }
 }
@@ -278,6 +335,11 @@ void GameModeSelectionState::handleInput(const sf::Event& event) {
         } else if (
             key == sf::Keyboard::Scancode::Num4
             || key == sf::Keyboard::Scancode::Numpad4
+        ) {
+            chooseOption(SelectionOption::Apocalypse);
+        } else if (
+            key == sf::Keyboard::Scancode::Num5
+            || key == sf::Keyboard::Scancode::Numpad5
         ) {
             chooseOption(SelectionOption::Duel);
         } else if (
@@ -330,6 +392,10 @@ void GameModeSelectionState::handleInput(const sf::Event& event) {
         infernoText.getGlobalBounds().contains(mousePosition)
     ) {
         chooseOption(SelectionOption::Inferno);
+    } else if (
+        apocalypseText.getGlobalBounds().contains(mousePosition)
+    ) {
+        chooseOption(SelectionOption::Apocalypse);
     } else if (
         duelText.getGlobalBounds().contains(mousePosition)
     ) {
@@ -405,8 +471,8 @@ void GameModeSelectionState::update(sf::Time) {
         SelectionOption::Normal,
         "NORMAL MODE",
         sf::Color::Yellow,
-        0.22f,
-        0.27f,
+        0.19f,
+        0.23f,
         dimColor,
         dimOutline
     );
@@ -417,8 +483,8 @@ void GameModeSelectionState::update(sf::Time) {
         SelectionOption::Nightfall,
         "NIGHTFALL MODE",
         sf::Color(180, 32, 255),
-        0.38f,
-        0.43f,
+        0.32f,
+        0.36f,
         dimColor,
         dimOutline
     );
@@ -429,8 +495,20 @@ void GameModeSelectionState::update(sf::Time) {
         SelectionOption::Inferno,
         "INFERNO MODE",
         sf::Color::White,
-        0.54f,
-        0.59f,
+        0.45f,
+        0.49f,
+        dimColor,
+        dimOutline
+    );
+
+    updateOption(
+        apocalypseText,
+        apocalypseDesc,
+        SelectionOption::Apocalypse,
+        "APOCALYPSE MODE",
+        sf::Color::White,
+        0.58f,
+        0.62f,
         dimColor,
         dimOutline
     );
@@ -441,11 +519,31 @@ void GameModeSelectionState::update(sf::Time) {
         SelectionOption::Duel,
         "DUEL MODE",
         sf::Color(80, 220, 120),
-        0.70f,
+        0.71f,
         0.75f,
         dimColor,
         dimOutline
     );
+
+    // If Apocalypse is locked, override the description
+    if (!Systems::CompletionTracker::getInstance().isApocalypseUnlocked()) {
+        const sf::Color lockedDim(50, 50, 50, 80);
+        apocalypseText.setFillColor(lockedDim);
+        apocalypseDesc.setString("Complete all worlds in Nightfall & Inferno to unlock");
+        apocalypseDesc.setFillColor(lockedDim);
+        // Re-center the description after changing string
+        const sf::FloatRect descBounds = apocalypseDesc.getLocalBounds();
+        apocalypseDesc.setOrigin({
+            descBounds.position.x + descBounds.size.x / 2.f,
+            descBounds.position.y + descBounds.size.y / 2.f
+        });
+    }
+
+    // Position lock icon at the center of the Apocalypse row
+    m_lockSprite.setPosition({
+        Config::kViewWidth / 2.f,
+        Config::kViewHeight * 0.58f
+    });
 }
 
 void GameModeSelectionState::render(sf::RenderWindow& window) {
@@ -485,7 +583,6 @@ void GameModeSelectionState::render(sf::RenderWindow& window) {
     m_infernoRT.clear(sf::Color::Transparent);
     
     sf::Color oldColor = infernoText.getFillColor();
-    // Use White if selected so texture is bright, dimColor if not to make it darker and faded
     infernoText.setFillColor(
         selectedOption == SelectionOption::Inferno
             ? sf::Color::White
@@ -507,6 +604,45 @@ void GameModeSelectionState::render(sf::RenderWindow& window) {
     finalInferno.setPosition(oldPos);
     window.draw(finalInferno);
     window.draw(infernoDesc);
+
+    // Render textured apocalypse text (or lock icon if locked)
+    bool apocalypseUnlocked = Systems::CompletionTracker::getInstance().isApocalypseUnlocked();
+    
+    m_apocalypseRT.clear(sf::Color::Transparent);
+    
+    sf::Color apocOldColor = apocalypseText.getFillColor();
+    if (apocalypseUnlocked) {
+        apocalypseText.setFillColor(
+            selectedOption == SelectionOption::Apocalypse
+                ? sf::Color::White
+                : dimColor
+        );
+    } else {
+        apocalypseText.setFillColor(sf::Color(50, 50, 50, 80));
+    }
+    
+    sf::Vector2f apocOldPos = apocalypseText.getPosition();
+    apocalypseText.setPosition({Config::kViewWidth / 2.f, 50.f});
+    
+    m_apocalypseRT.draw(apocalypseText);
+    if (apocalypseUnlocked) {
+        m_apocalypseRT.draw(m_apocalypseSprite, sf::BlendMultiply);
+    }
+    m_apocalypseRT.display();
+    
+    apocalypseText.setFillColor(apocOldColor);
+    apocalypseText.setPosition(apocOldPos);
+    
+    sf::Sprite finalApocalypse(m_apocalypseRT.getTexture());
+    finalApocalypse.setOrigin({Config::kViewWidth / 2.f, 50.f});
+    finalApocalypse.setPosition(apocOldPos);
+    window.draw(finalApocalypse);
+    window.draw(apocalypseDesc);
+
+    // Draw lock icon on top if locked
+    if (!apocalypseUnlocked) {
+        window.draw(m_lockSprite);
+    }
 
     window.draw(duelText);
     window.draw(duelDesc);

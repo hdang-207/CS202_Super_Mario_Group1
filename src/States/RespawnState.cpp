@@ -64,7 +64,7 @@ void RespawnState::update(sf::Time dt) {
             gsm.changeState(std::make_unique<PlayState>(gsm, assets, progress));
         } 
         else {
-            gsm.changeState(std::make_unique<GameOverState>(gsm, assets));
+            gsm.changeState(std::make_unique<GameOverState>(gsm, assets, progress.gameMode));
         }
     }
 }

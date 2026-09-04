@@ -70,7 +70,7 @@ bool SaveManager::loadFromFile(const std::string& filepath, SaveData& outData) {
                 int modeInt = 0;
                 if (inFile >> modeInt) {
                     optionalFieldValid = optionalFieldValid
-                                      && (modeInt >= 0 && modeInt <= 2);
+                                      && (modeInt >= 0 && modeInt <= 3);
                     loaded.gameMode = static_cast<GameMode>(modeInt);
                 } else if (!inFile.eof()) {
                     optionalFieldValid = false;

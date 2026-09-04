@@ -5,9 +5,9 @@
 
 /**
  * @class GameModeSelectionState
- * @brief Allows the player to choose Normal, Nightfall, Inferno, or Duel mode.
+ * @brief Allows the player to choose Normal, Nightfall, Inferno, Apocalypse, or Duel mode.
  *
- * Normal, Nightfall, and Inferno continue to character/world selection.
+ * Normal, Nightfall, Inferno, and Apocalypse continue to character/world selection.
  * Duel enters its dedicated local multiplayer state directly.
  */
 class GameModeSelectionState : public State {
@@ -30,6 +30,7 @@ private:
         Normal,
         Nightfall,
         Inferno,
+        Apocalypse,
         Duel
     };
 
@@ -39,16 +40,21 @@ private:
     sf::RectangleShape darkOverlay;
     sf::RenderTexture m_infernoRT;
     sf::Sprite m_hellfireSprite;
+    sf::RenderTexture m_apocalypseRT;
+    sf::Sprite m_apocalypseSprite;
+    sf::Sprite m_lockSprite;
     sf::Text headerText;
 
     sf::Text normalText;
     sf::Text nightfallText;
     sf::Text infernoText;
+    sf::Text apocalypseText;
     sf::Text duelText;
 
     sf::Text normalDesc;
     sf::Text nightfallDesc;
     sf::Text infernoDesc;
+    sf::Text apocalypseDesc;
     sf::Text duelDesc;
 
     sf::Text hintText;

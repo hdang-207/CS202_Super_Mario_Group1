@@ -44,6 +44,11 @@ Game::Game()
     assets.loadSoundBuffer("DowngradeSound", Systems::resourcePath("assets/audio/sound/downgrade.wav"));
     assets.loadSoundBuffer("BrickBreak", Systems::resourcePath("assets/audio/sound/brick_break.wav"));
     assets.loadSoundBuffer("BrickCollision", Systems::resourcePath("assets/audio/sound/brick_collision.wav"));
+
+    // Duel round-winner announcements
+    assets.loadSoundBuffer("MarioWinsSound", Systems::resourcePath("assets/audio/sound/mario_wins.wav"));
+    assets.loadSoundBuffer("LuigiWinsSound", Systems::resourcePath("assets/audio/sound/luigi_wins.wav"));
+    assets.loadSoundBuffer("FightSound", Systems::resourcePath("assets/audio/sound/fight.wav"));
     
     assets.loadTexture("MenuBackground", Systems::resourcePath("assets/textures/Background.png"));
     assets.loadTexture("CoinIcon", Systems::resourcePath("assets/textures/coinHUD.png"));
@@ -377,7 +382,14 @@ Game::Game()
     assets.loadTexture("DoomFire1", Systems::resourcePath("assets/textures/doomfire1.png"));
     assets.loadTexture("DoomFire2", Systems::resourcePath("assets/textures/doomfire2.png"));
     assets.loadTexture("Hellfire", Systems::resourcePath("assets/textures/hellfire.jpg"));
+    assets.loadTexture("SilverBackground", Systems::resourcePath("assets/textures/silver_metal_background_1.jpg"));
+    assets.loadTexture("Apocalypse", Systems::resourcePath("assets/textures/Apocalypse.png"));
+    assets.loadTexture("Lock", Systems::resourcePath("assets/textures/lock.png"));
     assets.loadTexture("WarpPipeForked", Systems::resourcePath("assets/textures/warp_pipe_forked.png"));
+    assets.loadTexture("NormalGameover", Systems::resourcePath("assets/textures/NormalGameover.png"));
+    assets.loadTexture("NightfallGameover", Systems::resourcePath("assets/textures/NightfallGameover.png"));
+    assets.loadTexture("InfernoGameover", Systems::resourcePath("assets/textures/InfernoGameover.png"));
+    assets.loadTexture("ApocalypseGameover", Systems::resourcePath("assets/textures/ApocalypseGameover.png"));
 
     // Limit application framerate to prevent high CPU utilization
     window.setFramerateLimit(60);

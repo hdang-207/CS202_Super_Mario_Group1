@@ -127,6 +127,35 @@ if(BUILD_TESTING)
         NAME DuelRulesTests
         COMMAND duel_rules_tests
     )
+
+    add_executable(duel_arena_tests
+        tests/states/DuelArenasTests.cpp
+        src/Systems/MapParser.cpp
+        src/Systems/ResourcePath.cpp
+    )
+
+    target_include_directories(duel_arena_tests PRIVATE include)
+    target_compile_definitions(duel_arena_tests
+        PRIVATE MARIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+    add_test(
+        NAME DuelArenaTests
+        COMMAND duel_arena_tests
+    )
+
+    add_executable(duel_player_collision_tests
+        tests/states/DuelPlayerCollisionTests.cpp
+        src/States/DuelPlayerCollision.cpp
+        src/Physics/PhysicsBody.cpp
+    )
+
+    target_include_directories(duel_player_collision_tests PRIVATE include)
+    target_link_libraries(duel_player_collision_tests PRIVATE SFML::System)
+
+    add_test(
+        NAME DuelPlayerCollisionTests
+        COMMAND duel_player_collision_tests
+    )
 endif()
 
 # Tự động copy file DLL của SFML vào thư mục bin trên Windows (đối với liên kết động - Dynamic Link)
